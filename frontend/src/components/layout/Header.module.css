@@ -1,0 +1,79 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  background-color: #1a1a2e;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+  /* Prevent text selection during drag */
+  user-select: none;
+}
+
+/* Full-width drag region — becomes non-draggable only at the buttons */
+.dragRegion {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  height: 100%;
+  -webkit-app-region: drag;
+}
+
+.appTitle {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #e0e0e0;
+  text-transform: uppercase;
+}
+
+/* Button strip — must opt out of the drag region */
+.windowControls {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.controlBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #909090;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  /* Reset button defaults */
+  padding: 0;
+  outline: none;
+}
+
+.controlBtn:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.4);
+  outline-offset: -2px;
+}
+
+.controlBtn:hover {
+  color: #ffffff;
+}
+
+.minimize:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.maximize:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.close:hover {
+  background-color: #c42b1c;
+  color: #ffffff;
+}
+
+.close:active {
+  background-color: #b22017;
+}
