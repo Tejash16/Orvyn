@@ -27,19 +27,35 @@ Docrack/
 ├── electron/               # Electron main process + preload
 │   ├── main.js             # App entry point, lifecycle, IPC
 │   ├── preload.js          # contextBridge API exposed to React
+│   ├── ipc/                # IPC handler modules (registered in main.js)
+│   ├── services/           # Electron-side service modules (e.g., Python process mgmt)
+│   ├── utils/              # Shared utilities for the main process
 │   ├── .env                # Runtime config (NOT committed)
 │   └── .env.example        # Safe template (committed)
 │
 ├── frontend/               # React UI (Vite + SWC)
 │   ├── src/
 │   │   ├── main.jsx        # React entry point
-│   │   └── App.jsx         # Root component
+│   │   ├── App.jsx         # Root component
+│   │   ├── components/     # Reusable UI components
+│   │   │   ├── dataroom/   # DataRoom-specific components
+│   │   │   ├── layout/     # Layout components (sidebar, header, etc.)
+│   │   │   └── upload/     # File upload components
+│   │   ├── pages/          # Page-level components (routed views)
+│   │   ├── services/       # Frontend service modules (IPC wrappers only)
+│   │   └── store/          # Redux store, slices, and thunks
 │   ├── vite.config.js      # Vite build config (dev only)
 │   └── package.json
 │
 ├── express-backend/        # Cloud auth server (Node.js + Express)
 │   ├── src/
-│   │   └── server.js
+│   │   ├── server.js       # Express app entry point
+│   │   ├── config/         # Environment and app configuration
+│   │   ├── controllers/    # Route handler logic
+│   │   ├── middleware/     # Express middleware (auth, validation, etc.)
+│   │   ├── models/         # Data models / DB schema definitions
+│   │   ├── routes/         # Route definitions
+│   │   └── services/       # Business logic services
 │   ├── .env                # Auth secrets (NOT committed)
 │   └── .env.example
 │
@@ -51,7 +67,6 @@ Docrack/
 │   ├── .env                # Python runtime config (NOT committed)
 │   └── .env.example
 │
-├── shared/                 # Cross-layer shared constants (read-only at runtime)
 ├── package.json            # Root scripts (concurrently runner only)
 └── CLAUDE.md               # This file
 ```
@@ -382,3 +397,51 @@ React → preload (contextBridge) → Electron main → Python (if required).
 
 Claude must re-read this file before performing structural or architectural changes.
 If a request conflicts with this file, Claude must ask for clarification.
+
+---
+
+## 14. Responsive UI & Window Resizing Rules
+
+DocRack is a desktop application and must support responsive behavior across:
+
+- Different PC screen resolutions (1366x768, 1920x1080, 2K, 4K)
+- Manual window resizing by the user
+
+The UI must adapt fluidly without breaking layout.
+
+### Layout Rules
+
+- All major layout containers must use Flexbox or CSS Grid.
+- Fixed-width page layouts are prohibited.
+- Content areas must use `flex: 1` and avoid hardcoded pixel widths.
+- Sidebar must use fixed width with optional collapse behavior, but must not flex-grow.
+- Main content area must scroll internally (`overflow: auto`) instead of breaking layout.
+
+### Window Constraints
+
+- Electron window must define `minWidth` and `minHeight`.
+- The UI must not rely on extremely small window sizes.
+- Layout must remain stable when resized.
+
+### Grid & Card Behavior
+
+- Use responsive grid patterns such as:
+  `grid-template-columns: repeat(auto-fit, minmax(Xpx, 1fr))`
+- Cards must reflow naturally instead of overlapping or overflowing.
+
+### Typography & Spacing
+
+- Avoid hardcoded large pixel font sizes.
+- Prefer relative units (`rem`, `%`, `clamp()`).
+- Avoid absolute positioning for layout structure.
+
+### Strict Prohibitions
+
+Claude must NOT:
+
+- Hardcode layout widths (e.g., 1200px containers).
+- Use `position: absolute` for core layout structure.
+- Use fixed heights that cause overflow clipping.
+- Create layouts that only work at one resolution.
+
+Responsive behavior is mandatory for all new UI components and pages.
