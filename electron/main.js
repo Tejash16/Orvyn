@@ -2,7 +2,10 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-const registerWindowControls = require('./ipc/windowControls');
+const registerWindowControls  = require('./ipc/windowControls');
+const registerAuthHandlers    = require('./ipc/authHandlers');
+const registerSettingsHandlers = require('./ipc/settingsHandlers');
+const pythonProcess            = require('./services/pythonProcess');
 
 let mainWindow;
 
@@ -34,7 +37,6 @@ function createWindow() {
     mainWindow.show();
   });
 
-  // Notify renderer when window maximize state changes
   mainWindow.on('maximize', () => {
     mainWindow.webContents.send('window:maximized', true);
   });
@@ -48,18 +50,37 @@ function createWindow() {
   });
 }
 
-// Register IPC handlers
+// ── Register IPC handlers ─────────────────────────────────
+
 registerWindowControls(ipcMain, () => mainWindow);
 
-// Expose runtime config to the renderer via preload
-ipcMain.handle('app:getConfig', () => {
-  return {
-    expressUrl: process.env.EXPRESS_URL || '',
-    pythonUrl: process.env.PYTHON_URL || '',
-  };
+// Auth handlers receive a mainWindow getter so they can push events
+// (session expired, offline status) to the renderer without polling.
+registerAuthHandlers(ipcMain, () => mainWindow);
+
+registerSettingsHandlers(ipcMain);
+
+// Runtime config — sourced from electron/.env, never from renderer
+ipcMain.handle('app:getConfig', () => ({
+  expressUrl: process.env.EXPRESS_URL || '',
+  pythonUrl:  process.env.PYTHON_URL  || '',
+}));
+
+// ── Startup ───────────────────────────────────────────────
+
+app.whenReady().then(() => {
+  // Spawn the local Python backend before the window opens.
+  // The renderer's session restore flow waits for Python health before proceeding.
+  pythonProcess.start();
+  createWindow();
 });
 
-app.whenReady().then(createWindow);
+// ── Shutdown ──────────────────────────────────────────────
+
+app.on('will-quit', () => {
+  // Stop Python cleanly on every quit path (window close, system shutdown, etc.)
+  pythonProcess.stop();
+});
 
 app.on('window-all-closed', () => {
   app.quit();

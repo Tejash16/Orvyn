@@ -1,0 +1,157 @@
+/* ── Auth wrap — fills remaining height, centers card ────── */
+
+.authWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 24px 16px;
+  background-color: var(--bg-app);
+}
+
+/* ── Card ────────────────────────────────────────────────── */
+
+.card {
+  width: 100%;
+  max-width: 380px;
+  background-color: var(--modal-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 36px 32px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
+}
+
+.cardTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 24px;
+}
+
+/* ── Form fields ─────────────────────────────────────────── */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.input {
+  padding: 9px 12px;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.input:focus {
+  border-color: #4f46e5;
+}
+
+/* ── Feedback ────────────────────────────────────────────── */
+
+.error {
+  font-size: 0.8125rem;
+  color: var(--danger-color);
+  margin: 0 0 12px;
+}
+
+.successBox {
+  font-size: 0.875rem;
+  color: var(--success-color);
+  background-color: var(--success-bg);
+  border: 1px solid var(--success-border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+/* ── Primary button ──────────────────────────────────────── */
+
+.submit {
+  width: 100%;
+  padding: 10px 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #4f46e5;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  margin-top: 6px;
+}
+
+.submit:hover:not(:disabled) {
+  background-color: #4338ca;
+}
+
+.submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Footer ──────────────────────────────────────────────── */
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.switchText {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.switchLink {
+  font-size: 0.875rem;
+  color: #4f46e5;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.switchLink:hover {
+  color: #4338ca;
+}
+
+/* ── Unverified email hint ───────────────────────────────── */
+
+.verifyHint {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+/* ── Disabled note (ForgotPassword) ─────────────────────── */
+
+.disabledNote {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 12px;
+  line-height: 1.5;
+}

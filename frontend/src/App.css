@@ -1,15 +1,137 @@
-/* App shell — full-viewport flex column that never overflows */
+/* ── Theme variables ─────────────────────────────────────── */
+
+[data-theme="light"] {
+  --bg-app: #f0f2f5;
+  --bg-header: #ffffff;
+  --bg-sidebar: #ffffff;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --text-primary: #1a1a2e;
+  --text-muted: #6b7280;
+  --nav-hover-bg: rgba(0, 0, 0, 0.05);
+  --nav-hover-color: #1a1a2e;
+  --nav-active-bg: rgba(79, 70, 229, 0.1);
+  --nav-active-color: #4f46e5;
+  --tooltip-bg: #ffffff;
+  --tooltip-border: rgba(0, 0, 0, 0.12);
+  --tooltip-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  --toggle-btn-color: #9ca3af;
+  --toggle-btn-hover-bg: rgba(0, 0, 0, 0.05);
+  --toggle-btn-hover-color: #1a1a2e;
+  --toggle-btn-focus-outline: rgba(0, 0, 0, 0.3);
+  --control-btn-color: #6b7280;
+  --control-btn-hover-bg: rgba(0, 0, 0, 0.06);
+  --danger-color: #dc2626;
+  --danger-hover: #b91c1c;
+  --modal-bg: #ffffff;
+  --modal-backdrop: rgba(0, 0, 0, 0.48);
+  --input-bg: #f9fafb;
+  --input-border: rgba(0, 0, 0, 0.15);
+  --btn-secondary-border: rgba(0, 0, 0, 0.15);
+  --btn-secondary-hover: rgba(0, 0, 0, 0.05);
+  --success-color: #16a34a;
+  --success-bg: rgba(22, 163, 74, 0.08);
+  --success-border: rgba(22, 163, 74, 0.2);
+}
+
+[data-theme="dark"] {
+  --bg-app: #0f0f1a;
+  --bg-header: #1a1a2e;
+  --bg-sidebar: #13132a;
+  --border-color: rgba(255, 255, 255, 0.06);
+  --text-primary: #e0e0e0;
+  --text-muted: #909090;
+  --nav-hover-bg: rgba(255, 255, 255, 0.06);
+  --nav-hover-color: #e0e0e0;
+  --nav-active-bg: rgba(100, 108, 255, 0.15);
+  --nav-active-color: #a5b4fc;
+  --tooltip-bg: #2a2a4a;
+  --tooltip-border: rgba(255, 255, 255, 0.08);
+  --tooltip-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --toggle-btn-color: #505070;
+  --toggle-btn-hover-bg: rgba(255, 255, 255, 0.05);
+  --toggle-btn-hover-color: #e0e0e0;
+  --toggle-btn-focus-outline: rgba(255, 255, 255, 0.4);
+  --control-btn-color: #909090;
+  --control-btn-hover-bg: rgba(255, 255, 255, 0.08);
+  --danger-color: #ef4444;
+  --danger-hover: #dc2626;
+  --modal-bg: #1e1e38;
+  --modal-backdrop: rgba(0, 0, 0, 0.64);
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-border: rgba(255, 255, 255, 0.1);
+  --btn-secondary-border: rgba(255, 255, 255, 0.1);
+  --btn-secondary-hover: rgba(255, 255, 255, 0.06);
+  --success-color: #4ade80;
+  --success-bg: rgba(74, 222, 128, 0.1);
+  --success-border: rgba(74, 222, 128, 0.2);
+}
+
+/* ── App shell ───────────────────────────────────────────── */
+
+/* Full-viewport flex column that never overflows */
 .app-shell {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  background-color: #0f0f1a;
+  background-color: var(--bg-app);
 }
 
-/* Scrollable main area — takes all remaining height below the header */
+/* Horizontal body row — sidebar + main content side by side */
+.app-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Scrollable main area — takes all remaining space beside the sidebar */
 .app-content {
   flex: 1;
+  min-width: 0;
   overflow: auto;
-  color: #e0e0e0;
+  color: var(--text-primary);
+}
+
+/* Offline banner — shown when the background token scheduler cannot reach Express */
+.offline-banner {
+  flex-shrink: 0;
+  padding: 0.375rem 1rem;
+  font-size: 0.8125rem;
+  text-align: center;
+  background-color: rgba(234, 179, 8, 0.15);
+  color: var(--text-primary);
+  border-bottom: 1px solid rgba(234, 179, 8, 0.35);
+}
+
+.hello{
+  color:white;
+  text-decoration-color: #e0e0e0;
+}
+
+/* ── App loading screen ──────────────────────────────────── */
+
+.app-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.app-loading-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--text-muted);
+  animation: loadingPulse 1.2s infinite ease-in-out both;
+}
+
+.app-loading-dot:nth-child(2) { animation-delay: 0.16s; }
+.app-loading-dot:nth-child(3) { animation-delay: 0.32s; }
+
+@keyframes loadingPulse {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
+  40%           { transform: scale(1);   opacity: 1; }
 }

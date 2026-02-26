@@ -346,20 +346,30 @@ DocRack supports both Light and Dark themes.
 
 ### Theme Architecture
 
-- Theme state must be stored in Redux (`uiSlice`).
-- Theme preference must persist in `localStorage`.
-- On application load, Redux initializes theme from `localStorage`.
-- Theme must be applied at the root level (HTML or body attribute).
-- Example: `document.documentElement.setAttribute("data-theme", theme)`
+- Default theme is `light` on every application launch.
+- Theme state is managed exclusively in Redux (`uiSlice`).
+- Theme is applied at the root container level via a `data-theme` attribute on the `app-shell` element.
+- All colors must be defined as CSS custom properties (variables) scoped to `[data-theme="light"]` and `[data-theme="dark"]`.
+- No component may hardcode color values — all colors must use CSS variables.
+- Future UI components must support both light and dark themes from the start.
+
+### Theme Persistence
+
+- Theme must NOT be persisted to `localStorage`.
+- Theme must NOT be persisted to any browser storage mechanism.
+- Theme persistence will be implemented in a future milestone via SQLite (managed by the Python backend through Electron IPC).
+- Until SQLite persistence is implemented, theme always resets to `light` on launch.
 
 ### Theme Restrictions
 
 Claude must NOT:
 
 - Implement theme using scattered `useState` across components.
-- Hardcode colors inside components.
-- Store theme inside arbitrary components.
+- Hardcode color values inside components or module CSS files.
+- Store theme state inside arbitrary components.
 - Introduce CSS-in-JS libraries without approval.
+- Use `localStorage`, `sessionStorage`, or cookies for theme storage.
+- Apply theme at the `document`, `html`, or `body` level — it must apply at the `app-shell` container.
 
 Theme must remain centralized, predictable, and globally controlled.
 

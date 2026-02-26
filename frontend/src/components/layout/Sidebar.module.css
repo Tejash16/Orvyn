@@ -1,0 +1,137 @@
+/* ── Sidebar shell ───────────────────────────────────────── */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 200px;
+  flex-shrink: 0;
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
+  transition: width 0.22s ease;
+  /* overflow must stay visible so tooltips can escape the sidebar edge */
+  overflow: visible;
+  position: relative;
+}
+
+.sidebar.collapsed {
+  width: 56px;
+}
+
+/* ── Nav sections ────────────────────────────────────────── */
+
+.topNav,
+.bottomNav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* ── Nav item ────────────────────────────────────────────── */
+
+.navItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 16px;
+  margin: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  user-select: none;
+}
+
+.navItem:hover {
+  background-color: var(--nav-hover-bg);
+  color: var(--nav-hover-color);
+}
+
+.navItem.active {
+  background-color: var(--nav-active-bg);
+  color: var(--nav-active-color);
+}
+
+/* ── Icon ────────────────────────────────────────────────── */
+
+.navIcon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+/* ── Label ───────────────────────────────────────────────── */
+
+.navLabel {
+  font-size: 0.875rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Fade out during collapse transition */
+  transition: opacity 0.15s ease;
+  opacity: 1;
+}
+
+.collapsed .navLabel {
+  opacity: 0;
+  pointer-events: none;
+  /* Keep it in the DOM but invisible so the transition looks clean */
+}
+
+/* ── Tooltip (collapsed only) ────────────────────────────── */
+
+.tooltip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: var(--tooltip-bg);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 5px 11px;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--tooltip-shadow);
+  border: 1px solid var(--tooltip-border);
+  z-index: 200;
+}
+
+/* ── Collapse toggle button ──────────────────────────────── */
+
+.toggleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 36px;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border-color);
+  color: var(--toggle-btn-color);
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.toggleBtn:hover {
+  background-color: var(--toggle-btn-hover-bg);
+  color: var(--toggle-btn-hover-color);
+}
+
+.toggleBtn:focus-visible {
+  outline: 1px solid var(--toggle-btn-focus-outline);
+  outline-offset: -2px;
+}
