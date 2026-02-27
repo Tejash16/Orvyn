@@ -57,12 +57,12 @@ async function register(req, res, next) {
       isEmailVerified: false,
     });
 
-    const plainToken = crypto.randomBytes(32).toString('hex');
-    user.emailVerificationToken = hashToken(plainToken);
-    user.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const code = String(crypto.randomInt(100000, 999999));
+    user.emailVerificationCode = hashToken(code);
+    user.emailVerificationExpires = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
-    console.log(`[Auth] Email verification token for ${user.email}: ${plainToken}`);
+    console.log(`[DEV] Verification code for ${user.email}: ${code}`);
 
     return res.status(201).json({
       success: true,
@@ -80,25 +80,38 @@ async function register(req, res, next) {
 
 async function verifyEmail(req, res, next) {
   try {
-    const { token } = req.query;
+    const { email, code } = req.body;
 
-    if (!token) {
-      return res.status(400).json({ success: false, error: 'Verification token is required.' });
+    if (!email || !code) {
+      return res.status(400).json({ success: false, error: 'Email and verification code are required.' });
     }
 
-    const hashed = hashToken(token);
-
-    const user = await User.findOne({
-      emailVerificationToken: hashed,
-      emailVerificationExpires: { $gt: Date.now() },
-    }).select('+emailVerificationToken +emailVerificationExpires');
+    const user = await User.findOne({ email: email.toLowerCase() })
+      .select('+emailVerificationCode +emailVerificationExpires');
 
     if (!user) {
-      return res.status(400).json({ success: false, error: 'Invalid or expired verification token.' });
+      return res.status(400).json({ success: false, error: 'No pending verification for this email.' });
+    }
+
+    if (user.isEmailVerified) {
+      return res.status(400).json({ success: false, error: 'Email is already verified.' });
+    }
+
+    if (!user.emailVerificationCode || !user.emailVerificationExpires) {
+      return res.status(400).json({ success: false, error: 'No pending verification for this email.' });
+    }
+
+    if (user.emailVerificationExpires < Date.now()) {
+      return res.status(400).json({ success: false, error: 'Verification code has expired. Please request a new one.' });
+    }
+
+    const hashed = hashToken(code);
+    if (hashed !== user.emailVerificationCode) {
+      return res.status(400).json({ success: false, error: 'Invalid verification code.' });
     }
 
     user.isEmailVerified = true;
-    user.emailVerificationToken = undefined;
+    user.emailVerificationCode = undefined;
     user.emailVerificationExpires = undefined;
     await user.save();
 
@@ -375,21 +388,21 @@ async function resendVerification(req, res, next) {
     const { email } = req.body;
 
     if (!email || !validator.isEmail(email)) {
-      return res.status(200).json({ success: true, message: 'If that email is registered and unverified, a new link has been sent.' });
+      return res.status(200).json({ success: true, message: 'If that email is registered and unverified, a new code has been sent.' });
     }
 
     const user = await User.findOne({ email: email.toLowerCase() })
-      .select('+emailVerificationToken +emailVerificationExpires');
+      .select('+emailVerificationCode +emailVerificationExpires');
 
     if (user && !user.isEmailVerified && !user.isDeleted) {
-      const plainToken = crypto.randomBytes(32).toString('hex');
-      user.emailVerificationToken   = hashToken(plainToken);
-      user.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const code = String(crypto.randomInt(100000, 999999));
+      user.emailVerificationCode    = hashToken(code);
+      user.emailVerificationExpires = new Date(Date.now() + 10 * 60 * 1000);
       await user.save();
-      console.log(`[Auth] Resend verification token for ${user.email}: ${plainToken}`);
+      console.log(`[DEV] Resend verification code for ${user.email}: ${code}`);
     }
 
-    return res.status(200).json({ success: true, message: 'If that email is registered and unverified, a new link has been sent.' });
+    return res.status(200).json({ success: true, message: 'If that email is registered and unverified, a new code has been sent.' });
   } catch (err) {
     next(err);
   }

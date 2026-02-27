@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    emailVerificationToken: {
+    emailVerificationCode: {
       type: String,
       select: false,
     },
@@ -79,7 +79,7 @@ const userSchema = new mongoose.Schema(
 userSchema.set('toJSON', {
   transform(doc, ret) {
     delete ret.password;
-    delete ret.emailVerificationToken;
+    delete ret.emailVerificationCode;
     delete ret.emailVerificationExpires;
     delete ret.refreshToken;
     delete ret.refreshTokenExpires;

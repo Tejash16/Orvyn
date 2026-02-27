@@ -27,9 +27,18 @@ Docrack/
 ├── electron/               # Electron main process + preload
 │   ├── main.js             # App entry point, lifecycle, IPC
 │   ├── preload.js          # contextBridge API exposed to React
+│   ├── package.json        # Electron dependencies
 │   ├── ipc/                # IPC handler modules (registered in main.js)
-│   ├── services/           # Electron-side service modules (e.g., Python process mgmt)
-│   ├── utils/              # Shared utilities for the main process
+│   │   ├── authHandlers.js
+│   │   ├── settingsHandlers.js
+│   │   └── windowControls.js
+│   ├── services/           # Electron-side service modules
+│   │   ├── authService.js          # Auth orchestration
+│   │   ├── pythonProcess.js        # Python process lifecycle
+│   │   ├── pythonService.js        # Python API communication
+│   │   ├── tokenRefreshScheduler.js # Token refresh logic
+│   │   ├── tokenVault.js           # Secure token storage
+│   │   └── userContextService.js   # User context management
 │   ├── .env                # Runtime config (NOT committed)
 │   └── .env.example        # Safe template (committed)
 │
@@ -38,11 +47,9 @@ Docrack/
 │   │   ├── main.jsx        # React entry point
 │   │   ├── App.jsx         # Root component
 │   │   ├── components/     # Reusable UI components
-│   │   │   ├── dataroom/   # DataRoom-specific components
-│   │   │   ├── layout/     # Layout components (sidebar, header, etc.)
-│   │   │   └── upload/     # File upload components
+│   │   │   ├── auth/       # Authentication components (Login, Register, etc.)
+│   │   │   └── layout/     # Layout components (Header, Sidebar)
 │   │   ├── pages/          # Page-level components (routed views)
-│   │   ├── services/       # Frontend service modules (IPC wrappers only)
 │   │   └── store/          # Redux store, slices, and thunks
 │   ├── vite.config.js      # Vite build config (dev only)
 │   └── package.json
@@ -52,15 +59,16 @@ Docrack/
 │   │   ├── server.js       # Express app entry point
 │   │   ├── config/         # Environment and app configuration
 │   │   ├── controllers/    # Route handler logic
-│   │   ├── middleware/     # Express middleware (auth, validation, etc.)
+│   │   ├── middleware/     # Express middleware (auth, rate limiting, errors)
 │   │   ├── models/         # Data models / DB schema definitions
-│   │   ├── routes/         # Route definitions
+│   │   ├── routes/         # Route definitions (auth, health)
 │   │   └── services/       # Business logic services
 │   ├── .env                # Auth secrets (NOT committed)
 │   └── .env.example
 │
 ├── python-backend/         # Local AI engine (FastAPI)
 │   ├── app/
+│   │   ├── __init__.py
 │   │   └── main.py         # FastAPI app
 │   ├── run.py              # Startup script
 │   ├── requirements.txt    # Python dependencies
@@ -188,6 +196,7 @@ Rules:
 ## 6. Git & Security Rules
 
 - `.env` files in all subdirectories are gitignored and must never be committed.
+- If you use the any variable from the `.env` file and it does not exist in the `.env.example` add variable there.
 - `.gitignore` must not be modified without explicit user instruction.
 - `node_modules/`, `venv/`, `__pycache__/`, `dist/`, and `*.pyc` must remain gitignored.
 - No secrets, tokens, passwords, or private keys may appear in any committed file.

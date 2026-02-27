@@ -37,7 +37,8 @@ function Login({ onSwitchView }) {
         dispatch(setTheme(result.theme ?? 'light'));
       } else if (result.error === 'Email not verified.') {
         dispatch(loginFailure(result.error));
-        setUnverified(true);
+        onSwitchView('verify', email);
+        return;
       } else {
         dispatch(loginFailure(result.error));
         setError(result.error || 'Login failed. Please try again.');

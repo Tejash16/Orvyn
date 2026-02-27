@@ -270,9 +270,9 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
   // ── Email Verification ────────────────────────────────────
 
-  ipcMain.handle('auth:verifyEmail', async (_event, { token }) => {
+  ipcMain.handle('auth:verifyEmail', async (_event, { email, code }) => {
     try {
-      const result = await authService.verifyEmail(token);
+      const result = await authService.verifyEmail(email, code);
       return { success: true, message: result.message };
     } catch (err) {
       return { success: false, error: err.message };

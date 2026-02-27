@@ -12,12 +12,12 @@ const {
   resetPassword,
 } = require('../controllers/authController');
 const { authenticate } = require('../middleware/authenticate');
-const { loginLimiter, forgotPasswordLimiter, resetPasswordLimiter } = require('../middleware/rateLimiter');
+const { loginLimiter, forgotPasswordLimiter, resetPasswordLimiter, resendVerificationLimiter } = require('../middleware/rateLimiter');
 
 const router = Router();
 
 router.post('/register',     register);
-router.get('/verify-email',  verifyEmail);
+router.post('/verify-email', verifyEmail);
 router.post('/login',        loginLimiter, login);
 
 // Stateless access-token validation — used by Electron for guard checks.
@@ -31,7 +31,7 @@ router.post('/refresh',      refreshTokens);
 // accepts the refresh token in the body (access token may already be expired).
 router.post('/logout',         logoutHandler);
 router.post('/delete-account',        authenticate, deleteAccount);
-router.post('/resend-verification',   resendVerification);
+router.post('/resend-verification',   resendVerificationLimiter, resendVerification);
 router.post('/forgot-password',       forgotPasswordLimiter, forgotPassword);
 router.post('/reset-password',        resetPasswordLimiter,  resetPassword);
 

@@ -35,7 +35,8 @@ function Register({ onSwitchView }) {
       const result = await window.api.auth.register({ name, email, password });
 
       if (result.success) {
-        setSuccess(true);
+        onSwitchView('verify', email);
+        return;
       } else {
         setError(result.error || 'Registration failed. Please try again.');
       }

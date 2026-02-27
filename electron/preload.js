@@ -26,7 +26,7 @@ contextBridge.exposeInMainWorld('api', {
     login:          (payload) => ipcRenderer.invoke('auth:login', payload),
     logout:         ()        => ipcRenderer.invoke('auth:logout'),
     deleteAccount:         (password) => ipcRenderer.invoke('auth:deleteAccount', { password }),
-    verifyEmail:           (token)                    => ipcRenderer.invoke('auth:verifyEmail', { token }),
+    verifyEmail:           (email, code)               => ipcRenderer.invoke('auth:verifyEmail', { email, code }),
     resendVerification:    (email)                    => ipcRenderer.invoke('auth:resendVerification', { email }),
     forgotPassword:        (email)                    => ipcRenderer.invoke('auth:forgotPassword', { email }),
     resetPassword:         (token, newPassword)       => ipcRenderer.invoke('auth:resetPassword', { token, newPassword }),

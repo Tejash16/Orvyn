@@ -4,10 +4,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "concurrently -k -n REACT,ELECTRON,EXPRESS,PYTHON -c blue,green,yellow,magenta \"npm run dev --prefix frontend\" \"npm run start --prefix electron\" \"npm run dev --prefix express-backend\" \"cd python-backend && venv\\Scripts\\activate && python run.py\"",
     "frontend": "concurrently -k -n REACT,ELECTRON, -c blue,green \"npm run dev --prefix frontend\" \"npm run start --prefix electron\"",
-    "app": "concurrently -k -n REACT,ELECTRON,EXPRESS -c blue,green,yellow \"npm run dev --prefix frontend\" \"npm run start --prefix electron\" \"npm run dev --prefix express-backend\""
-
+    "dev": "concurrently -k -n REACT,ELECTRON,EXPRESS -c blue,green,yellow \"npm run dev --prefix frontend\" \"npm run start --prefix electron\" \"npm run dev --prefix express-backend\""
   },
   "keywords": [],
   "author": "",

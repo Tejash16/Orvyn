@@ -6,7 +6,6 @@ import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
 import SettingsPage from './pages/setting';
 import AuthPage from './pages/AuthPage';
-import VerifyEmail from './pages/VerifyEmail';
 import ResetPassword from './pages/ResetPassword';
 import './App.css';
 
@@ -56,9 +55,7 @@ function App() {
 
       <Header />
 
-      {window.location.pathname.startsWith('/verify-email') ? (
-        <VerifyEmail />
-      ) : window.location.pathname.startsWith('/reset-password') ? (
+      {window.location.pathname.startsWith('/reset-password') ? (
         <ResetPassword />
       ) : isRestoring ? (
         <div className="app-loading" aria-label="Loading">
