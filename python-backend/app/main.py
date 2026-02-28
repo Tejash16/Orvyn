@@ -978,6 +978,87 @@ def rename_file(file_id: str, request: RenameFileRequest):
         return _file_dict(file_record)
 
 
+# ---- AI Classification endpoints --------------------------------------------
+
+class ClassifyRequest(BaseModel):
+    dataroom_id: str
+    file_ids: List[str]
+
+
+class GenerateDataRoomRequest(BaseModel):
+    dataroom_name: str
+    dataroom_description: Optional[str] = None
+    file_ids: List[str]
+
+
+@app.post("/ai/classify")
+async def ai_classify(request: ClassifyRequest):
+    """
+    Classify files into existing DataRoom folders using Gemini AI.
+    Files are matched to folders based on content and folder context.
+    """
+    from app.services.classification_service import classify_files
+
+    engine = _require_db()
+
+    if not request.file_ids:
+        raise HTTPException(status_code=400, detail="file_ids list cannot be empty.")
+
+    if len(request.file_ids) > _MAX_FILES_PER_REQUEST:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {_MAX_FILES_PER_REQUEST} files per request. Received {len(request.file_ids)}.",
+        )
+
+    # Verify DataRoom exists
+    with Session(engine) as session:
+        dr = session.query(DataRoom).filter_by(id=request.dataroom_id).first()
+        if not dr:
+            raise HTTPException(status_code=404, detail="DataRoom not found.")
+
+    try:
+        result = await classify_files(engine, request.dataroom_id, request.file_ids)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/ai/generate-dataroom")
+async def ai_generate_dataroom(request: GenerateDataRoomRequest):
+    """
+    Generate a new DataRoom with AI-created folder structure and file assignments.
+    Uses Gemini to analyze files and create an organized structure.
+    """
+    from app.services.classification_service import generate_dataroom
+
+    engine = _require_db()
+
+    if not request.dataroom_name or not request.dataroom_name.strip():
+        raise HTTPException(status_code=400, detail="dataroom_name is required.")
+
+    if not request.file_ids:
+        raise HTTPException(status_code=400, detail="file_ids list cannot be empty.")
+
+    if len(request.file_ids) > _MAX_FILES_PER_REQUEST:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {_MAX_FILES_PER_REQUEST} files per request. Received {len(request.file_ids)}.",
+        )
+
+    try:
+        result = await generate_dataroom(
+            engine,
+            request.dataroom_name.strip(),
+            request.dataroom_description,
+            request.file_ids,
+        )
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 # ---------------------------------------------------------------------------
 # Subfolder traversal helper
 # ---------------------------------------------------------------------------
