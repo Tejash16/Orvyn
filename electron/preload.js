@@ -50,6 +50,56 @@ contextBridge.exposeInMainWorld('api', {
     setTheme: (theme) => ipcRenderer.invoke('settings:setTheme', theme),
   },
 
+  // DataRoom CRUD
+  dataroom: {
+    create:  ({ name, description })  => ipcRenderer.invoke('dataroom:create', { name, description }),
+    list:    ()                       => ipcRenderer.invoke('dataroom:list'),
+    get:     (id)                     => ipcRenderer.invoke('dataroom:get', { id }),
+    update:  (id, updates)            => ipcRenderer.invoke('dataroom:update', { id, updates }),
+    delete:  (id)                     => ipcRenderer.invoke('dataroom:delete', { id }),
+  },
+
+  // Folder operations
+  folder: {
+    create:        (dataroomId, parentFolderId, name, context) =>
+      ipcRenderer.invoke('folder:create', { dataroom_id: dataroomId, parent_folder_id: parentFolderId, name, context }),
+    getChildren:   (dataroomId, parentFolderId) =>
+      ipcRenderer.invoke('folder:get-children', { dataroom_id: dataroomId, parent_folder_id: parentFolderId }),
+    rename:        (folderId, newName) =>
+      ipcRenderer.invoke('folder:rename', { folder_id: folderId, new_name: newName }),
+    updateContext: (folderId, context) =>
+      ipcRenderer.invoke('folder:update-context', { folder_id: folderId, context }),
+    delete:        (folderId) =>
+      ipcRenderer.invoke('folder:delete', { folder_id: folderId }),
+    move:          (folderId, newParentId) =>
+      ipcRenderer.invoke('folder:move', { folder_id: folderId, new_parent_id: newParentId }),
+  },
+
+  // File operations
+  file: {
+    selectFiles:       ()                                  => ipcRenderer.invoke('file:select-files'),
+    selectFolder:      ()                                  => ipcRenderer.invoke('file:select-folder'),
+    register:          (dataroomId, filePaths)              => ipcRenderer.invoke('file:register', { dataroom_id: dataroomId, file_paths: filePaths }),
+    moveToFolder:      (fileId, folderId)                  => ipcRenderer.invoke('file:move-to-folder', { file_id: fileId, folder_id: folderId }),
+    removeFromDocrack: (fileId)                            => ipcRenderer.invoke('file:remove-from-docrack', { file_id: fileId }),
+    deleteFromSystem:  (fileId)                            => ipcRenderer.invoke('file:delete-from-system', { file_id: fileId }),
+    checkExists:       (fileId)                            => ipcRenderer.invoke('file:check-exists', { file_id: fileId }),
+    relocate:          (fileId)                            => ipcRenderer.invoke('file:relocate', { file_id: fileId }),
+    open:              (filePath)                          => ipcRenderer.invoke('file:open', { file_path: filePath }),
+    openWith:          (filePath)                          => ipcRenderer.invoke('file:open-with', { file_path: filePath }),
+    copyPath:          (filePath)                          => ipcRenderer.invoke('file:copy-path', { file_path: filePath }),
+    copyToClipboard:   (filePath)                          => ipcRenderer.invoke('file:copy-to-clipboard', { file_path: filePath }),
+    getDetails:        (fileId)                            => ipcRenderer.invoke('file:get-details', { file_id: fileId }),
+    list:              (dataroomId, options = {})           => ipcRenderer.invoke('file:list', { dataroom_id: dataroomId, ...options }),
+    rename:            (fileId, newName)                   => ipcRenderer.invoke('file:rename', { file_id: fileId, new_name: newName }),
+  },
+
+  // AI classification
+  ai: {
+    classify:         (dataroomId, fileIds)                => ipcRenderer.invoke('ai:classify', { dataroom_id: dataroomId, file_ids: fileIds }),
+    generateDataroom: (name, description, fileIds)         => ipcRenderer.invoke('ai:generate-dataroom', { dataroom_name: name, dataroom_description: description, file_ids: fileIds }),
+  },
+
   // App-level push events from the main process
   app: {
     // Fires when the background token refresh detects a network change.

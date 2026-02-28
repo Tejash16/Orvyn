@@ -398,11 +398,13 @@ class UpdateDataRoomRequest(BaseModel):
 class CreateFolderRequest(BaseModel):
     name: str
     context: str
+    parent_id: Optional[str] = None
 
 
 class UpdateFolderRequest(BaseModel):
     name: Optional[str] = None
     context: Optional[str] = None
+    parent_id: Optional[str] = "__unset__"  # distinguish between "not provided" and "set to null"
 
 
 # -- Pydantic request models for Files --
@@ -585,10 +587,19 @@ def create_folder(dataroom_id: str, request: CreateFolderRequest):
         if not dr:
             raise HTTPException(status_code=404, detail="DataRoom not found.")
 
+        # Validate parent folder if provided
+        if request.parent_id is not None:
+            parent = session.query(Folder).filter_by(id=request.parent_id).first()
+            if not parent:
+                raise HTTPException(status_code=404, detail="Parent folder not found.")
+            if parent.dataroom_id != dataroom_id:
+                raise HTTPException(status_code=400, detail="Parent folder does not belong to this DataRoom.")
+
         folder = Folder(
             dataroom_id=dataroom_id,
             name=request.name.strip(),
             context=request.context.strip(),
+            parent_id=request.parent_id,
         )
         session.add(folder)
         session.commit()
@@ -631,6 +642,20 @@ def update_folder(folder_id: str, request: UpdateFolderRequest):
             if not request.context.strip():
                 raise HTTPException(status_code=400, detail="Folder context cannot be empty.")
             folder.context = request.context.strip()
+
+        # Handle parent_id change (folder move)
+        if request.parent_id != "__unset__":
+            if request.parent_id is not None:
+                # Validate parent exists and belongs to same DataRoom
+                parent = session.query(Folder).filter_by(id=request.parent_id).first()
+                if not parent:
+                    raise HTTPException(status_code=404, detail="Parent folder not found.")
+                if parent.dataroom_id != folder.dataroom_id:
+                    raise HTTPException(status_code=400, detail="Parent folder does not belong to the same DataRoom.")
+                # Prevent circular reference — folder cannot be its own ancestor
+                if request.parent_id == folder_id:
+                    raise HTTPException(status_code=400, detail="A folder cannot be its own parent.")
+            folder.parent_id = request.parent_id
 
         folder.updated_at = datetime.datetime.utcnow()
         session.commit()

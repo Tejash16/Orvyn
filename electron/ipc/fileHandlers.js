@@ -1,0 +1,264 @@
+const { dialog, shell, clipboard, nativeImage } = require('electron');
+const { execFile } = require('child_process');
+const path = require('path');
+const fs   = require('fs');
+const pythonService = require('../services/pythonService');
+
+// Supported file extensions — must match Python's _ALLOWED_EXTENSIONS.
+const SUPPORTED_EXTENSIONS = new Set([
+  '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.png', '.jpg', '.jpeg',
+]);
+
+const MAX_FILES_PER_BATCH = 50;
+
+/**
+ * Registers file-related IPC handlers.
+ *
+ * @param {Electron.IpcMain} ipcMain
+ * @param {() => Electron.BrowserWindow | null} getMainWindow
+ */
+function registerFileHandlers(ipcMain, getMainWindow) {
+
+  // ── File selection dialogs ─────────────────────────────────
+
+  ipcMain.handle('file:select-files', async () => {
+    try {
+      const win = getMainWindow();
+      const result = await dialog.showOpenDialog(win, {
+        properties: ['openFile', 'multiSelections'],
+        filters: [
+          { name: 'All Supported', extensions: ['pdf', 'docx', 'xlsx', 'pptx', 'txt', 'csv', 'png', 'jpg', 'jpeg'] },
+          { name: 'Documents',     extensions: ['pdf', 'docx', 'xlsx', 'pptx', 'txt', 'csv'] },
+          { name: 'Images',        extensions: ['png', 'jpg', 'jpeg'] },
+        ],
+      });
+
+      if (result.canceled) return { success: true, filePaths: [] };
+
+      if (result.filePaths.length > MAX_FILES_PER_BATCH) {
+        return {
+          success: false,
+          error: `Selected ${result.filePaths.length} files. Maximum is ${MAX_FILES_PER_BATCH} per batch.`,
+        };
+      }
+
+      return { success: true, filePaths: result.filePaths };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:select-folder', async () => {
+    try {
+      const win = getMainWindow();
+      const result = await dialog.showOpenDialog(win, {
+        properties: ['openDirectory'],
+      });
+
+      if (result.canceled) return { success: true, filePaths: [] };
+
+      const folderPath = result.filePaths[0];
+      const filePaths  = [];
+
+      // Recursive scan for supported files
+      function scanDir(dirPath) {
+        let entries;
+        try {
+          entries = fs.readdirSync(dirPath, { withFileTypes: true });
+        } catch {
+          return; // Skip unreadable directories
+        }
+
+        for (const entry of entries) {
+          // Ignore hidden files and folders
+          if (entry.name.startsWith('.')) continue;
+
+          const fullPath = path.join(dirPath, entry.name);
+
+          if (entry.isDirectory()) {
+            scanDir(fullPath);
+          } else if (entry.isFile()) {
+            const ext = path.extname(entry.name).toLowerCase();
+            if (SUPPORTED_EXTENSIONS.has(ext)) {
+              filePaths.push(fullPath);
+            }
+          }
+        }
+      }
+
+      scanDir(folderPath);
+
+      if (filePaths.length > MAX_FILES_PER_BATCH) {
+        return {
+          success: false,
+          error: `Found ${filePaths.length} files. Maximum is ${MAX_FILES_PER_BATCH} per batch.`,
+        };
+      }
+
+      return { success: true, filePaths };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // ── File registration & CRUD ───────────────────────────────
+
+  ipcMain.handle('file:register', async (_event, { dataroom_id, file_paths }) => {
+    try {
+      const data = await pythonService.registerFiles(dataroom_id, file_paths);
+      return { success: true, ...data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:move-to-folder', async (_event, { file_id, folder_id }) => {
+    try {
+      const data = await pythonService.moveFileToFolder(file_id, folder_id);
+      return { success: true, file: data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:remove-from-docrack', async (_event, { file_id }) => {
+    try {
+      const data = await pythonService.deleteFile(file_id, false);
+      return { success: true, ...data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:delete-from-system', async (_event, { file_id }) => {
+    try {
+      console.warn('[fileHandlers] DESTRUCTIVE: Deleting file from system, file_id:', file_id);
+      const data = await pythonService.deleteFile(file_id, true);
+      return { success: true, ...data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:check-exists', async (_event, { file_id }) => {
+    try {
+      const data = await pythonService.checkFileExists(file_id);
+      return { success: true, ...data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:relocate', async (_event, { file_id }) => {
+    try {
+      const win = getMainWindow();
+      const result = await dialog.showOpenDialog(win, {
+        properties: ['openFile'],
+        filters: [
+          { name: 'All Supported', extensions: ['pdf', 'docx', 'xlsx', 'pptx', 'txt', 'csv', 'png', 'jpg', 'jpeg'] },
+        ],
+      });
+
+      if (result.canceled) return { success: true, canceled: true };
+
+      const newPath = result.filePaths[0];
+      const data = await pythonService.relocateFile(file_id, newPath);
+      return { success: true, canceled: false, file: data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:get-details', async (_event, { file_id }) => {
+    try {
+      const [fileData, existsData] = await Promise.all([
+        pythonService.getFile(file_id),
+        pythonService.checkFileExists(file_id),
+      ]);
+      return { success: true, file: fileData, exists: existsData.exists };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:list', async (_event, { dataroom_id, folder_id, include_subfolders, status }) => {
+    try {
+      const options = {};
+      if (folder_id != null)       options.folder_id = folder_id;
+      if (include_subfolders)      options.include_subfolders = true;
+      if (status)                  options.status = status;
+
+      const data = await pythonService.listFiles(dataroom_id, options);
+      return { success: true, files: data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:rename', async (_event, { file_id, new_name }) => {
+    try {
+      const data = await pythonService.renameFile(file_id, new_name);
+      return { success: true, file: data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // ── Shell & clipboard operations ───────────────────────────
+
+  ipcMain.handle('file:open', async (_event, { file_path }) => {
+    try {
+      const result = await shell.openPath(path.resolve(file_path));
+      // shell.openPath returns an empty string on success, or an error message
+      if (result) return { success: false, error: result };
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:open-with', async (_event, { file_path }) => {
+    try {
+      const resolved = path.resolve(file_path);
+      execFile('rundll32.exe', ['shell32.dll,OpenAs_RunDLL', resolved]);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:copy-path', async (_event, { file_path }) => {
+    try {
+      clipboard.writeText(path.resolve(file_path));
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:copy-to-clipboard', async (_event, { file_path }) => {
+    try {
+      const resolved = path.resolve(file_path);
+      const ext = path.extname(resolved).toLowerCase();
+
+      if (['.png', '.jpg', '.jpeg'].includes(ext)) {
+        // Copy image to clipboard as native image
+        const img = nativeImage.createFromPath(resolved);
+        if (img.isEmpty()) {
+          return { success: false, error: 'Failed to read image file.' };
+        }
+        clipboard.writeImage(img);
+      } else {
+        // For non-image files, copy as file URI so it can be pasted in Explorer
+        // Windows Explorer expects a Buffer with a file drop list
+        clipboard.writeBuffer('FileNameW', Buffer.from(resolved + '\0', 'ucs2'));
+      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+}
+
+module.exports = registerFileHandlers;

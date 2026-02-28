@@ -2,9 +2,13 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-const registerWindowControls  = require('./ipc/windowControls');
-const registerAuthHandlers    = require('./ipc/authHandlers');
+const registerWindowControls    = require('./ipc/windowControls');
+const registerAuthHandlers     = require('./ipc/authHandlers');
 const registerSettingsHandlers = require('./ipc/settingsHandlers');
+const registerDataroomHandlers = require('./ipc/dataroomHandlers');
+const registerFolderHandlers   = require('./ipc/folderHandlers');
+const registerFileHandlers     = require('./ipc/fileHandlers');
+const registerAiHandlers       = require('./ipc/aiHandlers');
 const pythonProcess            = require('./services/pythonProcess');
 
 let mainWindow;
@@ -59,6 +63,10 @@ registerWindowControls(ipcMain, () => mainWindow);
 registerAuthHandlers(ipcMain, () => mainWindow);
 
 registerSettingsHandlers(ipcMain);
+registerDataroomHandlers(ipcMain);
+registerFolderHandlers(ipcMain);
+registerFileHandlers(ipcMain, () => mainWindow);
+registerAiHandlers(ipcMain);
 
 // Runtime config — sourced from electron/.env, never from renderer
 ipcMain.handle('app:getConfig', () => ({
