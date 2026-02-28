@@ -160,6 +160,19 @@ export const navigateToPathIndex = createAsyncThunk(
   }
 );
 
+export const navigateDirect = createAsyncThunk(
+  'fileExplorer/navigateDirect',
+  async ({ folderId, path }, { getState, rejectWithValue }) => {
+    try {
+      const { fileExplorer } = getState();
+      const items = await fetchChildren(fileExplorer.currentDataroomId, folderId);
+      return { folderId, path, items };
+    } catch (err) {
+      return rejectWithValue(err.message);
+    }
+  }
+);
+
 export const refreshCurrentView = createAsyncThunk(
   'fileExplorer/refreshCurrentView',
   async (_, { getState, rejectWithValue }) => {
@@ -326,6 +339,25 @@ const fileExplorerSlice = createSlice({
         state.items = sortItems(action.payload.items, state.sortBy, state.sortOrder);
       })
       .addCase(navigateToPathIndex.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      });
+
+    // navigateDirect (back/forward history)
+    builder
+      .addCase(navigateDirect.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+        state.selectedItems = [];
+      })
+      .addCase(navigateDirect.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.currentFolderId = action.payload.folderId;
+        state.currentPath = action.payload.path;
+        state.items = sortItems(action.payload.items, state.sortBy, state.sortOrder);
+        state.searchQuery = '';
+      })
+      .addCase(navigateDirect.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       });

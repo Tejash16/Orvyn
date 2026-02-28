@@ -6,6 +6,7 @@ import {
   deleteDataroom,
 } from '../store/dataroomSlice';
 import CreateDataRoomModal from '../components/dataroom/CreateDataRoomModal';
+import FileExplorer from '../components/dataroom/FileExplorer';
 import styles from './DataRoomList.module.css';
 
 /* ── Icons ───────────────────────────────────────────────── */
@@ -311,13 +312,10 @@ function DataRoomList() {
       {/* ── Right panel ────────────────────────────────── */}
       <div className={styles.mainPanel}>
         {selectedId ? (
-          <div className={styles.emptyState}>
-            <IconEmptyBox />
-            <span className={styles.emptyTitle}>File Explorer</span>
-            <span className={styles.emptyHint}>
-              File explorer will be available here in the next phase.
-            </span>
-          </div>
+          <FileExplorer
+            dataroomId={selectedId}
+            onClose={() => setSelectedId(null)}
+          />
         ) : (
           <div className={styles.emptyState}>
             <IconEmptyBox />
