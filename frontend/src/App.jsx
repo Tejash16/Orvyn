@@ -5,6 +5,7 @@ import { setTheme, setOnline } from './store/uiSlice';
 import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
 import SettingsPage from './pages/setting';
+import DataRoomList from './pages/DataRoomList';
 import AuthPage from './pages/AuthPage';
 import ResetPassword from './pages/ResetPassword';
 import './App.css';
@@ -67,6 +68,7 @@ function App() {
         <div className="app-body">
           <Sidebar />
           <main className="app-content">
+            {activePage === 'dataroom' && <DataRoomList />}
             {activePage === 'settings' && <SettingsPage />}
           </main>
         </div>

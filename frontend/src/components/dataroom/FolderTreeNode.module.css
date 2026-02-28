@@ -1,0 +1,310 @@
+/* ── FolderTreeNode ─────────────────────────────────────── */
+
+.node {
+  position: relative;
+}
+
+.nodeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: default;
+  transition: background-color 0.12s ease;
+}
+
+.nodeRow:hover {
+  background-color: var(--nav-hover-bg);
+}
+
+.folderIcon {
+  flex-shrink: 0;
+  color: #eab308;
+}
+
+.nodeInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nodeName {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nodeContext {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Action buttons on each node ──────────────────────────── */
+
+.actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.nodeRow:hover .actions {
+  opacity: 1;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.actionBtn:hover {
+  background-color: var(--control-btn-hover-bg);
+  color: var(--text-primary);
+}
+
+.actionBtnDanger:hover {
+  background-color: rgba(220, 38, 38, 0.1);
+  color: var(--danger-color);
+}
+
+/* ── Children container with tree line ────────────────────── */
+
+.children {
+  position: relative;
+  margin-left: 16px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-color);
+}
+
+/* ── Inline form (add / edit) ─────────────────────────────── */
+
+.inlineForm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  margin: 4px 0 4px 16px;
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+}
+
+.inlineInput {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  background-color: var(--modal-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 5px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.inlineInput:focus {
+  border-color: #4f46e5;
+}
+
+.inlineTextarea {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  background-color: var(--modal-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 5px;
+  outline: none;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 48px;
+  max-height: 100px;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.inlineTextarea:focus {
+  border-color: #4f46e5;
+}
+
+.inlineActions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.inlineConfirm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 5px;
+  background-color: #4f46e5;
+  color: #ffffff;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.12s ease;
+}
+
+.inlineConfirm:hover {
+  background-color: #4338ca;
+}
+
+.inlineConfirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.inlineCancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--btn-secondary-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.12s ease;
+}
+
+.inlineCancel:hover {
+  background-color: var(--btn-secondary-hover);
+}
+
+.inlineLabel {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.inlineError {
+  font-size: 0.75rem;
+  color: var(--danger-color);
+  margin: 0;
+}
+
+/* ── Add root folder button ───────────────────────────────── */
+
+.addRootBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #4f46e5;
+  background: transparent;
+  border: 1px dashed var(--input-border);
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.addRootBtn:hover {
+  background-color: var(--nav-active-bg);
+  border-color: #4f46e5;
+}
+
+/* ── Read-only mode (preview) ─────────────────────────────── */
+
+.readOnly .actions {
+  display: none;
+}
+
+.readOnly .nodeRow:hover {
+  background-color: transparent;
+}
+
+/* ── Delete confirmation ──────────────────────────────────── */
+
+.deleteConfirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  margin: 2px 0 2px 16px;
+  background-color: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.deleteConfirm span {
+  flex: 1;
+}
+
+.deleteYes {
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #ffffff;
+  background-color: var(--danger-color);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.deleteYes:hover {
+  background-color: var(--danger-hover);
+}
+
+.deleteNo {
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--btn-secondary-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.deleteNo:hover {
+  background-color: var(--btn-secondary-hover);
+}
+
+/* ── Empty tree state ─────────────────────────────────────── */
+
+.emptyTree {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.emptyTreeIcon {
+  color: var(--text-muted);
+  opacity: 0.4;
+}
