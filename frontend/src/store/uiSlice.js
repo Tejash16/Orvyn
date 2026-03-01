@@ -7,6 +7,8 @@ const uiSlice = createSlice({
     theme: 'light',
     activePage: 'dataroom',
     showUploadModal: false,
+    toasts: [],
+    toastCounter: 0,
     // Reflects the background token-refresh scheduler's view of connectivity.
     // true  = access tokens can be silently renewed (online)
     // false = Express unreachable; app operates in local read-only mode
@@ -34,6 +36,17 @@ const uiSlice = createSlice({
     closeUploadModal(state) {
       state.showUploadModal = false;
     },
+    addToast(state, action) {
+      state.toastCounter += 1;
+      state.toasts.push({
+        id: state.toastCounter,
+        message: action.payload.message,
+        type: action.payload.type || 'info', // 'info' | 'success' | 'error'
+      });
+    },
+    removeToast(state, action) {
+      state.toasts = state.toasts.filter((t) => t.id !== action.payload);
+    },
   },
 });
 
@@ -45,6 +58,8 @@ export const {
   setOnline,
   openUploadModal,
   closeUploadModal,
+  addToast,
+  removeToast,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

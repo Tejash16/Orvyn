@@ -8,6 +8,7 @@ import SettingsPage from './pages/setting';
 import DataRoomList from './pages/DataRoomList';
 import AuthPage from './pages/AuthPage';
 import ResetPassword from './pages/ResetPassword';
+import ToastContainer from './components/common/Toast';
 import './App.css';
 
 function App() {
@@ -76,6 +77,7 @@ function App() {
         <AuthPage />
       )}
 
+      <ToastContainer />
     </div>
   );
 }

@@ -139,6 +139,15 @@ export const copyFilePath = createAsyncThunk(
   }
 );
 
+export const copyFileToClipboard = createAsyncThunk(
+  'file/copyFileToClipboard',
+  async (filePath, { rejectWithValue }) => {
+    const result = await window.api.file.copyToClipboard(filePath);
+    if (!result.success) return rejectWithValue(result.error);
+    return result;
+  }
+);
+
 export const relocateFile = createAsyncThunk(
   'file/relocateFile',
   async (fileId, { dispatch, rejectWithValue }) => {
@@ -310,7 +319,7 @@ const fileSlice = createSlice({
     }
 
     // Shell/clipboard actions — only track errors
-    const shellThunks = [openFile, openFileWith, copyFilePath];
+    const shellThunks = [openFile, openFileWith, copyFilePath, copyFileToClipboard];
     for (const thunk of shellThunks) {
       builder.addCase(thunk.rejected, (state, action) => {
         state.error = action.payload;
