@@ -204,6 +204,53 @@ function registerFileHandlers(ipcMain, getMainWindow) {
     }
   });
 
+  // ── Path info & folder scanning (no registration) ─────
+
+  ipcMain.handle('file:get-paths-info', async (_event, { file_paths }) => {
+    try {
+      const results = [];
+      for (const fp of file_paths) {
+        const ext = path.extname(fp).toLowerCase();
+        const name = path.basename(fp);
+        let size = 0;
+        try { size = fs.statSync(fp).size; } catch { /* skip */ }
+        results.push({ path: fp, name, size, extension: ext, valid: SUPPORTED_EXTENSIONS.has(ext) });
+      }
+      return { success: true, files: results };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('file:scan-folder', async (_event, { folder_path }) => {
+    try {
+      const filePaths = [];
+
+      function scanDir(dirPath) {
+        let entries;
+        try {
+          entries = fs.readdirSync(dirPath, { withFileTypes: true });
+        } catch {
+          return;
+        }
+        for (const entry of entries) {
+          if (entry.name.startsWith('.')) continue;
+          const fullPath = path.join(dirPath, entry.name);
+          if (entry.isDirectory()) {
+            scanDir(fullPath);
+          } else if (entry.isFile()) {
+            filePaths.push(fullPath);
+          }
+        }
+      }
+
+      scanDir(folder_path);
+      return { success: true, filePaths };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   // ── Shell & clipboard operations ───────────────────────────
 
   ipcMain.handle('file:open', async (_event, { file_path }) => {

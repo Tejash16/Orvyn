@@ -92,6 +92,8 @@ contextBridge.exposeInMainWorld('api', {
     getDetails:        (fileId)                            => ipcRenderer.invoke('file:get-details', { file_id: fileId }),
     list:              (dataroomId, options = {})           => ipcRenderer.invoke('file:list', { dataroom_id: dataroomId, ...options }),
     rename:            (fileId, newName)                   => ipcRenderer.invoke('file:rename', { file_id: fileId, new_name: newName }),
+    getPathsInfo:      (filePaths)                         => ipcRenderer.invoke('file:get-paths-info', { file_paths: filePaths }),
+    scanFolder:        (folderPath)                        => ipcRenderer.invoke('file:scan-folder', { folder_path: folderPath }),
   },
 
   // AI classification

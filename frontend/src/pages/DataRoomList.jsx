@@ -5,8 +5,10 @@ import {
   updateDataroom,
   deleteDataroom,
 } from '../store/dataroomSlice';
+import { closeUploadModal } from '../store/uiSlice';
 import CreateDataRoomModal from '../components/dataroom/CreateDataRoomModal';
 import FileExplorer from '../components/dataroom/FileExplorer';
+import UploadModal from '../components/upload/UploadModal';
 import styles from './DataRoomList.module.css';
 
 /* ── Icons ───────────────────────────────────────────────── */
@@ -72,10 +74,13 @@ const IconEmptyBox = () => (
 function DataRoomList() {
   const dispatch = useDispatch();
   const { datarooms, isLoading } = useSelector((s) => s.dataroom);
+  const showUploadModal = useSelector((s) => s.ui.showUploadModal);
 
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [localUploadModal, setLocalUploadModal] = useState(false);
+  const [uploadInitialFiles, setUploadInitialFiles] = useState(null);
 
   // Favorites — visual only, local state (V1)
   const [favorites, setFavorites] = useState(new Set());
@@ -175,6 +180,30 @@ function DataRoomList() {
   function handleCreated(dataroomId) {
     setSelectedId(dataroomId);
   }
+
+  // ── Upload Modal ────────────────────────────────────────
+
+  function handleOpenUpload(mode, filePaths) {
+    if (mode === 'drop' && filePaths) {
+      setUploadInitialFiles(filePaths);
+    } else {
+      setUploadInitialFiles(null);
+    }
+    setLocalUploadModal(true);
+  }
+
+  function handleCloseUploadModal() {
+    setLocalUploadModal(false);
+    setUploadInitialFiles(null);
+    dispatch(closeUploadModal());
+  }
+
+  function handleViewDataroom(dataroomId) {
+    setSelectedId(dataroomId);
+    handleCloseUploadModal();
+  }
+
+  const isUploadModalOpen = localUploadModal || showUploadModal;
 
   // ── Render ─────────────────────────────────────────────
 
@@ -315,6 +344,7 @@ function DataRoomList() {
           <FileExplorer
             dataroomId={selectedId}
             onClose={() => setSelectedId(null)}
+            onOpenUpload={handleOpenUpload}
           />
         ) : (
           <div className={styles.emptyState}>
@@ -363,6 +393,16 @@ function DataRoomList() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Upload & Classify Modal ─────────────────────── */}
+      {isUploadModalOpen && (
+        <UploadModal
+          onClose={handleCloseUploadModal}
+          initialFiles={uploadInitialFiles}
+          currentDataroomId={selectedId}
+          onViewDataroom={handleViewDataroom}
+        />
       )}
     </div>
   );

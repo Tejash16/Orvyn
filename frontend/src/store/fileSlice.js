@@ -53,6 +53,35 @@ export const generateDataroom = createAsyncThunk(
   }
 );
 
+// ── Upload Modal thunks (decoupled flow) ────────────────
+
+export const registerFiles = createAsyncThunk(
+  'file/registerFiles',
+  async ({ dataroomId, filePaths }, { rejectWithValue }) => {
+    const result = await window.api.file.register(dataroomId, filePaths);
+    if (!result.success) return rejectWithValue(result.error);
+    return result;
+  }
+);
+
+export const classifyRegisteredFiles = createAsyncThunk(
+  'file/classifyRegisteredFiles',
+  async ({ dataroomId, fileIds }, { rejectWithValue }) => {
+    const result = await window.api.ai.classify(dataroomId, fileIds);
+    if (!result.success) return rejectWithValue(result.error);
+    return result;
+  }
+);
+
+export const generateNewDataroom = createAsyncThunk(
+  'file/generateNewDataroom',
+  async ({ name, description, fileIds }, { rejectWithValue }) => {
+    const result = await window.api.ai.generateDataroom(name, description, fileIds);
+    if (!result.success) return rejectWithValue(result.error);
+    return result;
+  }
+);
+
 export const moveFileToFolder = createAsyncThunk(
   'file/moveFileToFolder',
   async ({ fileId, folderId }, { dispatch, rejectWithValue }) => {
@@ -140,6 +169,16 @@ const fileSlice = createSlice({
     isClassifying: false,
     classificationResults: null,
     error: null,
+    // Upload modal state
+    uploadModal: {
+      registrationResult: null,
+      classificationResult: null,
+      generationResult: null,
+      isRegistering: false,
+      isClassifying: false,
+      isGenerating: false,
+      error: null,
+    },
   },
   reducers: {
     clearFileError(state) {
@@ -147,6 +186,17 @@ const fileSlice = createSlice({
     },
     clearClassificationResults(state) {
       state.classificationResults = null;
+    },
+    resetUploadState(state) {
+      state.uploadModal = {
+        registrationResult: null,
+        classificationResult: null,
+        generationResult: null,
+        isRegistering: false,
+        isClassifying: false,
+        isGenerating: false,
+        error: null,
+      };
     },
   },
   extraReducers: (builder) => {
@@ -200,6 +250,51 @@ const fileSlice = createSlice({
         state.error = action.payload;
       });
 
+    // registerFiles (upload modal)
+    builder
+      .addCase(registerFiles.pending, (state) => {
+        state.uploadModal.isRegistering = true;
+        state.uploadModal.error = null;
+      })
+      .addCase(registerFiles.fulfilled, (state, action) => {
+        state.uploadModal.isRegistering = false;
+        state.uploadModal.registrationResult = action.payload;
+      })
+      .addCase(registerFiles.rejected, (state, action) => {
+        state.uploadModal.isRegistering = false;
+        state.uploadModal.error = action.payload;
+      });
+
+    // classifyRegisteredFiles (upload modal)
+    builder
+      .addCase(classifyRegisteredFiles.pending, (state) => {
+        state.uploadModal.isClassifying = true;
+        state.uploadModal.error = null;
+      })
+      .addCase(classifyRegisteredFiles.fulfilled, (state, action) => {
+        state.uploadModal.isClassifying = false;
+        state.uploadModal.classificationResult = action.payload;
+      })
+      .addCase(classifyRegisteredFiles.rejected, (state, action) => {
+        state.uploadModal.isClassifying = false;
+        state.uploadModal.error = action.payload;
+      });
+
+    // generateNewDataroom (upload modal)
+    builder
+      .addCase(generateNewDataroom.pending, (state) => {
+        state.uploadModal.isGenerating = true;
+        state.uploadModal.error = null;
+      })
+      .addCase(generateNewDataroom.fulfilled, (state, action) => {
+        state.uploadModal.isGenerating = false;
+        state.uploadModal.generationResult = action.payload;
+      })
+      .addCase(generateNewDataroom.rejected, (state, action) => {
+        state.uploadModal.isGenerating = false;
+        state.uploadModal.error = action.payload;
+      });
+
     // Mutation thunks — only track errors
     const mutationThunks = [
       moveFileToFolder,
@@ -224,5 +319,5 @@ const fileSlice = createSlice({
   },
 });
 
-export const { clearFileError, clearClassificationResults } = fileSlice.actions;
+export const { clearFileError, clearClassificationResults, resetUploadState } = fileSlice.actions;
 export default fileSlice.reducer;

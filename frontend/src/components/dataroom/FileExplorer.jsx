@@ -17,8 +17,6 @@ import {
 } from '../../store/fileExplorerSlice';
 import { createFolder } from '../../store/folderSlice';
 import {
-  selectAndRegisterFiles,
-  selectAndRegisterFolder,
   openFile,
   renameFile,
   removeFromDocrack,
@@ -217,7 +215,7 @@ const IconOpen = () => (
 
 /* ── Component ──────────────────────────────────────────── */
 
-function FileExplorer({ dataroomId, onClose }) {
+function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
   const dispatch = useDispatch();
   const {
     currentDataroomId,
@@ -411,13 +409,49 @@ function FileExplorer({ dataroomId, onClose }) {
   // ── Upload ──
 
   function handleUploadFiles() {
-    dispatch(selectAndRegisterFiles(currentDataroomId));
     setOpenDropdown(null);
+    if (onOpenUpload) onOpenUpload('files');
   }
 
   function handleUploadFolder() {
-    dispatch(selectAndRegisterFolder(currentDataroomId));
     setOpenDropdown(null);
+    if (onOpenUpload) onOpenUpload('folder');
+  }
+
+  // ── Drag-and-drop ──
+
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  function handleExplorerDragOver(e) {
+    e.preventDefault();
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragOver(true);
+    }
+  }
+
+  function handleExplorerDragLeave(e) {
+    e.preventDefault();
+    // Only hide overlay if we're leaving the explorer container
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setIsDragOver(false);
+    }
+  }
+
+  async function handleExplorerDrop(e) {
+    e.preventDefault();
+    setIsDragOver(false);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    const paths = [];
+    for (let i = 0; i < files.length; i++) {
+      if (files[i].path) paths.push(files[i].path);
+    }
+
+    if (paths.length > 0 && onOpenUpload) {
+      onOpenUpload('drop', paths);
+    }
   }
 
   // ── Sort column click (list view) ──
@@ -904,7 +938,12 @@ function FileExplorer({ dataroomId, onClose }) {
   // ── Main render ──
 
   return (
-    <div className={styles.explorer}>
+    <div
+      className={styles.explorer}
+      onDragOver={handleExplorerDragOver}
+      onDragLeave={handleExplorerDragLeave}
+      onDrop={handleExplorerDrop}
+    >
       {renderNavBar()}
       {renderToolbar()}
       {renderSelectionBar()}
@@ -931,6 +970,19 @@ function FileExplorer({ dataroomId, onClose }) {
           flexShrink: 0,
         }}>
           {error}
+        </div>
+      )}
+
+      {/* Drag-and-drop overlay */}
+      {isDragOver && (
+        <div className={styles.dropOverlay}>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="16 16 12 12 8 16" />
+            <line x1="12" y1="12" x2="12" y2="21" />
+            <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+          </svg>
+          <span>Drop files here to upload &amp; classify</span>
         </div>
       )}
 
