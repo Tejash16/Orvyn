@@ -127,12 +127,25 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
   ipcMain.handle('auth:restoreSession', async () => {
     try {
-      // Step 1 — Python must be healthy before SQLite work
-      try {
-        await pythonService.checkHealth();
-      } catch {
-        return { success: false };
+      // Step 1 — Wait for Python to become healthy.
+      // pythonProcess.start() runs just before the window opens, so the
+      // FastAPI server may still be booting when React mounts and calls
+      // restoreSession.  Poll up to ~10 s (20 × 500 ms) before giving up.
+      const MAX_HEALTH_ATTEMPTS = 20;
+      const HEALTH_INTERVAL_MS  = 500;
+      let pythonReady = false;
+
+      for (let i = 0; i < MAX_HEALTH_ATTEMPTS; i++) {
+        try {
+          await pythonService.checkHealth();
+          pythonReady = true;
+          break;
+        } catch {
+          await new Promise((r) => setTimeout(r, HEALTH_INTERVAL_MS));
+        }
       }
+
+      if (!pythonReady) return { success: false };
 
       // Step 2
       const storedRefreshToken = tokenVault.read();

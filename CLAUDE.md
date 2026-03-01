@@ -464,3 +464,358 @@ Claude must NOT:
 - Create layouts that only work at one resolution.
 
 Responsive behavior is mandatory for all new UI components and pages.
+
+---
+
+## 15. Smart DataRoom Architecture
+
+DocRack's core feature is the Smart DataRoom — an AI-powered virtual file organizer.
+
+### Virtual File System
+
+- Files are **never copied** into the application. DocRack stores only the absolute path
+  reference (`original_path`) in SQLite. The actual file stays on disk where the user placed it.
+- If a file is moved or deleted externally, DocRack detects this via `file:check-exists` and
+  offers a **Relocate** option so the user can point to the new location.
+- File metadata (name, extension, size, checksum, extracted text) is stored in the database
+  alongside the path reference.
+
+### Supported File Types
+
+`.pdf`, `.docx`, `.xlsx`, `.pptx`, `.txt`, `.csv`, `.png`, `.jpg`, `.jpeg`
+
+Any file with an unsupported extension is rejected at registration time.
+
+### Classification Modes
+
+1. **Custom Classification** — User selects an existing DataRoom. Files are registered into
+   that DataRoom, then the AI classifies each file into the DataRoom's existing folder
+   structure based on folder context descriptions.
+
+2. **AI Auto-Organize** — User provides a name and optional description. The AI creates an
+   entirely new DataRoom with an auto-generated folder structure, then classifies all files
+   into those folders.
+
+### Constraints
+
+- Maximum **50 files** per classification batch.
+- Nested folder structure with unlimited depth. Each folder node has a `context` field
+  (description) that guides the AI classifier.
+- File fingerprinting extracts the first **1000 characters** of text content per file for
+  AI classification input.
+
+---
+
+## 16. Classification Engine
+
+The classification engine lives in `python-backend/app/services/classification_service.py`.
+
+### Processing Pipeline
+
+1. **Text Extraction** — On file registration, the Python backend extracts text from each
+   file (PDF via PyPDF2, DOCX via python-docx, XLSX/CSV via openpyxl/csv, PPTX via
+   python-pptx, images via OCR, TXT directly). Stores up to 5000 chars in `extracted_text`.
+
+2. **Fingerprinting** — For classification, each file's fingerprint is built from:
+   `filename + extension + first 1000 chars of extracted_text`.
+
+3. **Batched Parallel Processing** — Files are split into batches of **10 files per Gemini
+   API call**. Up to **5 batches run in parallel** using `asyncio.gather()`, processing
+   a maximum of 50 files efficiently.
+
+4. **Folder Assignment** — The AI returns a `folder_id` and `confidence` score (0.0–1.0)
+   for each file.
+
+### AI Model Configuration
+
+- **Model**: `gemini-2.0-flash` (Google Generative AI)
+- **Temperature**: `0.1` (low variance for consistent classification)
+- **Response format**: Structured JSON with `folder_id`, `confidence`, `reasoning`
+
+### Confidence Threshold
+
+- Minimum confidence: **0.4** for folder assignment.
+- Files scoring below 0.4 remain **unclassified** (folder_id = null).
+- The `classification_score` is stored on the file record and displayed as a colored
+  confidence dot in the UI (green ≥ 0.8, yellow ≥ 0.6, orange ≥ 0.4).
+
+---
+
+## 17. IPC Channels
+
+All IPC channels are defined in `electron/ipc/` handler files and exposed via
+`electron/preload.js` through `contextBridge`. React accesses them via `window.api.*`.
+
+### `dataroom:*` — DataRoom CRUD
+
+| Channel | Preload Method | Purpose |
+|---------|---------------|---------|
+| `dataroom:create` | `window.api.dataroom.create({name, description})` | Create a new DataRoom |
+| `dataroom:list` | `window.api.dataroom.list()` | List all DataRooms with folder/file counts |
+| `dataroom:get` | `window.api.dataroom.get(id)` | Get DataRoom with folders and files |
+| `dataroom:update` | `window.api.dataroom.update(id, updates)` | Update name/description |
+| `dataroom:delete` | `window.api.dataroom.delete(id)` | Delete DataRoom and all contents |
+
+### `folder:*` — Folder Operations
+
+| Channel | Preload Method | Purpose |
+|---------|---------------|---------|
+| `folder:create` | `window.api.folder.create(dataroomId, parentFolderId, name, context)` | Create folder with context description |
+| `folder:get-children` | `window.api.folder.getChildren(dataroomId, folderId)` | Get subfolders + files for a folder (null = root) |
+| `folder:rename` | `window.api.folder.rename(folderId, newName)` | Rename a folder |
+| `folder:update-context` | `window.api.folder.updateContext(folderId, context)` | Update folder description |
+| `folder:delete` | `window.api.folder.delete(folderId)` | Delete folder (files become unclassified) |
+| `folder:move` | `window.api.folder.move(folderId, newParentId)` | Move folder to new parent |
+
+### `file:*` — File Operations
+
+| Channel | Preload Method | Purpose |
+|---------|---------------|---------|
+| `file:select-files` | `window.api.file.selectFiles()` | Open native file picker dialog |
+| `file:select-folder` | `window.api.file.selectFolder()` | Open native folder picker, scan recursively |
+| `file:register` | `window.api.file.register(dataroomId, filePaths)` | Register file paths in DataRoom (max 50) |
+| `file:get-details` | `window.api.file.getDetails(fileId)` | Get full file metadata + extracted text |
+| `file:list` | `window.api.file.list(dataroomId, options)` | List files with folder/status filters |
+| `file:check-exists` | `window.api.file.checkExists(fileId)` | Check if file still exists on disk |
+| `file:move-to-folder` | `window.api.file.moveToFolder(fileId, folderId)` | Move file to a different folder |
+| `file:rename` | `window.api.file.rename(fileId, newName)` | Rename file display name (not on disk) |
+| `file:relocate` | `window.api.file.relocate(fileId)` | Open picker to update path for moved file |
+| `file:remove-from-docrack` | `window.api.file.removeFromDocrack(fileId)` | Remove from DB only, keep file on disk |
+| `file:delete-from-system` | `window.api.file.deleteFromSystem(fileId)` | Delete from DB AND from disk |
+| `file:open` | `window.api.file.open(filePath)` | Open file with default system app |
+| `file:open-with` | `window.api.file.openWith(filePath)` | Open Windows "Open With" dialog |
+| `file:copy-path` | `window.api.file.copyPath(filePath)` | Copy file path to clipboard |
+| `file:copy-to-clipboard` | `window.api.file.copyToClipboard(filePath)` | Copy file itself to clipboard |
+| `file:get-paths-info` | `window.api.file.getPathsInfo(filePaths)` | Get metadata for paths without registering |
+| `file:scan-folder` | `window.api.file.scanFolder(folderPath)` | Recursively scan folder for file paths |
+
+### `ai:*` — AI Classification
+
+| Channel | Preload Method | Purpose |
+|---------|---------------|---------|
+| `ai:classify` | `window.api.ai.classify(dataroomId, fileIds)` | Classify files into existing DataRoom folders |
+| `ai:generate-dataroom` | `window.api.ai.generateDataroom(name, description, fileIds)` | Create AI-generated DataRoom with folders |
+
+---
+
+## 18. Python Backend Endpoints
+
+All endpoints are defined in `python-backend/app/main.py`. The FastAPI server runs locally,
+spawned by Electron. Electron communicates with it via HTTP — React never calls it directly.
+
+### Infrastructure
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/health` | Health check, returns DB table list |
+| `POST` | `/init-db` | Initialize SQLite with `database_path` and `mongo_user_id` |
+
+### Theme Settings
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/settings/theme` | Get current theme preference |
+| `POST` | `/settings/theme` | Set theme (`"light"` or `"dark"`) |
+
+### DataRoom CRUD
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/datarooms` | Create DataRoom (`name`, optional `description`) |
+| `GET` | `/datarooms` | List all DataRooms with `folder_count` and `file_count` |
+| `GET` | `/datarooms/{dataroom_id}` | Get DataRoom with nested `folders[]` and `files[]` |
+| `PUT` | `/datarooms/{dataroom_id}` | Update DataRoom name/description |
+| `DELETE` | `/datarooms/{dataroom_id}` | Delete DataRoom and all children |
+
+### Folder CRUD
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/datarooms/{dataroom_id}/folders` | Create folder (`name`, `context`, optional `parent_id`) |
+| `GET` | `/datarooms/{dataroom_id}/folders` | List all folders in DataRoom with `file_count` |
+| `PUT` | `/folders/{folder_id}` | Update folder (`name`, `context`, `parent_id`) |
+| `DELETE` | `/folders/{folder_id}` | Delete folder (files become unclassified) |
+
+### File Management
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/files/register` | Register files (`dataroom_id`, `file_paths[]`, max 50) |
+| `GET` | `/files/{file_id}` | Get file details including `extracted_text` |
+| `GET` | `/datarooms/{dataroom_id}/files` | List files with optional `folder_id`, `include_subfolders`, `status` filters |
+| `POST` | `/files/{file_id}/check-exists` | Check if file exists at `original_path` |
+| `PUT` | `/files/{file_id}/relocate` | Update `original_path` to new location |
+| `PUT` | `/files/{file_id}/move-to-folder` | Move file to folder (`folder_id`, null = unclassified) |
+| `PUT` | `/files/{file_id}/rename` | Rename display name (`new_name`) |
+| `DELETE` | `/files/{file_id}` | Delete file record (query param `delete_from_system=true` also deletes from disk) |
+
+### AI Classification
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/ai/classify` | Classify `file_ids[]` into existing DataRoom folders. Returns per-file `folder_id`, `confidence`, `reasoning` |
+| `POST` | `/ai/generate-dataroom` | Create new DataRoom with AI-generated folders, then classify `file_ids[]`. Returns `folders_created`, `files_assigned`, `files_unassigned` |
+
+---
+
+## 19. Redux Slices
+
+All slices are in `frontend/src/store/`. Each slice uses Redux Toolkit's `createSlice` and
+`createAsyncThunk`.
+
+### `dataroomSlice.js` — DataRoom CRUD State
+
+```
+State shape:
+  datarooms: []              — Array of all DataRooms
+  activeDataroom: null       — Currently viewed DataRoom (with folders/files)
+  isLoading: false           — Fetch in progress
+  isCreating: false          — Creation in progress
+  error: null                — Error message
+
+Thunks: fetchDatarooms, fetchDataroom, createDataroom, updateDataroom, deleteDataroom
+```
+
+### `fileExplorerSlice.js` — Navigation & View State
+
+```
+State shape:
+  currentDataroomId: null    — Active DataRoom ID
+  currentFolderId: null      — Current folder (null = root)
+  currentPath: []            — Breadcrumb path [{id, name, type}, ...]
+  items: []                  — Current view items (files + folders merged)
+  selectedItems: []          — Multi-selection [{id, type}, ...]
+  viewMode: 'grid'           — 'grid' | 'list'
+  sortBy: 'name'             — 'name' | 'size' | 'date'
+  sortOrder: 'asc'           — 'asc' | 'desc'
+  searchQuery: ''            — Local search filter
+  isLoading: false           — Navigation in progress
+  error: null                — Error message
+
+Thunks: navigateToDataroom, navigateToFolder, navigateUp,
+        navigateToPathIndex, navigateDirect, refreshCurrentView
+```
+
+### `fileSlice.js` — File Operations & Upload Modal
+
+```
+State shape:
+  isRegistering: false              — File registration in progress
+  isClassifying: false              — Classification in progress
+  classificationResults: null       — Results from AI classification
+  error: null                       — Error message
+  uploadModal:
+    registrationResult: null        — { registered, rejected }
+    classificationResult: null      — Full classify response
+    generationResult: null          — Full generate-dataroom response
+    isRegistering: false
+    isClassifying: false
+    isGenerating: false
+    error: null
+
+Thunks: selectAndRegisterFiles, selectAndRegisterFolder, classifyFiles,
+        generateDataroom, registerFiles, classifyRegisteredFiles,
+        generateNewDataroom, moveFileToFolder, removeFromDocrack,
+        deleteFromSystem, openFile, openFileWith, copyFilePath,
+        copyFileToClipboard, relocateFile, renameFile
+```
+
+### `folderSlice.js` — Folder Operations
+
+```
+State shape:
+  isCreating: false          — Folder creation in progress
+  error: null                — Error message
+
+Thunks: createFolder, renameFolder, deleteFolder, moveFolder, updateFolderContext
+```
+
+### `uiSlice.js` — Global UI State
+
+```
+State shape:
+  sidebarCollapsed: true     — Sidebar collapsed/expanded
+  theme: 'light'             — 'light' | 'dark'
+  activePage: 'dataroom'     — Current page identifier
+  showUploadModal: false     — Upload modal visibility
+  toasts: []                 — Toast notifications [{id, message, type}, ...]
+  toastCounter: 0            — Auto-increment toast ID
+  isOnline: true             — Express backend reachable
+
+Reducers: toggleSidebar, toggleTheme, setTheme, setActivePage,
+          setOnline, openUploadModal, closeUploadModal, addToast, removeToast
+```
+
+---
+
+## 20. File Explorer Architecture
+
+The File Explorer (`frontend/src/components/dataroom/FileExplorer.jsx`) is the primary
+interface for browsing DataRoom contents. It mimics Windows Explorer behavior.
+
+### Virtual File References
+
+- Files are displayed by their `original_name` and metadata from the database.
+- Double-clicking a file calls `file:open` which uses `shell.openPath()` to launch the
+  system default application.
+- If the file no longer exists at `original_path`, the UI shows a "File not found" state
+  with a **Relocate** button that opens a file picker to update the stored path.
+
+### Navigation
+
+- **Breadcrumb bar** with clickable path segments for instant navigation to any ancestor.
+- **Back/Up buttons** for parent folder navigation.
+- **Folder double-click** navigates into the folder.
+- Navigation state is managed by `fileExplorerSlice` with `currentPath[]` tracking the
+  full breadcrumb trail.
+
+### View Modes
+
+- **Grid view** — Card-based layout with file type icons, names (2-line clamp), and size.
+- **List view** — Table with sortable columns (Name, Type, Size, Date, Confidence).
+- Toggle between views via toolbar buttons. Persisted in Redux.
+
+### Right-Click Context Menus
+
+Uses the reusable `ContextMenu` component (`frontend/src/components/common/ContextMenu.jsx`).
+
+**File context menu** (11 items):
+Open, Open With, separator, Copy File, Copy Path, Move to Folder, separator,
+Rename (F2), Relocate, separator, Remove from DocRack, Delete from System.
+
+**Folder context menu** (6 items):
+Open, New Subfolder, separator, Rename, Edit Description, separator, Delete Folder.
+
+**Background context menu** (6 items):
+New Folder, separator, Upload Files, Upload Folder, separator, Refresh.
+
+### Confirmation Dialogs
+
+- **Remove from DocRack** — Single confirmation. File stays on disk.
+- **Delete from System** — Double confirmation: user must type the exact filename to
+  enable the delete button. File is permanently deleted from disk.
+- **Delete Folder** — Single confirmation. Files inside become unclassified.
+- All dialogs support **Escape** to cancel and **Enter** to confirm.
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Delete` | Remove selected file(s) from DocRack |
+| `F2` | Rename selected item |
+| `Enter` | Open file / navigate into folder |
+| `Backspace` | Navigate to parent folder |
+| `Escape` | Clear selection |
+| `Ctrl+A` | Select all items |
+| `Ctrl+C` | Copy selected file to clipboard |
+
+### Multi-Selection
+
+- Click to select single item, Ctrl+click to toggle, toolbar "Select All" button.
+- Selection bar appears with count and batch action buttons.
+
+### Drag-and-Drop Upload
+
+- Dragging files over the explorer shows a drop overlay.
+- Dropping files opens the Upload Modal with pre-loaded file paths.
+- Folder drops are detected and recursively scanned via `file:scan-folder`.

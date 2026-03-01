@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from pathlib import Path
 from dotenv import load_dotenv
 from typing import Optional, List
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Float, Text, ForeignKey, inspect, func, event
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Float, Text, ForeignKey, inspect, func, event, text
 from sqlalchemy.orm import declarative_base, Session, relationship
 import os
 import datetime
@@ -312,6 +312,22 @@ def init_db(request: InitDbRequest):
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA foreign_keys = ON")
         cursor.close()
+
+    # Schema migration: if the files table exists with stale columns
+    # (stored_name, local_path from old schema), drop files + classifications
+    # so create_all rebuilds them with the current ORM definitions.
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='files'"
+        ))
+        if result.fetchone():
+            columns = [
+                row[1] for row in conn.execute(text("PRAGMA table_info(files)"))
+            ]
+            if "original_path" not in columns:
+                conn.execute(text("DROP TABLE IF EXISTS classifications"))
+                conn.execute(text("DROP TABLE IF EXISTS files"))
+                conn.commit()
 
     Base.metadata.create_all(engine)
 
