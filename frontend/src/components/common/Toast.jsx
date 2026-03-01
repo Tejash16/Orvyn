@@ -1,31 +1,37 @@
-import { useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { removeToast } from '../../store/uiSlice';
 import styles from './Toast.module.css';
 
-const TOAST_DURATION = 3000;
+const TOAST_DURATION = 4000;
+const FADE_OUT_MS = 250;
 
 function ToastItem({ toast }) {
   const dispatch = useDispatch();
+  const [fading, setFading] = useState(false);
+
+  const dismiss = useCallback(() => {
+    setFading(true);
+    setTimeout(() => dispatch(removeToast(toast.id)), FADE_OUT_MS);
+  }, [toast.id, dispatch]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      dispatch(removeToast(toast.id));
-    }, TOAST_DURATION);
+    const timer = setTimeout(dismiss, TOAST_DURATION);
     return () => clearTimeout(timer);
-  }, [toast.id, dispatch]);
+  }, [dismiss]);
 
   const typeClass =
     toast.type === 'success' ? styles.toastSuccess
       : toast.type === 'error' ? styles.toastError
-        : styles.toastInfo;
+        : toast.type === 'warning' ? styles.toastWarning
+          : styles.toastInfo;
 
   return (
-    <div className={`${styles.toast} ${typeClass}`}>
+    <div className={`${styles.toast} ${typeClass} ${fading ? styles.toastFadeOut : ''}`}>
       <span className={styles.message}>{toast.message}</span>
       <button
         className={styles.closeBtn}
-        onClick={() => dispatch(removeToast(toast.id))}
+        onClick={dismiss}
         type="button"
       >
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none"

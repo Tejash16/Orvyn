@@ -90,6 +90,9 @@
   border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: background-color 0.12s ease, color 0.12s ease;
 }
 

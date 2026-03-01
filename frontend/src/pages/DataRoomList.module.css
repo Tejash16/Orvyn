@@ -333,6 +333,24 @@
   color: var(--text-muted);
 }
 
+.clearSearchBtn {
+  margin-top: 8px;
+  padding: 5px 14px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.clearSearchBtn:hover {
+  background-color: var(--nav-hover-bg);
+  color: var(--text-primary);
+}
+
 /* ── Delete confirm modal ────────────────────────────────── */
 
 .confirmBackdrop {

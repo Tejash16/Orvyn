@@ -749,6 +749,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
                 className={`${styles.crumb} ${i === currentPath.length - 1 ? styles.crumbActive : ''}`}
                 onClick={() => handleBreadcrumb(i)}
                 type="button"
+                title={seg.name}
               >
                 {seg.name}
               </button>
@@ -908,7 +909,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
               )}
               {renderItemIcon(item, 'grid')}
               {renamingId === item.id ? renderInlineRename(item) : (
-                <span className={styles.gridCardName}>{item.name}</span>
+                <span className={styles.gridCardName} title={item.name}>{item.name}</span>
               )}
               {item.type === 'file' && (
                 <span className={styles.gridCardMeta}>{formatFileSize(item.size_bytes)}</span>
@@ -973,7 +974,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
                         style={{ textAlign: 'left' }}
                       />
                     ) : (
-                      <span className={styles.listFileName}>{item.name}</span>
+                      <span className={styles.listFileName} title={item.name}>{item.name}</span>
                     )}
                     {confColor && (
                       <span
@@ -1006,6 +1007,11 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
           <span className={styles.emptyHint}>
             No files or folders match &quot;{searchQuery}&quot;
           </span>
+          <div className={styles.emptyAction}>
+            <button className={styles.toolBtn} onClick={() => dispatch(setSearchQuery(''))} type="button">
+              Clear Search
+            </button>
+          </div>
         </div>
       );
     }
@@ -1115,7 +1121,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
 
       {/* Remove from DocRack confirmation */}
       {removeConfirm && (
-        <div className={styles.confirmBackdrop} onClick={() => setRemoveConfirm(null)}>
+        <div className={styles.confirmBackdrop} onClick={() => setRemoveConfirm(null)} onKeyDown={(e) => { if (e.key === 'Escape') setRemoveConfirm(null); if (e.key === 'Enter') confirmRemove(); }}>
           <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.confirmTitle}>Remove from DocRack</h3>
             <p className={styles.confirmText}>
@@ -1124,7 +1130,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
             </p>
             <div className={styles.confirmActions}>
               <button className={styles.confirmBtnSecondary} onClick={() => setRemoveConfirm(null)} type="button">Cancel</button>
-              <button className={styles.confirmBtnDanger} onClick={confirmRemove} type="button">Remove</button>
+              <button className={styles.confirmBtnDanger} onClick={confirmRemove} type="button" autoFocus>Remove</button>
             </div>
           </div>
         </div>
@@ -1132,7 +1138,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
 
       {/* Delete from System — double confirmation */}
       {deleteConfirm && (
-        <div className={styles.confirmBackdrop} onClick={() => { setDeleteConfirm(null); setDeleteConfirmName(''); }}>
+        <div className={styles.confirmBackdrop} onClick={() => { setDeleteConfirm(null); setDeleteConfirmName(''); }} onKeyDown={(e) => { if (e.key === 'Escape') { setDeleteConfirm(null); setDeleteConfirmName(''); } }}>
           <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.confirmTitle}>Delete from System</h3>
             <p className={styles.confirmText}>
@@ -1149,6 +1155,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
               onChange={(e) => setDeleteConfirmName(e.target.value)}
               placeholder={deleteConfirm.name}
               autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter' && deleteConfirmName === deleteConfirm.name) confirmDeleteFromSystem(); }}
             />
             <div className={styles.confirmActions}>
               <button className={styles.confirmBtnSecondary} onClick={() => { setDeleteConfirm(null); setDeleteConfirmName(''); }} type="button">Cancel</button>
@@ -1167,7 +1174,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
 
       {/* Delete folder confirmation */}
       {deleteFolderConfirm && (
-        <div className={styles.confirmBackdrop} onClick={() => setDeleteFolderConfirm(null)}>
+        <div className={styles.confirmBackdrop} onClick={() => setDeleteFolderConfirm(null)} onKeyDown={(e) => { if (e.key === 'Escape') setDeleteFolderConfirm(null); if (e.key === 'Enter') confirmDeleteFolder(); }}>
           <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.confirmTitle}>Delete Folder</h3>
             <p className={styles.confirmText}>
@@ -1176,7 +1183,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
             </p>
             <div className={styles.confirmActions}>
               <button className={styles.confirmBtnSecondary} onClick={() => setDeleteFolderConfirm(null)} type="button">Cancel</button>
-              <button className={styles.confirmBtnDanger} onClick={confirmDeleteFolder} type="button">Delete</button>
+              <button className={styles.confirmBtnDanger} onClick={confirmDeleteFolder} type="button" autoFocus>Delete</button>
             </div>
           </div>
         </div>

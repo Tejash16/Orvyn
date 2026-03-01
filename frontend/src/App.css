@@ -31,6 +31,9 @@
   --success-color: #16a34a;
   --success-bg: rgba(22, 163, 74, 0.08);
   --success-border: rgba(22, 163, 74, 0.2);
+  --warning-color: #b45309;
+  --warning-bg: rgba(234, 179, 8, 0.1);
+  --warning-border: rgba(234, 179, 8, 0.3);
 }
 
 [data-theme="dark"] {
@@ -64,6 +67,9 @@
   --success-color: #4ade80;
   --success-bg: rgba(74, 222, 128, 0.1);
   --success-border: rgba(74, 222, 128, 0.2);
+  --warning-color: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.1);
+  --warning-border: rgba(251, 191, 36, 0.25);
 }
 
 /* ── App shell ───────────────────────────────────────────── */

@@ -41,8 +41,12 @@ const uiSlice = createSlice({
       state.toasts.push({
         id: state.toastCounter,
         message: action.payload.message,
-        type: action.payload.type || 'info', // 'info' | 'success' | 'error'
+        type: action.payload.type || 'info', // 'info' | 'success' | 'error' | 'warning'
       });
+      // Max 3 visible — remove oldest when exceeding
+      while (state.toasts.length > 3) {
+        state.toasts.shift();
+      }
     },
     removeToast(state, action) {
       state.toasts = state.toasts.filter((t) => t.id !== action.payload);

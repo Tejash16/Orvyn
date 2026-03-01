@@ -261,7 +261,7 @@ function DataRoomList() {
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
-                    <span className={styles.drName}>{dr.name}</span>
+                    <span className={styles.drName} title={dr.name}>{dr.name}</span>
                   )}
                   {dr.description && (
                     <span className={styles.drDesc}>{dr.description}</span>
@@ -322,6 +322,20 @@ function DataRoomList() {
             {!isLoading && filtered.length === 0 && datarooms.length > 0 && (
               <div className={styles.emptyState} style={{ padding: '24px 16px' }}>
                 <span className={styles.emptyHint}>No data rooms match your search.</span>
+                <button
+                  className={styles.clearSearchBtn}
+                  onClick={() => setSearch('')}
+                  type="button"
+                >
+                  Clear Search
+                </button>
+              </div>
+            )}
+
+            {!isLoading && datarooms.length === 0 && (
+              <div className={styles.emptyState} style={{ padding: '32px 16px' }}>
+                <span className={styles.emptyTitle}>No DataRooms yet</span>
+                <span className={styles.emptyHint}>Create your first DataRoom to start organizing documents.</span>
               </div>
             )}
           </div>
@@ -367,7 +381,7 @@ function DataRoomList() {
 
       {/* ── Delete confirmation ────────────────────────── */}
       {deleteTarget && (
-        <div className={styles.confirmBackdrop} onClick={() => setDeleteTarget(null)}>
+        <div className={styles.confirmBackdrop} onClick={() => setDeleteTarget(null)} onKeyDown={(e) => { if (e.key === 'Escape') setDeleteTarget(null); if (e.key === 'Enter') confirmDelete(); }}>
           <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.confirmTitle}>Delete DataRoom</h3>
             <p className={styles.confirmText}>
@@ -387,6 +401,7 @@ function DataRoomList() {
                 className={styles.btnDanger}
                 onClick={confirmDelete}
                 type="button"
+                autoFocus
               >
                 Delete
               </button>
