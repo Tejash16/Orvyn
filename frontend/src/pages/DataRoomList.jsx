@@ -5,10 +5,14 @@ import {
   updateDataroom,
   deleteDataroom,
 } from '../store/dataroomSlice';
-import { closeUploadModal } from '../store/uiSlice';
+import {
+  setActivePage,
+  setUploadInitialFiles,
+  setUploadPreselectedDataroomId,
+  clearPendingViewDataroomId,
+} from '../store/uiSlice';
 import CreateDataRoomModal from '../components/dataroom/CreateDataRoomModal';
 import FileExplorer from '../components/dataroom/FileExplorer';
-import UploadModal from '../components/upload/UploadModal';
 import styles from './DataRoomList.module.css';
 
 /* ── Icons ───────────────────────────────────────────────── */
@@ -74,13 +78,11 @@ const IconEmptyBox = () => (
 function DataRoomList() {
   const dispatch = useDispatch();
   const { datarooms, isLoading } = useSelector((s) => s.dataroom);
-  const showUploadModal = useSelector((s) => s.ui.showUploadModal);
+  const pendingViewDataroomId = useSelector((s) => s.ui.pendingViewDataroomId);
 
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [localUploadModal, setLocalUploadModal] = useState(false);
-  const [uploadInitialFiles, setUploadInitialFiles] = useState(null);
 
   // Favorites — visual only, local state (V1)
   const [favorites, setFavorites] = useState(new Set());
@@ -101,6 +103,14 @@ function DataRoomList() {
   useEffect(() => {
     dispatch(fetchDatarooms());
   }, [dispatch]);
+
+  // Auto-select dataroom when returning from upload page
+  useEffect(() => {
+    if (pendingViewDataroomId) {
+      setSelectedId(pendingViewDataroomId);
+      dispatch(clearPendingViewDataroomId());
+    }
+  }, [pendingViewDataroomId, dispatch]);
 
   // Focus rename input when it appears
   useEffect(() => {
@@ -181,29 +191,17 @@ function DataRoomList() {
     setSelectedId(dataroomId);
   }
 
-  // ── Upload Modal ────────────────────────────────────────
+  // ── Navigate to Upload Page ────────────────────────────
 
   function handleOpenUpload(mode, filePaths) {
     if (mode === 'drop' && filePaths) {
-      setUploadInitialFiles(filePaths);
-    } else {
-      setUploadInitialFiles(null);
+      dispatch(setUploadInitialFiles(filePaths));
     }
-    setLocalUploadModal(true);
+    if (selectedId) {
+      dispatch(setUploadPreselectedDataroomId(selectedId));
+    }
+    dispatch(setActivePage('upload'));
   }
-
-  function handleCloseUploadModal() {
-    setLocalUploadModal(false);
-    setUploadInitialFiles(null);
-    dispatch(closeUploadModal());
-  }
-
-  function handleViewDataroom(dataroomId) {
-    setSelectedId(dataroomId);
-    handleCloseUploadModal();
-  }
-
-  const isUploadModalOpen = localUploadModal || showUploadModal;
 
   // ── Render ─────────────────────────────────────────────
 
@@ -410,15 +408,6 @@ function DataRoomList() {
         </div>
       )}
 
-      {/* ── Upload & Classify Modal ─────────────────────── */}
-      {isUploadModalOpen && (
-        <UploadModal
-          onClose={handleCloseUploadModal}
-          initialFiles={uploadInitialFiles}
-          currentDataroomId={selectedId}
-          onViewDataroom={handleViewDataroom}
-        />
-      )}
     </div>
   );
 }

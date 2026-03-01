@@ -1,145 +1,87 @@
-/* ── Modal backdrop & shell ───────────────────────────────── */
+/* ── Page layout ─────────────────────────────────────────── */
 
-.backdrop {
-  position: fixed;
-  inset: 0;
-  background-color: var(--modal-backdrop);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.modal {
-  background-color: var(--modal-bg);
-  border-radius: 12px;
-  width: min(720px, calc(100vw - 48px));
-  max-height: min(720px, calc(100vh - 80px));
+.page {
+  flex: 1;
+  height: 100%;
+  overflow-y: auto;
+  padding: 32px 40px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
-  overflow: hidden;
 }
 
-/* ── Header ──────────────────────────────────────────────── */
+/* ── Header / Breadcrumb ─────────────────────────────────── */
 
 .header {
+  margin-bottom: 28px;
+  flex-shrink: 0;
+}
+
+.breadcrumb {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.breadcrumbLink {
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.12s ease;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.breadcrumbLink:hover {
+  color: var(--text-primary);
+}
+
+.breadcrumbCurrent {
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 .title {
-  font-size: 1.125rem;
-  font-weight: 600;
+  font-size: 1.375rem;
+  font-weight: 700;
   color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: var(--text-muted);
   margin: 0;
 }
 
-.closeBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0;
-  transition: background-color 0.12s ease, color 0.12s ease;
-}
+/* ── Content area ────────────────────────────────────────── */
 
-.closeBtn:hover {
-  background-color: var(--control-btn-hover-bg);
-  color: var(--text-primary);
-}
-
-/* ── Body ────────────────────────────────────────────────── */
-
-.body {
+.content {
   flex: 1;
-  overflow-y: auto;
-  padding: 20px 24px;
-  min-height: 0;
-}
-
-/* ── Footer ──────────────────────────────────────────────── */
-
-.footer {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--border-color);
-  flex-shrink: 0;
-}
-
-/* ── Buttons ─────────────────────────────────────────────── */
-
-.btnPrimary {
-  padding: 8px 20px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #ffffff;
-  background-color: #4f46e5;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-  white-space: nowrap;
-}
-
-.btnPrimary:hover:not(:disabled) {
-  background-color: #4338ca;
-}
-
-.btnPrimary:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.btnSecondary {
-  padding: 8px 20px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-primary);
-  background: transparent;
-  border: 1px solid var(--btn-secondary-border);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-  white-space: nowrap;
-}
-
-.btnSecondary:hover:not(:disabled) {
-  background-color: var(--btn-secondary-hover);
-}
-
-.btnSecondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* ── Drop zone ───────────────────────────────────────────── */
 
 .dropZone {
   border: 2px dashed var(--border-color);
-  border-radius: 10px;
-  padding: 28px 20px;
+  border-radius: 12px;
+  padding: 40px 24px;
+  min-height: 200px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .dropZone:hover {
@@ -157,32 +99,22 @@
 }
 
 .dropZoneText {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   color: var(--text-muted);
   text-align: center;
 }
 
-.dropZoneLink {
-  color: #4f46e5;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.dropZoneLink:hover {
-  text-decoration: underline;
-}
-
 .selectBtns {
   display: flex;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 10px;
+  margin-top: 6px;
 }
 
 .selectBtn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 14px;
+  gap: 6px;
+  padding: 8px 16px;
   font-size: 0.8125rem;
   font-weight: 500;
   color: #4f46e5;
@@ -223,9 +155,9 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 200px;
+  max-height: 250px;
   overflow-y: auto;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
 }
@@ -308,7 +240,7 @@
   color: var(--danger-color);
 }
 
-/* ── Mode selector ───────────────────────────────────────── */
+/* ── Section label ───────────────────────────────────────── */
 
 .sectionLabel {
   font-size: 0.8125rem;
@@ -317,18 +249,20 @@
   margin-bottom: 10px;
 }
 
+/* ── Mode selector ───────────────────────────────────────── */
+
 .modeCards {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 24px;
 }
 
 .modeCard {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 14px 16px;
+  padding: 16px 18px;
   border: 2px solid var(--border-color);
   border-radius: 10px;
   background: transparent;
@@ -358,7 +292,7 @@
   line-height: 1.4;
 }
 
-/* ── Custom mode: DataRoom dropdown ──────────────────────── */
+/* ── Form fields ─────────────────────────────────────────── */
 
 .field {
   display: flex;
@@ -435,6 +369,63 @@
   border-color: #4f46e5;
 }
 
+/* ── Buttons ─────────────────────────────────────────────── */
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px 0 0;
+  border-top: 1px solid var(--border-color);
+  margin-top: 24px;
+  flex-shrink: 0;
+}
+
+.btnPrimary {
+  padding: 9px 22px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #ffffff;
+  background-color: #4f46e5;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background-color: #4338ca;
+}
+
+.btnPrimary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btnSecondary {
+  padding: 9px 22px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--btn-secondary-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.btnSecondary:hover:not(:disabled) {
+  background-color: var(--btn-secondary-hover);
+}
+
+.btnSecondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── Progress screen ─────────────────────────────────────── */
 
 .progressWrap {
@@ -442,8 +433,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 24px;
-  padding: 40px 24px;
+  gap: 28px;
+  padding: 60px 24px;
 }
 
 .stepIndicator {
@@ -451,7 +442,7 @@
   align-items: center;
   gap: 0;
   width: 100%;
-  max-width: 360px;
+  max-width: 400px;
 }
 
 .stepNode {
@@ -463,13 +454,13 @@
 }
 
 .stepDot {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   border: 2px solid var(--border-color);
   background: transparent;
@@ -490,7 +481,7 @@
 }
 
 .stepLabel {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-muted);
   white-space: nowrap;
@@ -509,8 +500,8 @@
   flex: 1;
   height: 2px;
   background-color: var(--border-color);
-  margin: 0 8px;
-  margin-bottom: 22px;
+  margin: 0 10px;
+  margin-bottom: 24px;
   transition: background-color 0.2s ease;
 }
 
@@ -522,12 +513,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .spinner {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: 3px solid var(--border-color);
   border-top-color: #4f46e5;
   border-radius: 50%;
@@ -539,7 +530,7 @@
 }
 
 .progressText {
-  font-size: 0.9375rem;
+  font-size: 1rem;
   color: var(--text-muted);
   text-align: center;
 }
@@ -549,20 +540,23 @@
 .resultsWrap {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .resultsSuccess {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 16px 0;
+  gap: 10px;
+  padding: 20px 0;
 }
 
 .successIcon {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   background-color: var(--success-bg);
   border: 2px solid var(--success-border);
@@ -573,29 +567,29 @@
 }
 
 .successTitle {
-  font-size: 1rem;
+  font-size: 1.125rem;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
 }
 
 .statCard {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   background-color: var(--input-bg);
   border: 1px solid var(--border-color);
   border-radius: 8px;
 }
 
 .statValue {
-  font-size: 1.25rem;
+  font-size: 1.375rem;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -617,7 +611,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   background-color: var(--input-bg);
   border: 1px solid var(--border-color);
   border-radius: 6px;
@@ -638,7 +632,7 @@
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding: 20px;
+  padding: 24px;
   text-align: center;
 }
 
@@ -648,7 +642,7 @@
 }
 
 .retryBtn {
-  padding: 6px 16px;
+  padding: 7px 18px;
   font-size: 0.8125rem;
   font-weight: 500;
   color: #4f46e5;
@@ -663,7 +657,7 @@
   background: rgba(79, 70, 229, 0.14);
 }
 
-/* ── File icon backgrounds (same as FileExplorer) ────────── */
+/* ── File icon backgrounds ───────────────────────────────── */
 
 .iconBgPdf { background-color: #ef4444; }
 .iconBgDocx { background-color: #3b82f6; }

@@ -14,7 +14,7 @@ import time
 import datetime
 import uuid
 
-import google.generativeai as genai
+from google import genai
 from sqlalchemy.orm import Session
 
 from app.main import DataRoom, Folder, File, Classification
@@ -29,12 +29,12 @@ _MODEL_NAME = "gemini-2.0-flash"
 _TEMPERATURE = 0.1
 
 
-def _configure_gemini():
-    """Configure the Gemini SDK with the API key from environment."""
+def _get_client() -> genai.Client:
+    """Create a Gemini client using the new google-genai SDK."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set in environment variables.")
-    genai.configure(api_key=api_key)
+    return genai.Client(api_key=api_key)
 
 
 # ---------------------------------------------------------------------------
@@ -99,21 +99,21 @@ def build_folder_tree(session, dataroom_id: str) -> str:
 
 async def _call_gemini(prompt_system: str, prompt_user: str, retries: int = 3) -> str:
     """
-    Call Gemini and return the raw text response.
+    Call Gemini using the google-genai async SDK and return the raw text response.
     Handles retries with exponential backoff.
     """
-    _configure_gemini()
-    model = genai.GenerativeModel(
-        model_name=_MODEL_NAME,
-        system_instruction=prompt_system,
-        generation_config=genai.GenerationConfig(temperature=_TEMPERATURE),
-    )
+    client = _get_client()
 
     last_error = None
     for attempt in range(retries):
         try:
-            response = await asyncio.to_thread(
-                model.generate_content, prompt_user
+            response = await client.aio.models.generate_content(
+                model=_MODEL_NAME,
+                contents=prompt_user,
+                config={
+                    "system_instruction": prompt_system,
+                    "temperature": _TEMPERATURE,
+                },
             )
             raw = response.text
 

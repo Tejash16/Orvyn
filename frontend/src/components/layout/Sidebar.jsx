@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { toggleSidebar, setActivePage, openUploadModal } from '../../store/uiSlice';
+import { toggleSidebar, setActivePage } from '../../store/uiSlice';
 import styles from './Sidebar.module.css';
 
 /* ── Icons ───────────────────────────────────────────────── */
@@ -98,11 +98,8 @@ function Sidebar() {
           icon={<IconUpload />}
           label="Upload"
           collapsed={collapsed}
-          active={false}
-          onClick={() => {
-            dispatch(setActivePage('dataroom'));
-            dispatch(openUploadModal());
-          }}
+          active={activePage === 'upload'}
+          onClick={() => dispatch(setActivePage('upload'))}
         />
       </nav>
 

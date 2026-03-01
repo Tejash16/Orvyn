@@ -6,13 +6,17 @@ const uiSlice = createSlice({
     sidebarCollapsed: true,
     theme: 'light',
     activePage: 'dataroom',
-    showUploadModal: false,
     toasts: [],
     toastCounter: 0,
     // Reflects the background token-refresh scheduler's view of connectivity.
     // true  = access tokens can be silently renewed (online)
     // false = Express unreachable; app operates in local read-only mode
     isOnline: true,
+    // Upload page pre-population state
+    uploadInitialFiles: null,
+    uploadPreselectedDataroomId: null,
+    // After classification, navigate back to DataRoomList and auto-select this dataroom
+    pendingViewDataroomId: null,
   },
   reducers: {
     toggleSidebar(state) {
@@ -30,11 +34,21 @@ const uiSlice = createSlice({
     setOnline(state, action) {
       state.isOnline = action.payload;
     },
-    openUploadModal(state) {
-      state.showUploadModal = true;
+    setUploadInitialFiles(state, action) {
+      state.uploadInitialFiles = action.payload;
     },
-    closeUploadModal(state) {
-      state.showUploadModal = false;
+    setUploadPreselectedDataroomId(state, action) {
+      state.uploadPreselectedDataroomId = action.payload;
+    },
+    clearUploadPageState(state) {
+      state.uploadInitialFiles = null;
+      state.uploadPreselectedDataroomId = null;
+    },
+    setPendingViewDataroomId(state, action) {
+      state.pendingViewDataroomId = action.payload;
+    },
+    clearPendingViewDataroomId(state) {
+      state.pendingViewDataroomId = null;
     },
     addToast(state, action) {
       state.toastCounter += 1;
@@ -60,8 +74,11 @@ export const {
   setTheme,
   setActivePage,
   setOnline,
-  openUploadModal,
-  closeUploadModal,
+  setUploadInitialFiles,
+  setUploadPreselectedDataroomId,
+  clearUploadPageState,
+  setPendingViewDataroomId,
+  clearPendingViewDataroomId,
   addToast,
   removeToast,
 } = uiSlice.actions;
