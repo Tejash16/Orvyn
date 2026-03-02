@@ -6,6 +6,7 @@
   height: 100%;
   overflow: hidden;
   position: relative;
+  background-color: var(--bg-base);
 }
 
 /* ── Drag-and-drop overlay ─────────────────────────────── */
@@ -19,10 +20,10 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background-color: rgba(79, 70, 229, 0.06);
-  border: 2px dashed #4f46e5;
-  border-radius: 8px;
-  color: #4f46e5;
+  background-color: var(--accent-softer);
+  border: 2px dashed var(--accent-primary);
+  border-radius: 10px;
+  color: var(--accent-primary);
   font-size: 0.9375rem;
   font-weight: 500;
   pointer-events: none;
@@ -35,9 +36,9 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
-  background-color: var(--bg-sidebar);
+  background-color: var(--bg-surface);
 }
 
 .navBtn {
@@ -49,14 +50,14 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 0;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .navBtn:hover:not(:disabled) {
-  background-color: var(--nav-hover-bg);
+  background-color: var(--bg-hover);
   color: var(--text-primary);
 }
 
@@ -68,7 +69,7 @@
 .navSep {
   width: 1px;
   height: 20px;
-  background-color: var(--border-color);
+  background-color: var(--border-light);
   margin: 0 4px;
 }
 
@@ -82,8 +83,8 @@
 }
 
 .crumb {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
   background: transparent;
   border: none;
   padding: 4px 6px;
@@ -93,12 +94,13 @@
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .crumb:hover {
-  background-color: var(--nav-hover-bg);
+  background-color: var(--bg-hover);
   color: var(--text-primary);
+  text-decoration: underline;
 }
 
 .crumbActive {
@@ -109,12 +111,12 @@
 
 .crumbActive:hover {
   background: transparent;
+  text-decoration: none;
 }
 
 .crumbSep {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  opacity: 0.5;
+  font-size: 13px;
+  color: var(--text-tertiary);
   flex-shrink: 0;
 }
 
@@ -124,10 +126,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 6px 16px;
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
   flex-shrink: 0;
   flex-wrap: wrap;
+  height: 44px;
 }
 
 .toolbarLeft {
@@ -147,85 +151,95 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 10px;
-  font-size: 0.8125rem;
-  color: var(--text-primary);
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
   background: transparent;
-  border: 1px solid var(--border-color);
+  border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.12s ease, border-color 0.12s ease;
+  transition: all 0.15s ease;
   white-space: nowrap;
 }
 
 .toolBtn:hover {
-  background-color: var(--nav-hover-bg);
-  border-color: var(--input-border);
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .toolBtnPrimary {
   color: #ffffff;
-  background-color: #4f46e5;
-  border-color: #4f46e5;
+  background-color: var(--accent-primary);
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
 }
 
 .toolBtnPrimary:hover {
-  background-color: #4338ca;
-  border-color: #4338ca;
+  background-color: var(--accent-hover);
 }
 
 /* ── Toolbar search ─────────────────────────────────────── */
 
 .toolSearch {
-  width: 180px;
-  padding: 5px 10px 5px 30px;
-  font-size: 0.8125rem;
+  width: 200px;
+  height: 30px;
+  padding: 0 10px 0 30px;
+  font-size: 13px;
   color: var(--text-primary);
-  background-color: var(--input-bg);
-  border: 1px solid var(--border-color);
+  background-color: var(--bg-hover);
+  border: 1px solid transparent;
   border-radius: 6px;
   outline: none;
   box-sizing: border-box;
-  transition: border-color 0.15s ease, width 0.2s ease;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+  transition: all 0.2s ease-in-out;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%239095AE' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: 9px center;
 }
 
 .toolSearch:focus {
-  border-color: #4f46e5;
-  width: 240px;
+  background-color: var(--bg-surface);
+  border-color: var(--border-focus);
+  width: 280px;
+}
+
+.toolSearch::placeholder {
+  color: var(--text-tertiary);
 }
 
 /* ── View mode toggle ───────────────────────────────────── */
 
 .viewToggle {
   display: flex;
-  border: 1px solid var(--border-color);
+  background-color: var(--bg-hover);
   border-radius: 6px;
-  overflow: hidden;
+  padding: 2px;
+  gap: 2px;
 }
 
 .viewToggleBtn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 28px;
+  width: 28px;
+  height: 24px;
   border: none;
+  border-radius: 4px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   cursor: pointer;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .viewToggleBtn:hover {
-  background-color: var(--nav-hover-bg);
+  color: var(--text-primary);
 }
 
 .viewToggleBtnActive {
-  background-color: var(--nav-active-bg);
-  color: var(--nav-active-color);
+  background-color: var(--bg-surface);
+  color: var(--accent-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 /* ── Dropdown menus ─────────────────────────────────────── */
@@ -238,10 +252,10 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  background-color: var(--modal-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
   z-index: 60;
   min-width: 160px;
   padding: 4px;
@@ -254,19 +268,19 @@
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   color: var(--text-primary);
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
   text-align: left;
   width: 100%;
-  transition: background-color 0.12s ease;
+  transition: background-color 0.15s ease;
 }
 
 .dropdownItem:hover {
-  background-color: var(--nav-hover-bg);
+  background-color: var(--bg-hover);
 }
 
 .dropdownDanger {
@@ -274,13 +288,13 @@
 }
 
 .dropdownDanger:hover {
-  background-color: rgba(220, 38, 38, 0.08);
+  background-color: rgba(239, 68, 68, 0.08);
 }
 
 .dropdownSep {
   height: 1px;
-  background-color: var(--border-color);
-  margin: 4px 0;
+  background-color: var(--border-light);
+  margin: 4px 8px;
 }
 
 /* ── Main content area ──────────────────────────────────── */
@@ -296,7 +310,7 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 12px;
 }
 
@@ -306,25 +320,29 @@
   align-items: center;
   gap: 8px;
   padding: 16px 10px 12px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
   cursor: pointer;
-  transition: background-color 0.12s ease, border-color 0.12s ease;
+  box-shadow: var(--shadow-card);
+  transition: all 0.2s ease;
   position: relative;
 }
 
 .gridCard:hover {
-  background-color: var(--nav-hover-bg);
+  border-color: var(--border-medium);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 .gridCardSelected {
-  background-color: var(--nav-active-bg);
-  border-color: rgba(79, 70, 229, 0.2);
+  border-color: var(--accent-primary);
+  background-color: var(--accent-softer);
 }
 
 .gridCardIcon {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -333,7 +351,8 @@
 }
 
 .gridCardName {
-  font-size: 0.8125rem;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-primary);
   text-align: center;
   word-break: break-word;
@@ -346,8 +365,8 @@
 }
 
 .gridCardMeta {
-  font-size: 0.6875rem;
-  color: var(--text-muted);
+  font-size: 11px;
+  color: var(--text-tertiary);
 }
 
 /* ── Confidence dot ─────────────────────────────────────── */
@@ -356,9 +375,10 @@
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--bg-surface);
 }
 
 /* ── List view ──────────────────────────────────────────── */
@@ -366,6 +386,8 @@
 .listTable {
   width: 100%;
   border-collapse: collapse;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .listHeader {
@@ -375,18 +397,18 @@
 }
 
 .listHeader th {
-  font-size: 0.6875rem;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
   text-align: left;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--border-color);
-  background-color: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border-light);
+  background-color: var(--bg-surface);
   cursor: pointer;
   user-select: none;
-  transition: color 0.12s ease;
+  transition: color 0.15s ease;
   white-space: nowrap;
 }
 
@@ -402,25 +424,29 @@
 
 .listRow {
   cursor: pointer;
-  transition: background-color 0.1s ease;
+  transition: background-color 0.15s ease;
+}
+
+.listRow:nth-child(even) {
+  background-color: var(--accent-softer);
 }
 
 .listRow:hover {
-  background-color: var(--nav-hover-bg);
+  background-color: var(--bg-hover);
 }
 
 .listRowSelected {
-  background-color: var(--nav-active-bg);
+  background-color: var(--accent-soft);
 }
 
 .listRow td {
-  padding: 7px 12px;
-  font-size: 0.8125rem;
+  padding: 8px 12px;
+  font-size: 13px;
   color: var(--text-primary);
-  border-bottom: 1px solid var(--border-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  height: 40px;
 }
 
 .listRow td:first-child {
@@ -434,9 +460,9 @@
 }
 
 .listIcon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -450,8 +476,8 @@
 }
 
 .listMuted {
-  color: var(--text-muted);
-  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-size: 12px;
 }
 
 /* ── Empty state ────────────────────────────────────────── */
@@ -463,24 +489,23 @@
   justify-content: center;
   gap: 12px;
   padding: 60px 24px;
-  color: var(--text-muted);
   text-align: center;
 }
 
 .emptyIcon {
   opacity: 0.3;
+  color: var(--text-tertiary);
 }
 
 .emptyTitle {
   font-size: 1rem;
   font-weight: 500;
   color: var(--text-primary);
-  opacity: 0.6;
 }
 
 .emptyHint {
-  font-size: 0.875rem;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .emptyAction {
@@ -496,19 +521,19 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  border-bottom: 1px solid var(--border-color);
-  background-color: var(--input-bg);
+  border-bottom: 1px solid var(--border-light);
+  background-color: var(--bg-surface);
   flex-shrink: 0;
 }
 
 .newFolderInput {
   flex: 1;
   padding: 6px 10px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   color: var(--text-primary);
-  background-color: var(--modal-bg);
-  border: 1px solid #4f46e5;
-  border-radius: 5px;
+  background-color: var(--bg-base);
+  border: 1px solid var(--border-focus);
+  border-radius: 6px;
   outline: none;
   box-sizing: border-box;
 }
@@ -520,28 +545,28 @@
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 5px;
+  border-radius: 6px;
   cursor: pointer;
   padding: 0;
-  transition: background-color 0.12s ease;
+  transition: background-color 0.15s ease;
 }
 
 .newFolderBtnConfirm {
-  background-color: #4f46e5;
+  background-color: var(--accent-primary);
   color: #ffffff;
 }
 
 .newFolderBtnConfirm:hover {
-  background-color: #4338ca;
+  background-color: var(--accent-hover);
 }
 
 .newFolderBtnCancel {
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
 }
 
 .newFolderBtnCancel:hover {
-  background-color: var(--nav-hover-bg);
+  background-color: var(--bg-hover);
   color: var(--text-primary);
 }
 
@@ -558,8 +583,8 @@
 .spinner {
   width: 28px;
   height: 28px;
-  border: 3px solid var(--border-color);
-  border-top-color: #4f46e5;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--accent-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -575,15 +600,15 @@
   align-items: center;
   gap: 10px;
   padding: 6px 16px;
-  background-color: var(--nav-active-bg);
-  border-bottom: 1px solid rgba(79, 70, 229, 0.15);
+  background-color: var(--accent-soft);
+  border-bottom: 1px solid rgba(108, 92, 231, 0.12);
   flex-shrink: 0;
 }
 
 .selectionCount {
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--nav-active-color);
+  color: var(--accent-primary);
 }
 
 .selectionActions {
@@ -597,47 +622,47 @@
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  font-size: 0.75rem;
+  font-size: 12px;
   color: var(--text-primary);
   background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: 5px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .selectionBtn:hover {
-  background-color: var(--nav-hover-bg);
+  background-color: var(--bg-hover);
 }
 
 .selectionBtnDanger {
   color: var(--danger-color);
-  border-color: rgba(220, 38, 38, 0.2);
+  border-color: rgba(239, 68, 68, 0.2);
 }
 
 .selectionBtnDanger:hover {
-  background-color: rgba(220, 38, 38, 0.08);
+  background-color: rgba(239, 68, 68, 0.08);
 }
 
 /* ── File type icon backgrounds ─────────────────────────── */
 
-.iconBgFolder   { background-color: rgba(79, 70, 229, 0.12); color: #4f46e5; }
-.iconBgPdf      { background-color: rgba(220, 38, 38, 0.1);  color: #dc2626; }
-.iconBgDocx     { background-color: rgba(37, 99, 235, 0.1);  color: #2563eb; }
-.iconBgXlsx     { background-color: rgba(22, 163, 74, 0.1);  color: #16a34a; }
-.iconBgPptx     { background-color: rgba(234, 88, 12, 0.1);  color: #ea580c; }
-.iconBgImage    { background-color: rgba(124, 58, 237, 0.1);  color: #7c3aed; }
-.iconBgDefault  { background-color: rgba(107, 114, 128, 0.1); color: #6b7280; }
+.iconBgFolder   { background-color: var(--accent-soft); color: var(--accent-primary); }
+.iconBgPdf      { background-color: var(--icon-bg-pdf); color: var(--icon-fg-pdf); }
+.iconBgDocx     { background-color: var(--icon-bg-docx); color: var(--icon-fg-docx); }
+.iconBgXlsx     { background-color: var(--icon-bg-xlsx); color: var(--icon-fg-xlsx); }
+.iconBgPptx     { background-color: var(--icon-bg-pptx); color: var(--icon-fg-pptx); }
+.iconBgImage    { background-color: var(--icon-bg-image); color: var(--icon-fg-image); }
+.iconBgDefault  { background-color: var(--icon-bg-default); color: var(--icon-fg-default); }
 
 /* ── Rename inline ──────────────────────────────────────── */
 
 .renameInput {
   width: 100%;
   padding: 2px 6px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   color: var(--text-primary);
-  background-color: var(--input-bg);
-  border: 1px solid #4f46e5;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-focus);
   border-radius: 4px;
   outline: none;
   box-sizing: border-box;
@@ -649,7 +674,7 @@
 .confirmBackdrop {
   position: fixed;
   inset: 0;
-  background-color: var(--modal-backdrop);
+  background-color: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -657,11 +682,12 @@
 }
 
 .confirmModal {
-  background-color: var(--modal-bg);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 12px;
   width: min(420px, calc(100vw - 48px));
   padding: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  box-shadow: var(--shadow-lg);
 }
 
 .confirmTitle {
@@ -672,8 +698,8 @@
 }
 
 .confirmText {
-  font-size: 0.875rem;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
   margin: 0;
   line-height: 1.5;
 }
@@ -681,7 +707,7 @@
 .confirmInput {
   width: 100%;
   padding: 8px 12px;
-  font-size: 0.875rem;
+  font-size: 13px;
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -693,13 +719,13 @@
 }
 
 .confirmInput:focus {
-  border-color: #4f46e5;
+  border-color: var(--border-focus);
 }
 
 .confirmTextarea {
   width: 100%;
   padding: 8px 12px;
-  font-size: 0.875rem;
+  font-size: 13px;
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -714,7 +740,7 @@
 }
 
 .confirmTextarea:focus {
-  border-color: #4f46e5;
+  border-color: var(--border-focus);
 }
 
 .confirmActions {
@@ -726,7 +752,7 @@
 
 .confirmBtnSecondary {
   padding: 7px 18px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
   background: transparent;
@@ -742,7 +768,7 @@
 
 .confirmBtnDanger {
   padding: 7px 18px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 500;
   color: #ffffff;
   background-color: var(--danger-color);
@@ -763,10 +789,10 @@
 
 .confirmBtnPrimary {
   padding: 7px 18px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 500;
   color: #ffffff;
-  background-color: #4f46e5;
+  background-color: var(--accent-primary);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -774,7 +800,7 @@
 }
 
 .confirmBtnPrimary:hover:not(:disabled) {
-  background-color: #4338ca;
+  background-color: var(--accent-hover);
 }
 
 .confirmBtnPrimary:disabled {
@@ -790,7 +816,7 @@
 }
 
 .dialogLabel {
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
 }

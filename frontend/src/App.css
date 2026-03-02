@@ -1,80 +1,189 @@
 /* ── Theme variables ─────────────────────────────────────── */
 
 [data-theme="light"] {
-  --bg-app: #f0f2f5;
-  --bg-header: #ffffff;
-  --bg-sidebar: #ffffff;
-  --border-color: rgba(0, 0, 0, 0.08);
-  --text-primary: #1a1a2e;
-  --text-muted: #6b7280;
-  --nav-hover-bg: rgba(0, 0, 0, 0.05);
-  --nav-hover-color: #1a1a2e;
-  --nav-active-bg: rgba(79, 70, 229, 0.1);
-  --nav-active-color: #4f46e5;
-  --tooltip-bg: #ffffff;
-  --tooltip-border: rgba(0, 0, 0, 0.12);
-  --tooltip-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
-  --toggle-btn-color: #9ca3af;
-  --toggle-btn-hover-bg: rgba(0, 0, 0, 0.05);
-  --toggle-btn-hover-color: #1a1a2e;
-  --toggle-btn-focus-outline: rgba(0, 0, 0, 0.3);
-  --control-btn-color: #6b7280;
-  --control-btn-hover-bg: rgba(0, 0, 0, 0.06);
-  --danger-color: #dc2626;
-  --danger-hover: #b91c1c;
-  --modal-bg: #ffffff;
-  --modal-backdrop: rgba(0, 0, 0, 0.48);
-  --input-bg: #f9fafb;
-  --input-border: rgba(0, 0, 0, 0.15);
-  --btn-secondary-border: rgba(0, 0, 0, 0.15);
-  --btn-secondary-hover: rgba(0, 0, 0, 0.05);
-  --success-color: #16a34a;
-  --success-bg: rgba(22, 163, 74, 0.08);
-  --success-border: rgba(22, 163, 74, 0.2);
-  --warning-color: #b45309;
-  --warning-bg: rgba(234, 179, 8, 0.1);
-  --warning-border: rgba(234, 179, 8, 0.3);
+  /* Background layers — create DEPTH with subtle layering */
+  --bg-base: #F8F9FC;
+  --bg-surface: #FFFFFF;
+  --bg-sidebar: #F1F3F8;
+  --bg-hover: #ECEEF4;
+  --bg-active: #E4E7F0;
+  --bg-overlay: rgba(0, 0, 0, 0.4);
+
+  /* Legacy aliases (mapped to new palette) */
+  --bg-app: #F8F9FC;
+  --bg-header: #FFFFFF;
+
+  /* Text */
+  --text-primary: #1A1D2E;
+  --text-secondary: #5F6580;
+  --text-tertiary: #9095AE;
+  --text-inverse: #FFFFFF;
+  --text-muted: #5F6580;
+
+  /* Accent */
+  --accent-primary: #6C5CE7;
+  --accent-hover: #5A4BD1;
+  --accent-soft: rgba(108, 92, 231, 0.08);
+  --accent-softer: rgba(108, 92, 231, 0.04);
+
+  /* Borders */
+  --border-light: #E8EAF0;
+  --border-medium: #D4D7E3;
+  --border-focus: #6C5CE7;
+  --border-color: #E8EAF0;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.03);
+
+  /* Navigation states */
+  --nav-hover-bg: #ECEEF4;
+  --nav-hover-color: #1A1D2E;
+  --nav-active-bg: rgba(108, 92, 231, 0.08);
+  --nav-active-color: #6C5CE7;
+
+  /* Tooltip */
+  --tooltip-bg: #FFFFFF;
+  --tooltip-border: #E8EAF0;
+  --tooltip-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+
+  /* Toggle & controls */
+  --toggle-btn-color: #9095AE;
+  --toggle-btn-hover-bg: #ECEEF4;
+  --toggle-btn-hover-color: #1A1D2E;
+  --toggle-btn-focus-outline: rgba(108, 92, 231, 0.4);
+  --control-btn-color: #5F6580;
+  --control-btn-hover-bg: #ECEEF4;
+
+  /* Status */
+  --danger-color: #EF4444;
+  --danger-hover: #DC2626;
+  --success-color: #22C55E;
+  --success-bg: rgba(34, 197, 94, 0.08);
+  --success-border: rgba(34, 197, 94, 0.2);
+  --warning-color: #F59E0B;
+  --warning-bg: rgba(245, 158, 11, 0.08);
+  --warning-border: rgba(245, 158, 11, 0.25);
+  --info-color: #3B82F6;
+
+  /* Inputs & modals */
+  --modal-bg: #FFFFFF;
+  --modal-backdrop: rgba(0, 0, 0, 0.4);
+  --input-bg: #F8F9FC;
+  --input-border: #D4D7E3;
+  --btn-secondary-border: #D4D7E3;
+  --btn-secondary-hover: #ECEEF4;
+
+  /* File type icon backgrounds */
+  --icon-bg-pdf: #FEE2E2;
+  --icon-fg-pdf: #DC2626;
+  --icon-bg-docx: #DBEAFE;
+  --icon-fg-docx: #2563EB;
+  --icon-bg-xlsx: #D1FAE5;
+  --icon-fg-xlsx: #16A34A;
+  --icon-bg-pptx: #FED7AA;
+  --icon-fg-pptx: #EA580C;
+  --icon-bg-image: #EDE9FE;
+  --icon-fg-image: #7C3AED;
+  --icon-bg-default: #F3F4F6;
+  --icon-fg-default: #6B7280;
 }
 
 [data-theme="dark"] {
-  --bg-app: #0f0f1a;
-  --bg-header: #1a1a2e;
-  --bg-sidebar: #13132a;
-  --border-color: rgba(255, 255, 255, 0.06);
-  --text-primary: #e0e0e0;
-  --text-muted: #909090;
-  --nav-hover-bg: rgba(255, 255, 255, 0.06);
-  --nav-hover-color: #e0e0e0;
-  --nav-active-bg: rgba(100, 108, 255, 0.15);
-  --nav-active-color: #a5b4fc;
-  --tooltip-bg: #2a2a4a;
-  --tooltip-border: rgba(255, 255, 255, 0.08);
+  /* Background layers */
+  --bg-base: #0F1117;
+  --bg-surface: #1A1D2E;
+  --bg-sidebar: #141620;
+  --bg-hover: #232638;
+  --bg-active: #2A2E45;
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+
+  /* Legacy aliases */
+  --bg-app: #0F1117;
+  --bg-header: #1A1D2E;
+
+  /* Text */
+  --text-primary: #E8EAF0;
+  --text-secondary: #9095AE;
+  --text-tertiary: #5F6580;
+  --text-inverse: #1A1D2E;
+  --text-muted: #9095AE;
+
+  /* Accent */
+  --accent-primary: #7C6DF0;
+  --accent-hover: #8B7FF5;
+  --accent-soft: rgba(124, 109, 240, 0.12);
+  --accent-softer: rgba(124, 109, 240, 0.06);
+
+  /* Borders */
+  --border-light: #232638;
+  --border-medium: #2A2E45;
+  --border-focus: #7C6DF0;
+  --border-color: #232638;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.03);
+
+  /* Navigation states */
+  --nav-hover-bg: #232638;
+  --nav-hover-color: #E8EAF0;
+  --nav-active-bg: rgba(124, 109, 240, 0.12);
+  --nav-active-color: #7C6DF0;
+
+  /* Tooltip */
+  --tooltip-bg: #1A1D2E;
+  --tooltip-border: #2A2E45;
   --tooltip-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-  --toggle-btn-color: #505070;
-  --toggle-btn-hover-bg: rgba(255, 255, 255, 0.05);
-  --toggle-btn-hover-color: #e0e0e0;
-  --toggle-btn-focus-outline: rgba(255, 255, 255, 0.4);
-  --control-btn-color: #909090;
-  --control-btn-hover-bg: rgba(255, 255, 255, 0.08);
-  --danger-color: #ef4444;
-  --danger-hover: #dc2626;
-  --modal-bg: #1e1e38;
-  --modal-backdrop: rgba(0, 0, 0, 0.64);
-  --input-bg: rgba(255, 255, 255, 0.05);
-  --input-border: rgba(255, 255, 255, 0.1);
-  --btn-secondary-border: rgba(255, 255, 255, 0.1);
-  --btn-secondary-hover: rgba(255, 255, 255, 0.06);
-  --success-color: #4ade80;
-  --success-bg: rgba(74, 222, 128, 0.1);
-  --success-border: rgba(74, 222, 128, 0.2);
-  --warning-color: #fbbf24;
+
+  /* Toggle & controls */
+  --toggle-btn-color: #5F6580;
+  --toggle-btn-hover-bg: #232638;
+  --toggle-btn-hover-color: #E8EAF0;
+  --toggle-btn-focus-outline: rgba(124, 109, 240, 0.4);
+  --control-btn-color: #9095AE;
+  --control-btn-hover-bg: #232638;
+
+  /* Status */
+  --danger-color: #EF4444;
+  --danger-hover: #DC2626;
+  --success-color: #22C55E;
+  --success-bg: rgba(34, 197, 94, 0.1);
+  --success-border: rgba(34, 197, 94, 0.2);
+  --warning-color: #FBBF24;
   --warning-bg: rgba(251, 191, 36, 0.1);
   --warning-border: rgba(251, 191, 36, 0.25);
+  --info-color: #3B82F6;
+
+  /* Inputs & modals */
+  --modal-bg: #1A1D2E;
+  --modal-backdrop: rgba(0, 0, 0, 0.6);
+  --input-bg: rgba(255, 255, 255, 0.04);
+  --input-border: #2A2E45;
+  --btn-secondary-border: #2A2E45;
+  --btn-secondary-hover: #232638;
+
+  /* File type icon backgrounds */
+  --icon-bg-pdf: #3B1111;
+  --icon-fg-pdf: #FCA5A5;
+  --icon-bg-docx: #1E2A4A;
+  --icon-fg-docx: #93C5FD;
+  --icon-bg-xlsx: #0D3320;
+  --icon-fg-xlsx: #86EFAC;
+  --icon-bg-pptx: #3B1A0A;
+  --icon-fg-pptx: #FDBA74;
+  --icon-bg-image: #2E1065;
+  --icon-fg-image: #C4B5FD;
+  --icon-bg-default: #1F2937;
+  --icon-fg-default: #9CA3AF;
 }
 
 /* ── App shell ───────────────────────────────────────────── */
 
-/* Full-viewport flex column that never overflows */
 .app-shell {
   display: flex;
   flex-direction: column;
@@ -98,22 +207,18 @@
   min-width: 0;
   overflow: auto;
   color: var(--text-primary);
+  background-color: var(--bg-base);
 }
 
-/* Offline banner — shown when the background token scheduler cannot reach Express */
+/* Offline banner */
 .offline-banner {
   flex-shrink: 0;
   padding: 0.375rem 1rem;
   font-size: 0.8125rem;
   text-align: center;
-  background-color: rgba(234, 179, 8, 0.15);
+  background-color: var(--warning-bg);
   color: var(--text-primary);
-  border-bottom: 1px solid rgba(234, 179, 8, 0.35);
-}
-
-.hello{
-  color:white;
-  text-decoration-color: #e0e0e0;
+  border-bottom: 1px solid var(--warning-border);
 }
 
 /* ── App loading screen ──────────────────────────────────── */
@@ -130,7 +235,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background-color: var(--text-muted);
+  background-color: var(--text-tertiary);
   animation: loadingPulse 1.2s infinite ease-in-out both;
 }
 

@@ -7,6 +7,7 @@
   padding: 32px 40px;
   display: flex;
   flex-direction: column;
+  background-color: var(--bg-base);
 }
 
 /* ── Header / Breadcrumb ─────────────────────────────────── */
@@ -20,20 +21,20 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text-tertiary);
   margin-bottom: 8px;
 }
 
 .breadcrumbLink {
   cursor: pointer;
-  color: var(--text-muted);
-  transition: color 0.12s ease;
+  color: var(--text-tertiary);
+  transition: color 0.15s ease;
   background: none;
   border: none;
   padding: 0;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 12px;
 }
 
 .breadcrumbLink:hover {
@@ -53,8 +54,8 @@
 }
 
 .subtitle {
-  font-size: 0.875rem;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -70,7 +71,7 @@
 /* ── Drop zone ───────────────────────────────────────────── */
 
 .dropZone {
-  border: 2px dashed var(--border-color);
+  border: 2px dashed var(--border-medium);
   border-radius: 12px;
   padding: 40px 24px;
   min-height: 200px;
@@ -80,27 +81,28 @@
   justify-content: center;
   gap: 12px;
   cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition: all 0.15s ease;
   margin-bottom: 20px;
+  background-color: var(--bg-surface);
 }
 
 .dropZone:hover {
-  border-color: #4f46e5;
-  background-color: rgba(79, 70, 229, 0.04);
+  border-color: var(--accent-primary);
+  background-color: var(--accent-softer);
 }
 
 .dropZoneActive {
-  border-color: #4f46e5;
-  background-color: rgba(79, 70, 229, 0.06);
+  border-color: var(--accent-primary);
+  background-color: var(--accent-soft);
 }
 
 .dropZoneIcon {
-  color: var(--text-muted);
+  color: var(--text-tertiary);
 }
 
 .dropZoneText {
   font-size: 0.9375rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-align: center;
 }
 
@@ -115,18 +117,19 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 500;
-  color: #4f46e5;
-  background: rgba(79, 70, 229, 0.08);
-  border: 1px solid rgba(79, 70, 229, 0.2);
+  color: var(--accent-primary);
+  background: var(--accent-soft);
+  border: 1px solid transparent;
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .selectBtn:hover {
-  background: rgba(79, 70, 229, 0.14);
+  background: var(--accent-soft);
+  border-color: var(--accent-primary);
 }
 
 /* ── File counter ────────────────────────────────────────── */
@@ -139,14 +142,14 @@
 }
 
 .fileCountText {
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .fileCountLimit {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 
 /* ── File list ───────────────────────────────────────────── */
@@ -154,12 +157,13 @@
 .fileList {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   max-height: 250px;
   overflow-y: auto;
   margin-bottom: 24px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background-color: var(--bg-surface);
 }
 
 .fileItem {
@@ -167,13 +171,13 @@
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   color: var(--text-primary);
-  transition: background-color 0.1s ease;
+  transition: background-color 0.15s ease;
 }
 
 .fileItem:hover {
-  background-color: var(--nav-hover-bg);
+  background-color: var(--bg-hover);
 }
 
 .fileItemInvalid {
@@ -204,17 +208,17 @@
 }
 
 .fileItemSize {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text-tertiary);
   flex-shrink: 0;
 }
 
 .fileItemBadge {
-  font-size: 0.6875rem;
+  font-size: 11px;
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 4px;
-  background-color: rgba(220, 38, 38, 0.1);
+  background-color: rgba(239, 68, 68, 0.08);
   color: var(--danger-color);
   flex-shrink: 0;
 }
@@ -226,24 +230,24 @@
   width: 24px;
   height: 24px;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
-  transition: background-color 0.1s ease, color 0.1s ease;
+  transition: all 0.15s ease;
 }
 
 .fileItemRemove:hover {
-  background-color: var(--control-btn-hover-bg);
+  background-color: var(--bg-active);
   color: var(--danger-color);
 }
 
 /* ── Section label ───────────────────────────────────────── */
 
 .sectionLabel {
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 10px;
@@ -263,32 +267,35 @@
   flex-direction: column;
   gap: 4px;
   padding: 16px 18px;
-  border: 2px solid var(--border-color);
+  border: 1px solid var(--border-light);
   border-radius: 10px;
-  background: transparent;
+  background: var(--bg-surface);
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition: all 0.15s ease;
+  box-shadow: var(--shadow-card);
 }
 
 .modeCard:hover {
-  border-color: rgba(79, 70, 229, 0.3);
+  border-color: var(--border-medium);
+  box-shadow: var(--shadow-md);
 }
 
 .modeCardActive {
-  border-color: #4f46e5;
-  background-color: rgba(79, 70, 229, 0.04);
+  border-color: var(--accent-primary);
+  background-color: var(--accent-softer);
+  box-shadow: 0 0 0 1px var(--accent-primary);
 }
 
 .modeCardTitle {
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .modeCardDesc {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text-secondary);
   line-height: 1.4;
 }
 
@@ -302,21 +309,21 @@
 }
 
 .label {
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .labelHint {
   font-weight: 400;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   margin-left: 4px;
 }
 
 .select {
   width: 100%;
   padding: 9px 12px;
-  font-size: 0.875rem;
+  font-size: 13px;
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -328,13 +335,13 @@
 }
 
 .select:focus {
-  border-color: #4f46e5;
+  border-color: var(--border-focus);
 }
 
 .input {
   width: 100%;
   padding: 9px 12px;
-  font-size: 0.875rem;
+  font-size: 13px;
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -345,13 +352,13 @@
 }
 
 .input:focus {
-  border-color: #4f46e5;
+  border-color: var(--border-focus);
 }
 
 .textarea {
   width: 100%;
   padding: 9px 12px;
-  font-size: 0.875rem;
+  font-size: 13px;
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -366,7 +373,7 @@
 }
 
 .textarea:focus {
-  border-color: #4f46e5;
+  border-color: var(--border-focus);
 }
 
 /* ── Buttons ─────────────────────────────────────────────── */
@@ -377,17 +384,17 @@
   justify-content: flex-end;
   gap: 10px;
   padding: 20px 0 0;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-light);
   margin-top: 24px;
   flex-shrink: 0;
 }
 
 .btnPrimary {
   padding: 9px 22px;
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 500;
   color: #ffffff;
-  background-color: #4f46e5;
+  background-color: var(--accent-primary);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -396,7 +403,7 @@
 }
 
 .btnPrimary:hover:not(:disabled) {
-  background-color: #4338ca;
+  background-color: var(--accent-hover);
 }
 
 .btnPrimary:disabled {
@@ -406,7 +413,7 @@
 
 .btnSecondary {
   padding: 9px 22px;
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
   background: transparent;
@@ -460,17 +467,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 700;
-  border: 2px solid var(--border-color);
+  border: 2px solid var(--border-medium);
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   transition: all 0.2s ease;
 }
 
 .stepDotActive {
-  border-color: #4f46e5;
-  background-color: #4f46e5;
+  border-color: var(--accent-primary);
+  background-color: var(--accent-primary);
   color: #fff;
 }
 
@@ -481,14 +488,14 @@
 }
 
 .stepLabel {
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   white-space: nowrap;
 }
 
 .stepLabelActive {
-  color: #4f46e5;
+  color: var(--accent-primary);
   font-weight: 600;
 }
 
@@ -499,7 +506,7 @@
 .stepLine {
   flex: 1;
   height: 2px;
-  background-color: var(--border-color);
+  background-color: var(--border-light);
   margin: 0 10px;
   margin-bottom: 24px;
   transition: background-color 0.2s ease;
@@ -519,8 +526,8 @@
 .spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid var(--border-color);
-  border-top-color: #4f46e5;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--accent-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -531,7 +538,7 @@
 
 .progressText {
   font-size: 1rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-align: center;
 }
 
@@ -583,9 +590,10 @@
   flex-direction: column;
   gap: 2px;
   padding: 14px 16px;
-  background-color: var(--input-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  box-shadow: var(--shadow-card);
 }
 
 .statValue {
@@ -595,10 +603,10 @@
 }
 
 .statLabel {
-  font-size: 0.6875rem;
-  color: var(--text-muted);
+  font-size: 11px;
+  color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.5px;
 }
 
 .resultsFolders {
@@ -612,16 +620,17 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background-color: var(--input-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 0.8125rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  font-size: 13px;
   color: var(--text-primary);
+  box-shadow: var(--shadow-card);
 }
 
 .resultsFolderCount {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text-tertiary);
   margin-left: auto;
 }
 
@@ -637,24 +646,24 @@
 }
 
 .errorText {
-  font-size: 0.875rem;
+  font-size: 13px;
   color: var(--danger-color);
 }
 
 .retryBtn {
   padding: 7px 18px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 500;
-  color: #4f46e5;
-  background: rgba(79, 70, 229, 0.08);
-  border: 1px solid rgba(79, 70, 229, 0.2);
+  color: var(--accent-primary);
+  background: var(--accent-soft);
+  border: 1px solid transparent;
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .retryBtn:hover {
-  background: rgba(79, 70, 229, 0.14);
+  border-color: var(--accent-primary);
 }
 
 /* ── File icon backgrounds ───────────────────────────────── */

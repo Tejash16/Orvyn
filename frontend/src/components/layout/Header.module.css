@@ -1,34 +1,54 @@
+/* ── Header ──────────────────────────────────────────────── */
+
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 40px;
-  background-color: var(--bg-header);
-  border-bottom: 1px solid var(--border-color);
+  height: 44px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
-  /* Prevent text selection during drag */
   user-select: none;
 }
 
-/* Full-width drag region — becomes non-draggable only at the buttons */
+/* Full-width drag region */
 .dragRegion {
   flex: 1;
   display: flex;
   align-items: center;
-  padding: 0 14px;
+  padding: 0 16px;
   height: 100%;
   -webkit-app-region: drag;
 }
 
+/* Brand group — logo + title */
+.brandGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logoMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
 .appTitle {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   color: var(--text-primary);
   text-transform: uppercase;
 }
 
-/* Button strip — must opt out of the drag region */
+/* Window control strip — must opt out of drag region */
 .windowControls {
   display: flex;
   align-items: stretch;
@@ -45,9 +65,8 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  color: var(--control-btn-color);
+  color: var(--text-tertiary);
   transition: background-color 0.15s ease, color 0.15s ease;
-  /* Reset button defaults */
   padding: 0;
   outline: none;
 }
@@ -62,11 +81,11 @@
 }
 
 .minimize:hover {
-  background-color: var(--control-btn-hover-bg);
+  background-color: var(--bg-hover);
 }
 
 .maximize:hover {
-  background-color: var(--control-btn-hover-bg);
+  background-color: var(--bg-hover);
 }
 
 .close:hover {

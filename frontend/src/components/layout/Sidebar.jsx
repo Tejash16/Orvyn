@@ -62,6 +62,9 @@ function NavItem({ icon, label, collapsed, active, onClick }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
+      {/* Active indicator bar */}
+      {active && <span className={styles.activeIndicator} />}
+
       <span className={styles.navIcon}>{icon}</span>
 
       {/* Label — hidden when collapsed via CSS */}
@@ -85,6 +88,11 @@ function Sidebar() {
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
 
+      {/* Section label */}
+      {!collapsed && (
+        <div className={styles.sectionLabel}>Navigation</div>
+      )}
+
       {/* Top section */}
       <nav className={styles.topNav} aria-label="Main navigation">
         <NavItem
@@ -104,6 +112,9 @@ function Sidebar() {
       </nav>
 
       <div className={styles.spacer} />
+
+      {/* Divider before bottom nav */}
+      <div className={styles.divider} />
 
       {/* Bottom section */}
       <nav className={styles.bottomNav} aria-label="Settings">

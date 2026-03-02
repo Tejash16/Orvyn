@@ -3,7 +3,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  background-color: var(--modal-backdrop);
+  background-color: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11,13 +11,14 @@
 }
 
 .modal {
-  background-color: var(--modal-bg);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
   border-radius: 12px;
   width: min(620px, calc(100vw - 48px));
   max-height: min(680px, calc(100vh - 80px));
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 
@@ -28,7 +29,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px 16px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
 }
 
@@ -46,8 +47,8 @@
 }
 
 .stepIndicator {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 
 .closeBtn {
@@ -59,14 +60,14 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: 0;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .closeBtn:hover {
-  background-color: var(--control-btn-hover-bg);
+  background-color: var(--bg-hover);
   color: var(--text-primary);
 }
 
@@ -84,12 +85,12 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: var(--border-color);
+  background-color: var(--border-medium);
   transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .stepDotActive {
-  background-color: #4f46e5;
+  background-color: var(--accent-primary);
   transform: scale(1.25);
 }
 
@@ -100,7 +101,7 @@
 .stepLine {
   flex: 1;
   height: 2px;
-  background-color: var(--border-color);
+  background-color: var(--border-light);
   max-width: 60px;
 }
 
@@ -124,7 +125,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-light);
   flex-shrink: 0;
 }
 
@@ -137,10 +138,10 @@
 
 .btnPrimary {
   padding: 8px 20px;
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 500;
   color: #ffffff;
-  background-color: #4f46e5;
+  background-color: var(--accent-primary);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -149,7 +150,7 @@
 }
 
 .btnPrimary:hover:not(:disabled) {
-  background-color: #4338ca;
+  background-color: var(--accent-hover);
 }
 
 .btnPrimary:disabled {
@@ -159,7 +160,7 @@
 
 .btnSecondary {
   padding: 8px 20px;
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
   background: transparent;
@@ -193,21 +194,21 @@
 }
 
 .label {
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .labelHint {
   font-weight: 400;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   margin-left: 4px;
 }
 
 .input {
   width: 100%;
   padding: 9px 12px;
-  font-size: 0.9375rem;
+  font-size: 13px;
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -218,13 +219,13 @@
 }
 
 .input:focus {
-  border-color: #4f46e5;
+  border-color: var(--border-focus);
 }
 
 .textarea {
   width: 100%;
   padding: 9px 12px;
-  font-size: 0.9375rem;
+  font-size: 13px;
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -239,7 +240,7 @@
 }
 
 .textarea:focus {
-  border-color: #4f46e5;
+  border-color: var(--border-focus);
 }
 
 /* ── Step 2: Folder Tree Builder ─────────────────────────── */
@@ -252,15 +253,15 @@
 }
 
 .treeTitle {
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .folderCount {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  background-color: var(--nav-active-bg);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  background-color: var(--accent-soft);
   padding: 2px 8px;
   border-radius: 10px;
 }
@@ -273,7 +274,7 @@
 }
 
 .validationError {
-  font-size: 0.8125rem;
+  font-size: 13px;
   color: var(--danger-color);
   margin-top: 8px;
 }
@@ -285,11 +286,11 @@
 }
 
 .previewLabel {
-  font-size: 0.6875rem;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
   margin-bottom: 8px;
 }
 
@@ -300,14 +301,14 @@
 }
 
 .previewDesc {
-  font-size: 0.875rem;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
 .previewTree {
   background-color: var(--input-bg);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 12px 16px;
 }
@@ -326,8 +327,8 @@
 .spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--border-color);
-  border-top-color: #4f46e5;
+  border: 3px solid var(--border-light);
+  border-top-color: var(--accent-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -338,7 +339,7 @@
 
 .creatingText {
   font-size: 0.9375rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* ── Success state ───────────────────────────────────────── */
@@ -371,14 +372,14 @@
 }
 
 .successHint {
-  font-size: 0.875rem;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 /* ── Error state ─────────────────────────────────────────── */
 
 .errorText {
-  font-size: 0.875rem;
+  font-size: 13px;
   color: var(--danger-color);
   text-align: center;
   margin-top: 8px;

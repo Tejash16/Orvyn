@@ -16,17 +16,17 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-light);
   padding-top: 20px;
   margin-bottom: 28px;
 }
 
 .sectionTitle {
-  font-size: 0.75rem;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
   margin-bottom: 12px;
 }
 
@@ -40,8 +40,8 @@
 }
 
 .fieldLabel {
-  font-size: 0.875rem;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .fieldValue {
@@ -74,8 +74,8 @@
 }
 
 .hint {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -89,18 +89,18 @@
   border: none;
   cursor: pointer;
   padding: 0;
-  background-color: var(--border-color);
+  background-color: var(--border-medium);
   transition: background-color 0.2s ease;
   outline: none;
   flex-shrink: 0;
 }
 
 .toggle.on {
-  background-color: #4f46e5;
+  background-color: var(--accent-primary);
 }
 
 .toggle:focus-visible {
-  outline: 2px solid #4f46e5;
+  outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }
 
@@ -125,7 +125,7 @@
 .btnSecondary {
   flex-shrink: 0;
   padding: 7px 16px;
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
   background-color: transparent;
@@ -148,7 +148,7 @@
 .btnDanger {
   flex-shrink: 0;
   padding: 7px 16px;
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 500;
   color: #ffffff;
   background-color: var(--danger-color);
@@ -171,7 +171,7 @@
 /* ── Danger section ──────────────────────────────────────── */
 
 .dangerSection {
-  border-top-color: rgba(220, 38, 38, 0.25);
+  border-top-color: rgba(239, 68, 68, 0.2);
 }
 
 .dangerTitle {
@@ -183,7 +183,7 @@
 .modalBackdrop {
   position: fixed;
   inset: 0;
-  background-color: var(--modal-backdrop);
+  background-color: var(--bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -191,14 +191,15 @@
 }
 
 .modal {
-  background-color: var(--modal-bg);
-  border-radius: 10px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
   padding: 28px 32px;
   width: min(460px, calc(100vw - 48px));
   display: flex;
   flex-direction: column;
   gap: 14px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  box-shadow: var(--shadow-lg);
 }
 
 .modalTitle {
@@ -209,14 +210,14 @@
 }
 
 .modalWarning {
-  font-size: 0.875rem;
-  color: var(--text-muted);
+  font-size: 13px;
+  color: var(--text-secondary);
   margin: 0;
   line-height: 1.5;
 }
 
 .modalLabel {
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -239,7 +240,7 @@
 }
 
 .modalError {
-  font-size: 0.8125rem;
+  font-size: 13px;
   color: var(--danger-color);
   margin: 0;
 }

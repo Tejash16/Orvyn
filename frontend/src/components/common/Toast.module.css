@@ -21,9 +21,9 @@
   min-width: 200px;
   max-width: 360px;
   border-radius: 8px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 500;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-lg);
   pointer-events: auto;
   animation: slideIn 0.2s ease-out;
 }
@@ -33,9 +33,9 @@
 }
 
 .toastInfo {
-  background-color: var(--modal-bg);
+  background-color: var(--bg-surface);
   color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-light);
 }
 
 .toastSuccess {
@@ -45,9 +45,9 @@
 }
 
 .toastError {
-  background-color: rgba(220, 38, 38, 0.08);
+  background-color: rgba(239, 68, 68, 0.08);
   color: var(--danger-color);
-  border: 1px solid rgba(220, 38, 38, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .toastWarning {
@@ -74,7 +74,7 @@
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
-  transition: opacity 0.12s ease;
+  transition: opacity 0.15s ease;
 }
 
 .closeBtn:hover {

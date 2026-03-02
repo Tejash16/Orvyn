@@ -11,11 +11,11 @@
   padding: 6px 8px;
   border-radius: 6px;
   cursor: default;
-  transition: background-color 0.12s ease;
+  transition: background-color 0.15s ease;
 }
 
 .nodeRow:hover {
-  background-color: var(--nav-hover-bg);
+  background-color: var(--bg-hover);
 }
 
 .folderIcon {
@@ -32,7 +32,7 @@
 }
 
 .nodeName {
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -41,8 +41,8 @@
 }
 
 .nodeContext {
-  font-size: 0.75rem;
-  color: var(--text-muted);
+  font-size: 11px;
+  color: var(--text-tertiary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -54,7 +54,7 @@
   display: flex;
   gap: 2px;
   opacity: 0;
-  transition: opacity 0.12s ease;
+  transition: opacity 0.15s ease;
 }
 
 .nodeRow:hover .actions {
@@ -68,21 +68,21 @@
   width: 26px;
   height: 26px;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: 0;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .actionBtn:hover {
-  background-color: var(--control-btn-hover-bg);
+  background-color: var(--bg-active);
   color: var(--text-primary);
 }
 
 .actionBtnDanger:hover {
-  background-color: rgba(220, 38, 38, 0.1);
+  background-color: rgba(239, 68, 68, 0.1);
   color: var(--danger-color);
 }
 
@@ -92,7 +92,7 @@
   position: relative;
   margin-left: 16px;
   padding-left: 12px;
-  border-left: 1px solid var(--border-color);
+  border-left: 1px solid var(--border-light);
 }
 
 /* ── Inline form (add / edit) ─────────────────────────────── */
@@ -104,35 +104,35 @@
   padding: 8px;
   margin: 4px 0 4px 16px;
   background-color: var(--input-bg);
-  border: 1px solid var(--input-border);
-  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
 }
 
 .inlineInput {
   width: 100%;
   padding: 7px 10px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   color: var(--text-primary);
-  background-color: var(--modal-bg);
+  background-color: var(--bg-surface);
   border: 1px solid var(--input-border);
-  border-radius: 5px;
+  border-radius: 6px;
   outline: none;
   box-sizing: border-box;
   transition: border-color 0.15s ease;
 }
 
 .inlineInput:focus {
-  border-color: #4f46e5;
+  border-color: var(--border-focus);
 }
 
 .inlineTextarea {
   width: 100%;
   padding: 7px 10px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   color: var(--text-primary);
-  background-color: var(--modal-bg);
+  background-color: var(--bg-surface);
   border: 1px solid var(--input-border);
-  border-radius: 5px;
+  border-radius: 6px;
   outline: none;
   box-sizing: border-box;
   resize: vertical;
@@ -143,7 +143,7 @@
 }
 
 .inlineTextarea:focus {
-  border-color: #4f46e5;
+  border-color: var(--border-focus);
 }
 
 .inlineActions {
@@ -159,16 +159,16 @@
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 5px;
-  background-color: #4f46e5;
+  border-radius: 6px;
+  background-color: var(--accent-primary);
   color: #ffffff;
   cursor: pointer;
   padding: 0;
-  transition: background-color 0.12s ease;
+  transition: background-color 0.15s ease;
 }
 
 .inlineConfirm:hover {
-  background-color: #4338ca;
+  background-color: var(--accent-hover);
 }
 
 .inlineConfirm:disabled {
@@ -183,12 +183,12 @@
   width: 28px;
   height: 28px;
   border: 1px solid var(--btn-secondary-border);
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: 0;
-  transition: background-color 0.12s ease;
+  transition: background-color 0.15s ease;
 }
 
 .inlineCancel:hover {
@@ -196,15 +196,15 @@
 }
 
 .inlineLabel {
-  font-size: 0.6875rem;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
 }
 
 .inlineError {
-  font-size: 0.75rem;
+  font-size: 12px;
   color: var(--danger-color);
   margin: 0;
 }
@@ -216,20 +216,21 @@
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 500;
-  color: #4f46e5;
+  color: var(--text-secondary);
   background: transparent;
-  border: 1px dashed var(--input-border);
-  border-radius: 6px;
+  border: 1px dashed var(--border-medium);
+  border-radius: 8px;
   cursor: pointer;
   width: 100%;
-  transition: background-color 0.12s ease, border-color 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .addRootBtn:hover {
-  background-color: var(--nav-active-bg);
-  border-color: #4f46e5;
+  background-color: var(--accent-soft);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
 }
 
 /* ── Read-only mode (preview) ─────────────────────────────── */
@@ -250,10 +251,10 @@
   gap: 8px;
   padding: 6px 10px;
   margin: 2px 0 2px 16px;
-  background-color: rgba(220, 38, 38, 0.06);
-  border: 1px solid rgba(220, 38, 38, 0.2);
+  background-color: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
   border-radius: 6px;
-  font-size: 0.8125rem;
+  font-size: 13px;
   color: var(--text-primary);
 }
 
@@ -263,13 +264,14 @@
 
 .deleteYes {
   padding: 3px 10px;
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 500;
   color: #ffffff;
   background-color: var(--danger-color);
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
 .deleteYes:hover {
@@ -278,13 +280,14 @@
 
 .deleteNo {
   padding: 3px 10px;
-  font-size: 0.75rem;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-primary);
   background: transparent;
   border: 1px solid var(--btn-secondary-border);
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
 .deleteNo:hover {
@@ -299,12 +302,12 @@
   align-items: center;
   gap: 8px;
   padding: 32px 16px;
-  color: var(--text-muted);
-  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  font-size: 13px;
   text-align: center;
 }
 
 .emptyTreeIcon {
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   opacity: 0.4;
 }

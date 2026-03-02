@@ -17,7 +17,17 @@ function Header() {
     <header className={styles.header}>
       {/* Drag region — covers the full header except window control buttons */}
       <div className={styles.dragRegion}>
-        <span className={styles.appTitle}>DocRack</span>
+        <div className={styles.brandGroup}>
+          <div className={styles.logoMark}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M4 4h7v7H4V4zm9 0h7v7h-7V4zm-9 9h7v7H4v-7zm12 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
+                fill="currentColor" opacity="0.9"
+              />
+            </svg>
+          </div>
+          <span className={styles.appTitle}>DocRack</span>
+        </div>
       </div>
 
       <div className={styles.windowControls}>
