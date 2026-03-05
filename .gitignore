@@ -24,3 +24,10 @@ Thumbs.db
 # Electron build
 release/
 out/
+# Third-party AI skills (installed via scripts/install-skills.sh)
+.agent/skills/
+
+# Keep these tracked:
+# - design-system/ (project design decisions)
+# - .claude/context/ (project documentation)
+# - scripts/install-skills.sh (reproducible setup)

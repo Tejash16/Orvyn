@@ -56,7 +56,7 @@ function getExtLabel(ext) {
 /* ── SVG Icons ──────────────────────────────────────────── */
 
 const IconUploadCloud = () => (
-  <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="16 16 12 12 8 16" />
     <line x1="12" y1="12" x2="12" y2="21" />
@@ -65,7 +65,7 @@ const IconUploadCloud = () => (
 );
 
 const IconFile = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
     <polyline points="14 2 14 8 20 8" />
@@ -90,6 +90,51 @@ const IconX = () => (
   <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="3" strokeLinecap="round">
     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+const IconSparkle = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
+  </svg>
+);
+
+const IconFolderTree = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 19a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2z" />
+    <path d="M22 9a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2z" />
+    <path d="M7 3v18" />
+    <path d="M7 8h6" />
+    <path d="M7 18h6" />
+    <path d="M3 3h4" />
+  </svg>
+);
+
+const IconEmptyFiles = () => (
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="16" y1="13" x2="8" y2="13" />
+    <line x1="16" y1="17" x2="8" y2="17" />
+    <polyline points="10 9 9 9 8 9" />
+  </svg>
+);
+
+const IconFileSmall = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+  </svg>
+);
+
+const IconFolderSmall = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
   </svg>
 );
 
@@ -351,6 +396,7 @@ function UploadPage() {
 
   const validCount = selectedFiles.filter((f) => f.valid).length;
   const invalidCount = selectedFiles.length - validCount;
+  const totalSize = selectedFiles.reduce((sum, f) => sum + (f.size || 0), 0);
 
   const canClassify = (() => {
     if (validCount === 0) return false;
@@ -364,136 +410,178 @@ function UploadPage() {
   function renderSelectScreen() {
     return (
       <div className={styles.content}>
-        {/* Drop zone */}
-        <div
-          className={`${styles.dropZone} ${isDragOver ? styles.dropZoneActive : ''}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <span className={styles.dropZoneIcon}><IconUploadCloud /></span>
-          <span className={styles.dropZoneText}>
-            Drag and drop files or folders here
-          </span>
-          <div className={styles.selectBtns}>
-            <button className={styles.selectBtn} onClick={handleSelectFiles} type="button">
-              <IconFile /> Select Files
-            </button>
-            <button className={styles.selectBtn} onClick={handleSelectFolder} type="button">
-              <IconFolder /> Select Folder
-            </button>
-          </div>
-        </div>
-
-        {/* File list */}
-        {selectedFiles.length > 0 && (
-          <>
-            <div className={styles.fileCounter}>
-              <span className={styles.fileCountText}>
-                {validCount} file{validCount !== 1 ? 's' : ''} selected
-                {invalidCount > 0 && ` (${invalidCount} unsupported)`}
-              </span>
-              <span className={styles.fileCountLimit}>{selectedFiles.length} / {MAX_FILES}</span>
-            </div>
-            <div className={styles.fileList}>
-              {selectedFiles.map((f) => (
-                <div
-                  key={f.path}
-                  className={`${styles.fileItem} ${!f.valid ? styles.fileItemInvalid : ''}`}
-                >
-                  <div className={`${styles.fileItemIcon} ${styles[getIconClass(f.extension)]}`}>
-                    {getExtLabel(f.extension).slice(0, 3)}
-                  </div>
-                  <span className={styles.fileItemName} title={f.path}>{f.name}</span>
-                  <span className={styles.fileItemSize}>{formatSize(f.size)}</span>
-                  {!f.valid && <span className={styles.fileItemBadge}>Unsupported</span>}
-                  <button
-                    className={styles.fileItemRemove}
-                    onClick={() => handleRemoveFile(f.path)}
-                    title="Remove"
-                    type="button"
-                  >
-                    <IconX />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Mode selector */}
-        {selectedFiles.length > 0 && (
-          <>
-            <div className={styles.sectionLabel}>Classification Mode</div>
-            <div className={styles.modeCards}>
-              <button
-                className={`${styles.modeCard} ${mode === 'custom' ? styles.modeCardActive : ''}`}
-                onClick={() => setMode('custom')}
-                type="button"
-              >
-                <span className={styles.modeCardTitle}>Custom</span>
-                <span className={styles.modeCardDesc}>
-                  Classify into an existing DataRoom&apos;s folder structure
+        <div className={styles.selectLayout}>
+          {/* ── Left Panel: File Browser ── */}
+          <div className={styles.leftPanel}>
+            <div className={styles.leftPanelHeader}>
+              <span className={styles.leftPanelTitle}>Selected Files</span>
+              <div className={styles.leftPanelStats}>
+                <span className={styles.leftPanelStat}>
+                  <IconFileSmall /> {validCount} file{validCount !== 1 ? 's' : ''}
                 </span>
-              </button>
-              <button
-                className={`${styles.modeCard} ${mode === 'ai' ? styles.modeCardActive : ''}`}
-                onClick={() => setMode('ai')}
-                type="button"
-              >
-                <span className={styles.modeCardTitle}>AI Auto-Organize</span>
-                <span className={styles.modeCardDesc}>
-                  Let AI create folders and organize your files automatically
+                <span className={styles.leftPanelStat}>
+                  <IconFolderSmall /> {formatSize(totalSize)}
                 </span>
-              </button>
+              </div>
             </div>
 
-            {/* Mode-specific fields */}
-            {mode === 'custom' && (
-              <div className={styles.field}>
-                <label className={styles.label}>Target DataRoom</label>
-                <select
-                  className={styles.select}
-                  value={targetDataroomId}
-                  onChange={(e) => setTargetDataroomId(e.target.value)}
-                >
-                  <option value="">Select a DataRoom...</option>
-                  {datarooms.map((dr) => (
-                    <option key={dr.id} value={dr.id}>{dr.name}</option>
-                  ))}
-                </select>
+            {selectedFiles.length > 0 && (
+              <div className={styles.fileCounter}>
+                <span className={styles.fileCountText}>
+                  {validCount} valid{invalidCount > 0 ? `, ${invalidCount} unsupported` : ''}
+                </span>
+                <span className={styles.fileCountLimit}>{selectedFiles.length} / {MAX_FILES}</span>
               </div>
             )}
 
-            {mode === 'ai' && (
-              <>
-                <div className={styles.field}>
-                  <label className={styles.label}>
-                    DataRoom Name
-                  </label>
-                  <input
-                    className={styles.input}
-                    type="text"
-                    placeholder="e.g. Q4 Financial Reports"
-                    value={aiName}
-                    onChange={(e) => setAiName(e.target.value)}
-                  />
-                </div>
-                <div className={styles.field}>
-                  <label className={styles.label}>
-                    Description <span className={styles.labelHint}>(optional)</span>
-                  </label>
-                  <textarea
-                    className={styles.textarea}
-                    placeholder="Describe the purpose of this DataRoom..."
-                    value={aiDescription}
-                    onChange={(e) => setAiDescription(e.target.value)}
-                  />
-                </div>
-              </>
+            {selectedFiles.length > 0 ? (
+              <div className={styles.fileList}>
+                {selectedFiles.map((f) => (
+                  <div
+                    key={f.path}
+                    className={`${styles.fileItem} ${!f.valid ? styles.fileItemInvalid : ''}`}
+                  >
+                    <div className={`${styles.fileItemIcon} ${styles[getIconClass(f.extension)]}`}>
+                      {getExtLabel(f.extension).slice(0, 3)}
+                    </div>
+                    <span className={styles.fileItemName} title={f.path}>{f.name}</span>
+                    <span className={styles.fileItemSize}>{formatSize(f.size)}</span>
+                    {!f.valid && <span className={styles.fileItemBadge}>Unsupported</span>}
+                    <button
+                      className={styles.fileItemRemove}
+                      onClick={() => handleRemoveFile(f.path)}
+                      title="Remove"
+                      type="button"
+                    >
+                      <IconX />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>
+                <span className={styles.emptyStateIcon}><IconEmptyFiles /></span>
+                <span className={styles.emptyStateTitle}>No files found</span>
+                <span className={styles.emptyStateHint}>Upload some files to get started</span>
+              </div>
             )}
-          </>
-        )}
+          </div>
+
+          {/* ── Right Panel: Upload & Configure ── */}
+          <div className={styles.rightPanel}>
+            {/* Drop Zone */}
+            <div
+              className={`${styles.dropZone} ${isDragOver ? styles.dropZoneActive : ''}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <span className={styles.dropZoneIconWrap}><IconUploadCloud /></span>
+              <span className={styles.dropZoneTitle}>Upload Files &amp; Folders</span>
+              <span className={styles.dropZoneText}>
+                Click to browse or drag files anywhere on the page
+              </span>
+              <div className={styles.selectBtns}>
+                <button className={styles.selectBtn} onClick={handleSelectFiles} type="button">
+                  <IconFile /> Select Files
+                </button>
+                <button className={styles.selectBtnSecondary} onClick={handleSelectFolder} type="button">
+                  <IconFolder /> Select Folder
+                </button>
+              </div>
+            </div>
+
+            {/* Organization Method */}
+            <div className={styles.orgSection}>
+              <div className={styles.orgSectionTitle}>Organization Method</div>
+              <div className={styles.orgSectionSubtitle}>Choose how you want to organize your uploaded files</div>
+
+              <div className={styles.modeCards}>
+                <button
+                  className={`${styles.modeCard} ${mode === 'ai' ? styles.modeCardActive : ''}`}
+                  onClick={() => setMode('ai')}
+                  type="button"
+                >
+                  <span className={styles.modeCardIcon}><IconSparkle /></span>
+                  <span className={styles.modeCardContent}>
+                    <span className={styles.modeCardTitle}>AI Organization</span>
+                    <span className={styles.modeCardDesc}>
+                      Let AI automatically organize your files intelligently
+                    </span>
+                  </span>
+                </button>
+                <button
+                  className={`${styles.modeCard} ${mode === 'custom' ? styles.modeCardActive : ''}`}
+                  onClick={() => setMode('custom')}
+                  type="button"
+                >
+                  <span className={styles.modeCardIcon}><IconFolderTree /></span>
+                  <span className={styles.modeCardContent}>
+                    <span className={styles.modeCardTitle}>Custom Categories</span>
+                    <span className={styles.modeCardDesc}>
+                      Choose from existing data rooms or create new ones
+                    </span>
+                  </span>
+                </button>
+              </div>
+
+              {/* Config area */}
+              <div className={styles.configArea}>
+                {mode === 'ai' && (
+                  <>
+                    <div className={styles.configHeader}>
+                      <span className={styles.configHeaderIcon}><IconSparkle /></span>
+                      <span className={styles.configHeaderTitle}>AI-Powered Organization</span>
+                    </div>
+                    <div className={styles.field}>
+                      <label className={styles.label}>Data Room Name</label>
+                      <input
+                        className={styles.input}
+                        type="text"
+                        placeholder="Enter a name for your new data room"
+                        value={aiName}
+                        onChange={(e) => setAiName(e.target.value)}
+                      />
+                    </div>
+                    <div className={styles.field}>
+                      <label className={styles.label}>
+                        Description <span className={styles.labelHint}>(optional)</span>
+                      </label>
+                      <textarea
+                        className={styles.textarea}
+                        placeholder="Describe the purpose of this DataRoom..."
+                        value={aiDescription}
+                        onChange={(e) => setAiDescription(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {mode === 'custom' && (
+                  <>
+                    <div className={styles.configHeader}>
+                      <span className={styles.configHeaderIcon}><IconFolderTree /></span>
+                      <span className={styles.configHeaderTitle}>Custom Classification</span>
+                    </div>
+                    <div className={styles.field}>
+                      <label className={styles.label}>Target DataRoom</label>
+                      <select
+                        className={styles.select}
+                        value={targetDataroomId}
+                        onChange={(e) => setTargetDataroomId(e.target.value)}
+                      >
+                        <option value="">Select a DataRoom...</option>
+                        {datarooms.map((dr) => (
+                          <option key={dr.id} value={dr.id}>{dr.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Errors */}
         {localError && (

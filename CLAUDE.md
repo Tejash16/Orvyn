@@ -819,3 +819,34 @@ New Folder, separator, Upload Files, Upload Folder, separator, Refresh.
 - Dragging files over the explorer shows a drop overlay.
 - Dropping files opens the Upload Modal with pre-loaded file paths.
 - Folder drops are detected and recursively scanned via `file:scan-folder`.
+
+## 21. Design System
+
+For all UI work, read `design-system/docrack/MASTER.md` first.
+For page-specific overrides, check `design-system/docrack/pages/<page-name>.md`.
+All colors, typography, and spacing must come from the design system tokens.
+
+## 22. AI Development Context
+
+Additional context files (not duplicating this CLAUDE.md):
+- `.claude/context/project.md` — Business context, current phase, what's done vs planned
+- `.claude/context/features.md` — Feature status tracker (completed / in-progress / planned)
+
+## 23. Commands
+
+Reusable workflows available via `/project:<command>`:
+- `/project:analyze-architecture` — Cross-reference codebase against CLAUDE.md
+- `/project:build-feature` — Guided feature implementation with guardrails
+- `/project:review-security` — Security checklist against Sections 7 and 12
+- `/project:refine-ui` — Design system-aligned UI polish
+
+## 24. Skills Reference
+
+Skills are in `.agent/skills/`. Invoke when relevant:
+- `@senior-fullstack` — General fullstack patterns
+- `@systematic-debugging` — When hunting bugs across layers
+- `@react-patterns` — React component architecture
+- `@fastapi-pro` — Python API work
+- `@ui-ux-pro-max` — UI design decisions and reviews
+- `@cc-skill-security-review` — Pre-release security checks
+- `@performance-profiling` — Performance debugging
