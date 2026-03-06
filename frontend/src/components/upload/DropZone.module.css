@@ -1,0 +1,162 @@
+/* ── Drop Zone ─────────────────────────────────────────── */
+
+.dropZone {
+  border: 2px dashed var(--border-medium);
+  border-radius: 14px;
+  padding: var(--space-xl, 32px) var(--space-lg, 24px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+  position: relative;
+  overflow: hidden;
+}
+
+.dropZone::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent-primary), transparent, var(--accent-primary));
+  opacity: 0;
+  z-index: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.dropZone:hover {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-softer);
+}
+
+.dropZoneActive {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-soft);
+}
+
+.dropZoneActive::before {
+  opacity: 0.15;
+}
+
+/* ── Icon wrap ─────────────────────────────────────────── */
+
+.iconWrap {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  z-index: 1;
+  transition: transform 0.2s ease;
+}
+
+.dropZone:hover .iconWrap {
+  transform: translateY(-2px);
+}
+
+/* ── Text ──────────────────────────────────────────────── */
+
+.title {
+  font-family: 'Fira Code', monospace;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  z-index: 1;
+}
+
+.text {
+  font-family: 'Fira Sans', sans-serif;
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+  text-align: center;
+  z-index: 1;
+}
+
+/* ── Action buttons ────────────────────────────────────── */
+
+.buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: var(--space-xs, 4px);
+  z-index: 1;
+}
+
+.btnFiles {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: 'Fira Sans', sans-serif;
+  color: #fff;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btnFiles:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btnFiles:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.btnFolder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: 'Fira Sans', sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.btnFolder:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
+}
+
+.btnFolder:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* ── Reduced motion ────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .dropZone,
+  .dropZone::before,
+  .iconWrap,
+  .btnFiles,
+  .btnFolder {
+    transition: none;
+  }
+
+  .dropZone:hover .iconWrap,
+  .btnFiles:hover,
+  .btnFolder:hover {
+    transform: none;
+  }
+}

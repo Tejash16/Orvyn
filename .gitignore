@@ -26,6 +26,7 @@ release/
 out/
 # Third-party AI skills (installed via scripts/install-skills.sh)
 .agent/skills/
+.claude/skills/
 
 # Keep these tracked:
 # - design-system/ (project design decisions)
