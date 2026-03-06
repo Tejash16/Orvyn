@@ -177,7 +177,16 @@ function UploadPage() {
   // ── Navigation helpers ──
 
   function handleCancel() {
-    dispatch(setActivePage('dataroom'));
+    setSelectedFiles([]);
+    setLocalError(null);
+    setMode('custom');
+    setTargetDataroomId('');
+    setAiName('');
+    setAiDescription('');
+    setResultDataroomId(null);
+    dispatch(resetUploadState());
+    setStep('select');
+    setProgressStep('registering');
   }
 
   function handleViewDataroom() {
@@ -299,7 +308,28 @@ function UploadPage() {
   // ── Main render ──
 
   return (
-    <div className={styles.page}>
+    <div
+      className={styles.page}
+      onDragOver={step === 'select' ? handleDragOver : undefined}
+      onDragLeave={step === 'select' ? handleDragLeave : undefined}
+      onDrop={step === 'select' ? handleDrop : undefined}
+    >
+      {/* Full-page drag overlay */}
+      {isDragOver && step === 'select' && (
+        <div className={styles.dragOverlay}>
+          <div className={styles.dragOverlayContent}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="16 16 12 12 8 16" />
+              <line x1="12" y1="12" x2="12" y2="21" />
+              <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+            </svg>
+            <span className={styles.dragOverlayTitle}>Drop files here</span>
+            <span className={styles.dragOverlayText}>Release to add files to the upload queue</span>
+          </div>
+        </div>
+      )}
+
       {/* ── Select Screen ── */}
       {step === 'select' && (
         <div className={styles.content}>

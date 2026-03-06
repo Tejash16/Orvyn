@@ -1,4 +1,4 @@
-import { IconSparkle, IconFolderTree, IconFolder, IconFileSmall } from './icons';
+import { IconSparkle, IconFolderTree } from './icons';
 import styles from './ClassificationModeSelector.module.css';
 
 function ClassificationModeSelector({
@@ -82,38 +82,6 @@ function ClassificationModeSelector({
                                 value={aiDescription}
                                 onChange={(e) => onAiDescriptionChange(e.target.value)}
                             />
-                        </div>
-
-                        {/* Preview: AI Organization Structure */}
-                        <div className={styles.previewSection}>
-                            <div className={styles.previewHeader}>
-                                <IconSparkle />
-                                <span>Preview: AI Organization Structure</span>
-                            </div>
-                            <div className={styles.previewTree}>
-                                <div className={styles.treeRoot}>
-                                    <IconFolder />
-                                    <span className={styles.treeRootName}>
-                                        {aiName.trim() || 'Your Data Room'}
-                                    </span>
-                                </div>
-                                <div className={styles.treeChild}>
-                                    <IconFileSmall />
-                                    <span>Financial Documents</span>
-                                </div>
-                                <div className={styles.treeChild}>
-                                    <IconFileSmall />
-                                    <span>Legal Documents</span>
-                                </div>
-                                <div className={styles.treeChild}>
-                                    <IconFileSmall />
-                                    <span>Images</span>
-                                </div>
-                                <div className={styles.treeChild}>
-                                    <IconFileSmall />
-                                    <span>Tickets</span>
-                                </div>
-                            </div>
                         </div>
                     </>
                 )}

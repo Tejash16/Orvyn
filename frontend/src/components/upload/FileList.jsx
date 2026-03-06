@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
-    IconX, IconEmptyFiles, IconFileSmall, IconFolderSmall,
+    IconX, IconEmptyFiles, IconFileSmall,
     IconSearch, IconGrid, IconList, IconFilter, IconSort, IconHardDrive,
 } from './icons';
 import styles from './FileList.module.css';
@@ -12,6 +12,10 @@ function formatSize(bytes) {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function sortSizeNumeric(a, b) {
+    return (a.size || 0) - (b.size || 0);
 }
 
 function getIconClass(ext) {
@@ -38,17 +42,81 @@ function getExtLabel(ext) {
 
 /* ── Component ────────────────────────────────────────── */
 
+const SORT_OPTIONS = [
+    { value: 'name-asc', label: 'Name (A-Z)' },
+    { value: 'name-desc', label: 'Name (Z-A)' },
+    { value: 'size-asc', label: 'Size (smallest)' },
+    { value: 'size-desc', label: 'Size (largest)' },
+    { value: 'type-asc', label: 'Type (A-Z)' },
+    { value: 'type-desc', label: 'Type (Z-A)' },
+];
+
+const FILE_TYPE_GROUPS = [
+    { value: '', label: 'All types' },
+    { value: 'document', label: 'Documents', exts: ['.pdf', '.docx', '.doc', '.txt'] },
+    { value: 'spreadsheet', label: 'Spreadsheets', exts: ['.xlsx', '.xls', '.csv'] },
+    { value: 'presentation', label: 'Presentations', exts: ['.pptx', '.ppt'] },
+    { value: 'image', label: 'Images', exts: ['.png', '.jpg', '.jpeg'] },
+];
+
 function FileList({ files, onRemoveFile, validCount, invalidCount, totalSize, maxFiles }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [viewMode, setViewMode] = useState('list');
+    const [sortKey, setSortKey] = useState('name-asc');
+    const [filterType, setFilterType] = useState('');
+    const [showSortMenu, setShowSortMenu] = useState(false);
+    const [showFilterMenu, setShowFilterMenu] = useState(false);
+    const sortRef = useRef(null);
+    const filterRef = useRef(null);
 
-    // Count folders (always 0 for upload context, but matches the reference UI)
-    const folderCount = 0;
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        function handleClickOutside(e) {
+            if (sortRef.current && !sortRef.current.contains(e.target)) {
+                setShowSortMenu(false);
+            }
+            if (filterRef.current && !filterRef.current.contains(e.target)) {
+                setShowFilterMenu(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
-    // Filter files by search query (local UI only)
-    const displayFiles = searchQuery.trim()
-        ? files.filter((f) => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
-        : files;
+    // Filter and sort files (local UI only)
+    const displayFiles = useMemo(() => {
+        let result = files;
+
+        // Search filter
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            result = result.filter((f) => f.name.toLowerCase().includes(q));
+        }
+
+        // Type filter
+        if (filterType) {
+            const group = FILE_TYPE_GROUPS.find((g) => g.value === filterType);
+            if (group && group.exts) {
+                result = result.filter((f) => group.exts.includes(f.extension));
+            }
+        }
+
+        // Sort
+        const [field, order] = sortKey.split('-');
+        const sorted = [...result].sort((a, b) => {
+            if (field === 'name') {
+                return a.name.localeCompare(b.name);
+            } else if (field === 'size') {
+                return sortSizeNumeric(a, b);
+            } else if (field === 'type') {
+                return (a.extension || '').localeCompare(b.extension || '');
+            }
+            return 0;
+        });
+
+        if (order === 'desc') sorted.reverse();
+        return sorted;
+    }, [files, searchQuery, filterType, sortKey]);
 
     return (
         <>
@@ -59,7 +127,7 @@ function FileList({ files, onRemoveFile, validCount, invalidCount, totalSize, ma
                     <input
                         className={styles.searchInput}
                         type="text"
-                        placeholder="Search files and folders..."
+                        placeholder="Search files..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -84,53 +152,121 @@ function FileList({ files, onRemoveFile, validCount, invalidCount, totalSize, ma
                 </div>
             </div>
 
-            {/* Toolbar: file/folder stats + filter/sort */}
+            {/* Toolbar: file stats + filter/sort */}
             <div className={styles.toolbar}>
                 <div className={styles.toolbarStats}>
                     <span className={styles.stat}>
-                        <IconFileSmall /> {validCount} files
-                    </span>
-                    <span className={styles.stat}>
-                        <IconFolderSmall /> {folderCount} folders
+                        <IconFileSmall /> {validCount} file{validCount !== 1 ? 's' : ''}
                     </span>
                     <span className={styles.stat}>
                         <IconHardDrive /> {formatSize(totalSize)}
                     </span>
                 </div>
                 <div className={styles.toolbarActions}>
-                    <button className={styles.toolbarBtn} type="button">
-                        <IconFilter /> Filter
-                    </button>
-                    <button className={styles.toolbarBtn} type="button">
-                        <IconSort /> Sort
-                    </button>
+                    <div className={styles.dropdownWrap} ref={filterRef}>
+                        <button
+                            className={`${styles.toolbarBtn} ${filterType ? styles.toolbarBtnActive : ''}`}
+                            type="button"
+                            onClick={() => { setShowFilterMenu((v) => !v); setShowSortMenu(false); }}
+                            aria-expanded={showFilterMenu}
+                            aria-haspopup="listbox"
+                        >
+                            <IconFilter /> Filter
+                        </button>
+                        {showFilterMenu && (
+                            <div className={styles.dropdown} role="listbox">
+                                {FILE_TYPE_GROUPS.map((g) => (
+                                    <button
+                                        key={g.value}
+                                        className={`${styles.dropdownItem} ${filterType === g.value ? styles.dropdownItemActive : ''}`}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={filterType === g.value}
+                                        onClick={() => { setFilterType(g.value); setShowFilterMenu(false); }}
+                                    >
+                                        {g.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <div className={styles.dropdownWrap} ref={sortRef}>
+                        <button
+                            className={styles.toolbarBtn}
+                            type="button"
+                            onClick={() => { setShowSortMenu((v) => !v); setShowFilterMenu(false); }}
+                            aria-expanded={showSortMenu}
+                            aria-haspopup="listbox"
+                        >
+                            <IconSort /> Sort
+                        </button>
+                        {showSortMenu && (
+                            <div className={styles.dropdown} role="listbox">
+                                {SORT_OPTIONS.map((opt) => (
+                                    <button
+                                        key={opt.value}
+                                        className={`${styles.dropdownItem} ${sortKey === opt.value ? styles.dropdownItemActive : ''}`}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={sortKey === opt.value}
+                                        onClick={() => { setSortKey(opt.value); setShowSortMenu(false); }}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
             {/* File list or empty state */}
             {displayFiles.length > 0 ? (
-                <div className={styles.list}>
+                <div className={viewMode === 'grid' ? styles.grid : styles.list}>
                     {displayFiles.map((f) => (
-                        <div
-                            key={f.path}
-                            className={`${styles.item} ${!f.valid ? styles.itemInvalid : ''}`}
-                        >
-                            <div className={`${styles.itemIcon} ${styles[getIconClass(f.extension)]}`}>
-                                {getExtLabel(f.extension).slice(0, 3)}
-                            </div>
-                            <span className={styles.itemName} title={f.path}>{f.name}</span>
-                            <span className={styles.itemSize}>{formatSize(f.size)}</span>
-                            {!f.valid && <span className={styles.itemBadge}>Unsupported</span>}
-                            <button
-                                className={styles.itemRemove}
-                                onClick={() => onRemoveFile(f.path)}
-                                title="Remove"
-                                type="button"
-                                aria-label={`Remove ${f.name}`}
+                        viewMode === 'grid' ? (
+                            <div
+                                key={f.path}
+                                className={`${styles.gridItem} ${!f.valid ? styles.itemInvalid : ''}`}
                             >
-                                <IconX />
-                            </button>
-                        </div>
+                                <button
+                                    className={styles.gridItemRemove}
+                                    onClick={() => onRemoveFile(f.path)}
+                                    title="Remove"
+                                    type="button"
+                                    aria-label={`Remove ${f.name}`}
+                                >
+                                    <IconX />
+                                </button>
+                                <div className={`${styles.gridItemIcon} ${styles[getIconClass(f.extension)]}`}>
+                                    {getExtLabel(f.extension).slice(0, 3)}
+                                </div>
+                                <span className={styles.gridItemName} title={f.path}>{f.name}</span>
+                                <span className={styles.gridItemSize}>{formatSize(f.size)}</span>
+                                {!f.valid && <span className={styles.itemBadge}>Unsupported</span>}
+                            </div>
+                        ) : (
+                            <div
+                                key={f.path}
+                                className={`${styles.item} ${!f.valid ? styles.itemInvalid : ''}`}
+                            >
+                                <div className={`${styles.itemIcon} ${styles[getIconClass(f.extension)]}`}>
+                                    {getExtLabel(f.extension).slice(0, 3)}
+                                </div>
+                                <span className={styles.itemName} title={f.path}>{f.name}</span>
+                                <span className={styles.itemSize}>{formatSize(f.size)}</span>
+                                {!f.valid && <span className={styles.itemBadge}>Unsupported</span>}
+                                <button
+                                    className={styles.itemRemove}
+                                    onClick={() => onRemoveFile(f.path)}
+                                    title="Remove"
+                                    type="button"
+                                    aria-label={`Remove ${f.name}`}
+                                >
+                                    <IconX />
+                                </button>
+                            </div>
+                        )
                     ))}
                 </div>
             ) : (
