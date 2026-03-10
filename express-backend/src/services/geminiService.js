@@ -167,4 +167,160 @@ async function generateDataroom(name, description, fingerprints) {
   return JSON.parse(raw);
 }
 
-module.exports = { classifyFiles, generateDataroom };
+// ── Embeddings (V1 Copilot) ──────────────────────────────
+
+const EMBEDDING_BATCH_SIZE = 50;
+
+/**
+ * Batch embed texts via Gemini embedding API.
+ *
+ * @param {string[]} texts - Array of text strings to embed
+ * @returns {Promise<number[][]>} Array of embedding vectors
+ */
+async function embedTexts(texts) {
+  const genAI = _getClient();
+  const embeddingModel = process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001';
+
+  const model = genAI.getGenerativeModel({ model: embeddingModel });
+
+  const allVectors = [];
+
+  // Process in batches
+  for (let i = 0; i < texts.length; i += EMBEDDING_BATCH_SIZE) {
+    const batch = texts.slice(i, i + EMBEDDING_BATCH_SIZE);
+    let lastError;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const result = await model.batchEmbedContents({
+          requests: batch.map((text) => ({
+            content: { parts: [{ text }] },
+          })),
+        });
+
+        for (const emb of result.embeddings) {
+          allVectors.push(emb.values);
+        }
+        lastError = null;
+        break;
+      } catch (e) {
+        lastError = e;
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
+        }
+      }
+    }
+
+    if (lastError) {
+      throw new Error(`Embedding failed after ${MAX_RETRIES} attempts: ${lastError.message}`);
+    }
+  }
+
+  return allVectors;
+}
+
+// ── Entity extraction (V1 Copilot) ──────────────────────
+
+const ENTITY_EXTRACTION_PROMPT =
+  'Extract all notable entities from this document. Return JSON only, no markdown:\n' +
+  '{\n' +
+  '  "organizations": [],\n' +
+  '  "people": [],\n' +
+  '  "monetary_values": [],\n' +
+  '  "dates": [],\n' +
+  '  "locations": [],\n' +
+  '  "key_terms": []\n' +
+  '}\n' +
+  'Do NOT assume any industry. Extract what\'s actually in the document.';
+
+/**
+ * Extract entities from document text via Gemini.
+ *
+ * @param {string} text - Document text to extract entities from
+ * @returns {Promise<Object>} Parsed entity JSON
+ */
+async function extractEntities(text) {
+  const raw = await _callGemini(ENTITY_EXTRACTION_PROMPT, text);
+  return JSON.parse(raw);
+}
+
+// ── File summary (V1 Copilot) ────────────────────────────
+
+const SUMMARIZE_SYSTEM_PROMPT =
+  'Summarize this document in 2-3 sentences. Be specific about names, numbers, dates, key terms. ' +
+  'Return ONLY the summary text, no JSON, no markdown formatting.';
+
+/**
+ * Generate a file summary via Gemini.
+ *
+ * @param {string} text - Document text (first 2000 chars)
+ * @returns {Promise<string>} Summary text
+ */
+async function summarizeFile(text) {
+  const genAI = _getClient();
+  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
+  const model = genAI.getGenerativeModel({
+    model: chatModel,
+    systemInstruction: SUMMARIZE_SYSTEM_PROMPT,
+    generationConfig: { temperature: 0.2 },
+  });
+
+  let lastError;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const result = await model.generateContent(text);
+      return result.response.text().trim();
+    } catch (e) {
+      lastError = e;
+      if (attempt < MAX_RETRIES - 1) {
+        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
+      }
+    }
+  }
+  throw new Error(`Summarize failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+}
+
+// ── Chat title generation (V1 Copilot) ───────────────────
+
+const TITLE_SYSTEM_PROMPT =
+  'Generate a concise 5-word title for a chat that starts with the given message. ' +
+  'Return ONLY the title, nothing else. No quotes, no punctuation at the end.';
+
+/**
+ * Generate a chat session title via Gemini.
+ *
+ * @param {string} message - First user message
+ * @returns {Promise<string>} Generated title
+ */
+async function generateTitle(message) {
+  const genAI = _getClient();
+  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
+  const model = genAI.getGenerativeModel({
+    model: chatModel,
+    systemInstruction: TITLE_SYSTEM_PROMPT,
+    generationConfig: { temperature: 0.3, maxOutputTokens: 20 },
+  });
+
+  let lastError;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const result = await model.generateContent(message);
+      return result.response.text().trim();
+    } catch (e) {
+      lastError = e;
+      if (attempt < MAX_RETRIES - 1) {
+        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
+      }
+    }
+  }
+  throw new Error(`Title generation failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+}
+
+module.exports = {
+  classifyFiles,
+  generateDataroom,
+  embedTexts,
+  extractEntities,
+  summarizeFile,
+  generateTitle,
+};

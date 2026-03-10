@@ -136,6 +136,13 @@ class File(Base):
     checksum = Column(String, nullable=True)
     extracted_text = Column(Text, nullable=True)
     status = Column(String, default="registered")  # registered | processing | classified | error
+    # Copilot columns
+    ai_summary = Column(Text, nullable=True)
+    embedding_status = Column(String, default="none")  # none | pending | processing | complete | failed
+    content_checksum = Column(Text, nullable=True)
+    embedding_model = Column(String, nullable=True)
+    indexed_file_size = Column(Integer, nullable=True)
+    indexed_file_mtime = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -159,8 +166,104 @@ class Classification(Base):
 
 
 # ---------------------------------------------------------------------------
+# Copilot models — new tables for the Copilot feature
+# ---------------------------------------------------------------------------
+
+class IndexingJob(Base):
+    __tablename__ = "indexing_jobs"
+
+    id = Column(String, primary_key=True, default=_generate_uuid)
+    file_id = Column(String, ForeignKey("files.id", ondelete="CASCADE"), nullable=False)
+    dataroom_id = Column(String, nullable=False)
+    status = Column(String, default="pending")  # pending | processing | complete | failed
+    attempts = Column(Integer, default=0)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class FileChunk(Base):
+    __tablename__ = "file_chunks"
+
+    id = Column(String, primary_key=True, default=_generate_uuid)
+    file_id = Column(String, ForeignKey("files.id", ondelete="CASCADE"), nullable=False)
+    dataroom_id = Column(String, nullable=False)
+    chunk_index = Column(Integer, nullable=False)
+    chunk_text = Column(Text, nullable=False)
+
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    id = Column(String, primary_key=True, default=_generate_uuid)
+    scope_type = Column(String, nullable=False)
+    scope_ids = Column(Text, nullable=True)
+    scope_name = Column(Text, nullable=True)
+    title = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(String, primary_key=True, default=_generate_uuid)
+    session_id = Column(String, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    sources = Column(Text, nullable=True)
+    tool_calls = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class DataroomInsight(Base):
+    __tablename__ = "dataroom_insights"
+
+    id = Column(String, primary_key=True, default=_generate_uuid)
+    dataroom_id = Column(String, ForeignKey("datarooms.id", ondelete="CASCADE"), nullable=False)
+    insight_type = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    generated_at = Column(DateTime, default=datetime.datetime.utcnow)
+    stale = Column(Boolean, default=False)
+
+
+class FileEntity(Base):
+    __tablename__ = "file_entities"
+
+    id = Column(String, primary_key=True, default=_generate_uuid)
+    file_id = Column(String, ForeignKey("files.id", ondelete="CASCADE"), nullable=False)
+    dataroom_id = Column(String, nullable=False)
+    entity_type = Column(String, nullable=False)
+    entity_value = Column(String, nullable=False)
+    context = Column(Text, nullable=True)
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+# Copilot context — set by /init-db, used by sync functions
+_active_chroma_path = None
+_active_user_id = None
+
+
+def _get_user_id(session=None) -> str:
+    """Return the active user's mongo_user_id for ChromaDB collection naming."""
+    global _active_user_id
+    if _active_user_id:
+        return _active_user_id
+    if session is not None:
+        row = session.query(UserMeta).first()
+        if row:
+            _active_user_id = row.mongo_user_id
+            return _active_user_id
+    return None
+
+
+def _get_chroma_path() -> str:
+    """Return the ChromaDB storage path. Set via /init-db or copilot endpoints."""
+    return _active_chroma_path
+
 
 def _require_db():
     """
@@ -367,7 +470,71 @@ def init_db(request: InitDbRequest):
                 conn.execute(text("ALTER TABLE datarooms ADD COLUMN is_starred BOOLEAN DEFAULT 0"))
                 conn.commit()
 
+    # Schema migration: add Copilot columns to files table if missing
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='files'"
+        ))
+        if result.fetchone():
+            columns = [
+                row[1] for row in conn.execute(text("PRAGMA table_info(files)"))
+            ]
+            copilot_columns = {
+                "ai_summary": "TEXT",
+                "embedding_status": "TEXT DEFAULT 'none'",
+                "content_checksum": "TEXT",
+                "embedding_model": "TEXT",
+                "indexed_file_size": "INTEGER",
+                "indexed_file_mtime": "REAL",
+            }
+            for col_name, col_type in copilot_columns.items():
+                if col_name not in columns:
+                    conn.execute(text(f"ALTER TABLE files ADD COLUMN {col_name} {col_type}"))
+            conn.commit()
+
     Base.metadata.create_all(engine)
+
+    # Create FTS5 virtual table and sync triggers (content= mode)
+    # These cannot be created via SQLAlchemy ORM — must use raw SQL.
+    with engine.connect() as conn:
+        # FTS5 virtual table
+        conn.execute(text("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS file_chunks_fts USING fts5(
+                chunk_text,
+                file_id UNINDEXED,
+                dataroom_id UNINDEXED,
+                chunk_index UNINDEXED,
+                content='file_chunks'
+            )
+        """))
+
+        # AFTER INSERT trigger
+        conn.execute(text("""
+            CREATE TRIGGER IF NOT EXISTS file_chunks_ai AFTER INSERT ON file_chunks BEGIN
+                INSERT INTO file_chunks_fts(rowid, chunk_text, file_id, dataroom_id, chunk_index)
+                VALUES (new.rowid, new.chunk_text, new.file_id, new.dataroom_id, new.chunk_index);
+            END
+        """))
+
+        # AFTER DELETE trigger
+        conn.execute(text("""
+            CREATE TRIGGER IF NOT EXISTS file_chunks_ad AFTER DELETE ON file_chunks BEGIN
+                INSERT INTO file_chunks_fts(file_chunks_fts, rowid, chunk_text, file_id, dataroom_id, chunk_index)
+                VALUES ('delete', old.rowid, old.chunk_text, old.file_id, old.dataroom_id, old.chunk_index);
+            END
+        """))
+
+        # AFTER UPDATE trigger
+        conn.execute(text("""
+            CREATE TRIGGER IF NOT EXISTS file_chunks_au AFTER UPDATE ON file_chunks BEGIN
+                INSERT INTO file_chunks_fts(file_chunks_fts, rowid, chunk_text, file_id, dataroom_id, chunk_index)
+                VALUES ('delete', old.rowid, old.chunk_text, old.file_id, old.dataroom_id, old.chunk_index);
+                INSERT INTO file_chunks_fts(rowid, chunk_text, file_id, dataroom_id, chunk_index)
+                VALUES (new.rowid, new.chunk_text, new.file_id, new.dataroom_id, new.chunk_index);
+            END
+        """))
+
+        conn.commit()
 
     # Upsert user_meta row — idempotent, one row per mongo_user_id
     with Session(engine) as session:
@@ -379,6 +546,16 @@ def init_db(request: InitDbRequest):
         if not existing:
             session.add(UserMeta(mongo_user_id=request.mongo_user_id))
             session.commit()
+
+    # Recover stale indexing jobs (crash recovery — Recommendation #6)
+    try:
+        with Session(engine) as session:
+            from app.services.embedding_service import recover_stale_indexing_jobs
+            recovered = recover_stale_indexing_jobs(session)
+            if recovered:
+                logger.info(f"init_db: recovered {recovered} stale indexing jobs")
+    except Exception as e:
+        logger.warning(f"init_db: indexing job recovery skipped (table may not exist yet): {e}")
 
     # Register engine only after schema + seed succeed
     active_engine = engine
@@ -529,6 +706,8 @@ def _file_dict(f):
         "size_bytes": f.size_bytes,
         "checksum": f.checksum,
         "status": f.status,
+        "embedding_status": f.embedding_status,
+        "ai_summary": f.ai_summary,
         "created_at": _dt(f.created_at),
         "updated_at": _dt(f.updated_at),
     }
@@ -647,6 +826,16 @@ def delete_dataroom(dataroom_id: str):
         dr = session.query(DataRoom).filter_by(id=dataroom_id).first()
         if not dr:
             raise HTTPException(status_code=404, detail="DataRoom not found.")
+
+        # Sync: clean up all Copilot data before deleting DataRoom
+        try:
+            from app.services.embedding_service import sync_dataroom_deleted
+            user_id = _get_user_id(session)
+            chroma_path = _get_chroma_path()
+            if user_id and chroma_path:
+                sync_dataroom_deleted(dataroom_id, user_id, chroma_path, session)
+        except Exception as e:
+            logger.warning(f"delete_dataroom: sync_dataroom_deleted failed: {e}")
 
         session.delete(dr)
         session.commit()
@@ -817,6 +1006,21 @@ def delete_folder(
         affected_files = session.query(File).filter(
             File.folder_id.in_(all_folder_ids)
         ).all()
+
+        # Sync: clean up Copilot data for all affected files
+        dataroom_id = folder.dataroom_id
+        try:
+            from app.services.embedding_service import sync_folder_deleted
+            user_id = _get_user_id(session)
+            chroma_path = _get_chroma_path()
+            if user_id and chroma_path and affected_files:
+                all_file_ids = [f.id for f in affected_files]
+                sync_folder_deleted(
+                    folder_id, dataroom_id, all_file_ids,
+                    user_id, chroma_path, session,
+                )
+        except Exception as e:
+            logger.warning(f"delete_folder: sync_folder_deleted failed: {e}")
 
         files_deleted = 0
         files_removed = 0
@@ -1076,6 +1280,21 @@ def relocate_file(file_id: str, request: RelocateFileRequest):
         file_record.updated_at = datetime.datetime.utcnow()
         session.commit()
         session.refresh(file_record)
+
+        # Sync: triple-check if file content has changed, re-index if so
+        try:
+            from app.services.embedding_service import has_file_changed, sync_file_content_changed
+            user_id = _get_user_id(session)
+            chroma_path = _get_chroma_path()
+            if user_id and chroma_path and file_record.embedding_status == "complete":
+                if has_file_changed(file_record, new_path):
+                    logger.info(f"relocate_file: file {file_id} content changed, re-indexing")
+                    sync_file_content_changed(
+                        file_id, file_record.dataroom_id, user_id, chroma_path, session,
+                    )
+        except Exception as e:
+            logger.warning(f"relocate_file: change detection failed: {e}")
+
         return _file_dict(file_record)
 
 
@@ -1097,12 +1316,37 @@ def move_to_folder(file_id: str, request: MoveToFolderRequest):
             if folder.dataroom_id != target_dataroom:
                 raise HTTPException(status_code=400, detail="Folder does not belong to the target DataRoom.")
 
+        old_dataroom_id = file_record.dataroom_id
+        old_folder_id = file_record.folder_id
+        is_cross_dataroom = request.dataroom_id is not None and request.dataroom_id != old_dataroom_id
+
         file_record.folder_id = request.folder_id
         if request.dataroom_id is not None:
             file_record.dataroom_id = request.dataroom_id
         file_record.updated_at = datetime.datetime.utcnow()
         session.commit()
         session.refresh(file_record)
+
+        # Sync: update ChromaDB metadata
+        try:
+            user_id = _get_user_id(session)
+            chroma_path = _get_chroma_path()
+            if user_id and chroma_path:
+                if is_cross_dataroom:
+                    from app.services.embedding_service import sync_file_moved_dataroom
+                    sync_file_moved_dataroom(
+                        file_id, old_dataroom_id, file_record.dataroom_id,
+                        request.folder_id, user_id, chroma_path, session,
+                    )
+                else:
+                    from app.services.embedding_service import sync_file_moved_folder
+                    sync_file_moved_folder(
+                        file_id, request.folder_id, user_id,
+                        file_record.dataroom_id, chroma_path, session,
+                    )
+        except Exception as e:
+            logger.warning(f"move_to_folder: sync failed: {e}")
+
         return _file_dict(file_record)
 
 
@@ -1118,6 +1362,8 @@ def delete_file(file_id: str, delete_from_system: bool = Query(default=False)):
         if not file_record:
             raise HTTPException(status_code=404, detail="File not found.")
 
+        file_dataroom_id = file_record.dataroom_id
+
         deleted_from_system = False
         if delete_from_system:
             try:
@@ -1129,6 +1375,16 @@ def delete_file(file_id: str, delete_from_system: bool = Query(default=False)):
                     status_code=500,
                     detail=f"Failed to delete file from disk: {exc}",
                 )
+
+        # Sync: clean up Copilot data before deleting file record
+        try:
+            from app.services.embedding_service import sync_file_removed
+            user_id = _get_user_id(session)
+            chroma_path = _get_chroma_path()
+            if user_id and chroma_path:
+                sync_file_removed(file_id, user_id, file_dataroom_id, chroma_path, session)
+        except Exception as e:
+            logger.warning(f"delete_file: sync_file_removed failed: {e}")
 
         session.delete(file_record)
         session.commit()
@@ -1195,12 +1451,24 @@ def rename_file(file_id: str, request: RenameFileRequest):
         if not file_record:
             raise HTTPException(status_code=404, detail="File not found.")
 
-        file_record.original_name = request.new_name.strip()
+        new_name = request.new_name.strip()
+        file_record.original_name = new_name
         if request.new_path is not None:
             file_record.original_path = request.new_path
         file_record.updated_at = datetime.datetime.utcnow()
         session.commit()
         session.refresh(file_record)
+
+        # Sync: update file_name in ChromaDB metadata
+        try:
+            from app.services.embedding_service import sync_file_renamed
+            user_id = _get_user_id(session)
+            chroma_path = _get_chroma_path()
+            if user_id and chroma_path:
+                sync_file_renamed(file_record.id, new_name, user_id, chroma_path)
+        except Exception as e:
+            logger.warning(f"rename_file: sync_file_renamed failed: {e}")
+
         return _file_dict(file_record)
 
 
@@ -1281,6 +1549,22 @@ async def ai_apply_classify(request: ApplyClassifyRequest):
 
     try:
         result = apply_classify_results(engine, request.dataroom_id, request.results)
+
+        # Create indexing jobs for classified files
+        try:
+            from app.services.embedding_service import create_indexing_job
+            classified_file_ids = [
+                r.get("file_id") for r in request.results
+                if r.get("file_id") and float(r.get("confidence", 0)) >= 0.4
+            ]
+            with Session(engine) as session:
+                for file_id in classified_file_ids:
+                    create_indexing_job(file_id, request.dataroom_id, session)
+            if classified_file_ids:
+                logger.info(f"apply_classify: created {len(classified_file_ids)} indexing jobs")
+        except Exception as e:
+            logger.warning(f"apply_classify: indexing job creation failed: {e}")
+
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -1336,9 +1620,463 @@ async def ai_apply_generate(request: ApplyGenerateRequest):
             request.gemini_result,
             request.file_ids,
         )
+
+        # Create indexing jobs for assigned files
+        try:
+            from app.services.embedding_service import create_indexing_job
+            dataroom_id = result.get("dataroom", {}).get("id")
+            if dataroom_id:
+                assigned_file_ids = [
+                    a.get("file_id") for a in request.gemini_result.get("assignments", [])
+                    if a.get("file_id") and float(a.get("confidence", 0)) >= 0.4
+                ]
+                with Session(engine) as session:
+                    for file_id in assigned_file_ids:
+                        create_indexing_job(file_id, dataroom_id, session)
+                if assigned_file_ids:
+                    logger.info(f"apply_generate: created {len(assigned_file_ids)} indexing jobs")
+        except Exception as e:
+            logger.warning(f"apply_generate: indexing job creation failed: {e}")
+
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Copilot endpoints — Embedding, Search, Chat, Indexing
+# ---------------------------------------------------------------------------
+
+# -- Pydantic request models for Copilot --
+
+class PrepareIndexRequest(BaseModel):
+    file_ids: List[str]
+    dataroom_id: str
+    chroma_path: Optional[str] = None
+
+class ApplyIndexRequest(BaseModel):
+    file_id: str
+    dataroom_id: str
+    chunks: list
+    vectors: list
+    embedding_model: str
+    content_checksum: str
+    file_size_bytes: Optional[int] = None
+    file_mtime: Optional[float] = None
+    user_id: str
+    chroma_path: str
+
+class ApplyEntitiesRequest(BaseModel):
+    file_id: str
+    dataroom_id: str
+    entities: dict  # {organizations: [], people: [], monetary_values: [], ...}
+
+class ApplySummaryRequest(BaseModel):
+    file_id: str
+    summary: str
+
+class CopilotSearchRequest(BaseModel):
+    query_vector: list
+    query_text: str
+    scope_type: Optional[str] = "global"
+    scope_ids: Optional[List[str]] = None
+    dataroom_id: Optional[str] = None
+    file_ids: Optional[List[str]] = None
+    folder_id: Optional[str] = None
+    user_id: str
+    chroma_path: str
+
+class SaveMessageRequest(BaseModel):
+    session_id: str
+    user_message: str
+    assistant_response: str
+    sources: Optional[str] = None
+    tool_calls: Optional[str] = None
+
+class TriggerIndexingRequest(BaseModel):
+    file_ids: List[str]
+    dataroom_id: str
+
+class CreateChatSessionRequest(BaseModel):
+    scope_type: str
+    scope_ids: Optional[str] = None
+    scope_name: Optional[str] = None
+    title: Optional[str] = None
+
+
+@app.post("/api/v1/copilot/prepare-index")
+def copilot_prepare_index(request: PrepareIndexRequest):
+    """Chunk files, compute checksums, detect duplicates."""
+    from app.services.embedding_service import prepare_index
+
+    engine = _require_db()
+
+    if not request.file_ids:
+        raise HTTPException(status_code=400, detail="file_ids list cannot be empty.")
+
+    with Session(engine) as session:
+        result = prepare_index(request.file_ids, request.dataroom_id, session)
+        return result
+
+
+@app.post("/api/v1/copilot/apply-index")
+def copilot_apply_index(request: ApplyIndexRequest):
+    """Store vectors in ChromaDB + chunks in FTS5, update files table."""
+    from app.services.embedding_service import apply_index
+
+    engine = _require_db()
+
+    with Session(engine) as session:
+        result = apply_index(
+            file_id=request.file_id,
+            dataroom_id=request.dataroom_id,
+            chunks=request.chunks,
+            vectors=request.vectors,
+            embedding_model=request.embedding_model,
+            content_checksum=request.content_checksum,
+            file_size_bytes=request.file_size_bytes,
+            file_mtime=request.file_mtime,
+            user_id=request.user_id,
+            chroma_path=request.chroma_path,
+            db_session=session,
+        )
+        return result
+
+
+@app.post("/api/v1/copilot/apply-entities")
+def copilot_apply_entities(request: ApplyEntitiesRequest):
+    """Store extracted entities in file_entities table."""
+    engine = _require_db()
+
+    with Session(engine) as session:
+        # Delete existing entities for this file
+        session.execute(
+            text("DELETE FROM file_entities WHERE file_id = :fid"),
+            {"fid": request.file_id},
+        )
+
+        # Insert new entities
+        count = 0
+        for entity_type, values in request.entities.items():
+            if not isinstance(values, list):
+                continue
+            for val in values:
+                if isinstance(val, str):
+                    entity_value = val
+                    context = None
+                elif isinstance(val, dict):
+                    entity_value = val.get("value", str(val))
+                    context = val.get("context")
+                else:
+                    entity_value = str(val)
+                    context = None
+
+                session.execute(
+                    text("""
+                        INSERT INTO file_entities (id, file_id, dataroom_id, entity_type, entity_value, context)
+                        VALUES (:id, :fid, :did, :etype, :eval, :ctx)
+                    """),
+                    {
+                        "id": str(uuid.uuid4()),
+                        "fid": request.file_id,
+                        "did": request.dataroom_id,
+                        "etype": entity_type,
+                        "eval": entity_value,
+                        "ctx": context,
+                    },
+                )
+                count += 1
+
+        session.commit()
+        return {"success": True, "entities_stored": count}
+
+
+@app.post("/api/v1/copilot/apply-summary")
+def copilot_apply_summary(request: ApplySummaryRequest):
+    """Store AI-generated summary on file record."""
+    engine = _require_db()
+
+    with Session(engine) as session:
+        file_record = session.query(File).filter_by(id=request.file_id).first()
+        if not file_record:
+            raise HTTPException(status_code=404, detail="File not found.")
+
+        file_record.ai_summary = request.summary
+        file_record.updated_at = datetime.datetime.utcnow()
+        session.commit()
+        return {"success": True, "file_id": request.file_id}
+
+
+@app.post("/api/v1/copilot/search")
+def copilot_search(request: CopilotSearchRequest):
+    """Hybrid search: vector (ChromaDB) + keyword (FTS5)."""
+    from app.services.embedding_service import hybrid_search
+
+    engine = _require_db()
+
+    with Session(engine) as session:
+        results = hybrid_search(
+            query_vector=request.query_vector,
+            query_text=request.query_text,
+            user_id=request.user_id,
+            chroma_path=request.chroma_path,
+            db_session=session,
+            dataroom_id=request.dataroom_id,
+            file_ids=request.file_ids,
+            folder_id=request.folder_id,
+        )
+        return {"results": results}
+
+
+@app.post("/api/v1/copilot/save-message")
+def copilot_save_message(request: SaveMessageRequest):
+    """Persist chat messages to SQLite."""
+    engine = _require_db()
+
+    with Session(engine) as session:
+        # Insert user message
+        session.execute(
+            text("""
+                INSERT INTO chat_messages (id, session_id, role, content)
+                VALUES (:id, :sid, 'user', :content)
+            """),
+            {"id": str(uuid.uuid4()), "sid": request.session_id, "content": request.user_message},
+        )
+        # Insert assistant message
+        session.execute(
+            text("""
+                INSERT INTO chat_messages (id, session_id, role, content, sources, tool_calls)
+                VALUES (:id, :sid, 'assistant', :content, :sources, :tools)
+            """),
+            {
+                "id": str(uuid.uuid4()),
+                "sid": request.session_id,
+                "content": request.assistant_response,
+                "sources": request.sources,
+                "tools": request.tool_calls,
+            },
+        )
+        # Update session.updated_at
+        session.execute(
+            text("UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = :sid"),
+            {"sid": request.session_id},
+        )
+        session.commit()
+        return {"success": True}
+
+
+# -- Indexing endpoints --
+
+@app.post("/api/v1/indexing/trigger")
+def indexing_trigger(request: TriggerIndexingRequest):
+    """Create indexing jobs for given file IDs."""
+    from app.services.embedding_service import create_indexing_job
+
+    engine = _require_db()
+
+    if not request.file_ids:
+        raise HTTPException(status_code=400, detail="file_ids list cannot be empty.")
+
+    jobs_created = []
+    with Session(engine) as session:
+        for file_id in request.file_ids:
+            # Check file exists
+            file_exists = session.execute(
+                text("SELECT id FROM files WHERE id = :fid"),
+                {"fid": file_id},
+            ).fetchone()
+            if file_exists:
+                job_id = create_indexing_job(file_id, request.dataroom_id, session)
+                jobs_created.append({"file_id": file_id, "job_id": job_id})
+
+    return {"success": True, "jobs_created": len(jobs_created), "jobs": jobs_created}
+
+
+@app.get("/api/v1/indexing/status")
+def indexing_status(dataroom_id: str = Query(default=None)):
+    """Get indexing status counts per DataRoom (or all)."""
+    engine = _require_db()
+
+    with Session(engine) as session:
+        scope_clause = ""
+        params = {}
+        if dataroom_id:
+            scope_clause = "WHERE dataroom_id = :did"
+            params["did"] = dataroom_id
+
+        rows = session.execute(
+            text(f"""
+                SELECT status, COUNT(*) as cnt
+                FROM indexing_jobs
+                {scope_clause}
+                GROUP BY status
+            """),
+            params,
+        ).fetchall()
+
+        counts = {"total": 0, "pending": 0, "processing": 0, "complete": 0, "failed": 0}
+        for row in rows:
+            status_val = row[0]
+            cnt = row[1]
+            if status_val in counts:
+                counts[status_val] = cnt
+            counts["total"] += cnt
+
+        return counts
+
+
+@app.post("/api/v1/indexing/retry-failed")
+def indexing_retry_failed(dataroom_id: str = Query(default=None)):
+    """Reset failed jobs to pending for retry."""
+    engine = _require_db()
+
+    with Session(engine) as session:
+        scope_clause = ""
+        params = {}
+        if dataroom_id:
+            scope_clause = "AND dataroom_id = :did"
+            params["did"] = dataroom_id
+
+        result = session.execute(
+            text(f"""
+                UPDATE indexing_jobs
+                SET status = 'pending', error_message = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE status = 'failed'
+                {scope_clause}
+            """),
+            params,
+        )
+        # Also reset embedding_status on the corresponding files
+        session.execute(
+            text(f"""
+                UPDATE files SET embedding_status = 'pending'
+                WHERE id IN (
+                    SELECT file_id FROM indexing_jobs
+                    WHERE status = 'pending'
+                    {scope_clause}
+                ) AND embedding_status = 'failed'
+            """),
+            params,
+        )
+        session.commit()
+        return {"success": True, "jobs_reset": result.rowcount}
+
+
+# -- Chat session endpoints --
+
+@app.post("/api/v1/chat/sessions", status_code=201)
+def create_chat_session(request: CreateChatSessionRequest):
+    """Create a new chat session."""
+    engine = _require_db()
+
+    with Session(engine) as session:
+        chat = ChatSession(
+            id=str(uuid.uuid4()),
+            scope_type=request.scope_type,
+            scope_ids=request.scope_ids,
+            scope_name=request.scope_name,
+            title=request.title,
+        )
+        session.add(chat)
+        session.commit()
+        session.refresh(chat)
+        return {
+            "id": chat.id,
+            "scope_type": chat.scope_type,
+            "scope_ids": chat.scope_ids,
+            "scope_name": chat.scope_name,
+            "title": chat.title,
+            "created_at": _dt(chat.created_at),
+            "updated_at": _dt(chat.updated_at),
+        }
+
+
+@app.get("/api/v1/chat/sessions")
+def list_chat_sessions(
+    scope_type: Optional[str] = Query(default=None),
+    scope_id: Optional[str] = Query(default=None),
+):
+    """List chat sessions, optionally filtered by scope."""
+    engine = _require_db()
+
+    with Session(engine) as session:
+        query = session.query(ChatSession)
+        if scope_type:
+            query = query.filter(ChatSession.scope_type == scope_type)
+        if scope_id:
+            # Use json_each for exact matching in scope_ids JSON array
+            query = query.filter(
+                ChatSession.id.in_(
+                    session.query(ChatSession.id).filter(
+                        text("EXISTS (SELECT 1 FROM json_each(chat_sessions.scope_ids) WHERE json_each.value = :sid)")
+                    ).params(sid=scope_id)
+                )
+            )
+
+        sessions_list = query.order_by(ChatSession.updated_at.desc()).all()
+        return [
+            {
+                "id": s.id,
+                "scope_type": s.scope_type,
+                "scope_ids": s.scope_ids,
+                "scope_name": s.scope_name,
+                "title": s.title,
+                "created_at": _dt(s.created_at),
+                "updated_at": _dt(s.updated_at),
+            }
+            for s in sessions_list
+        ]
+
+
+@app.get("/api/v1/chat/sessions/{session_id}/messages")
+def get_chat_messages(session_id: str):
+    """Get all messages for a chat session."""
+    engine = _require_db()
+
+    with Session(engine) as session:
+        chat = session.query(ChatSession).filter_by(id=session_id).first()
+        if not chat:
+            raise HTTPException(status_code=404, detail="Chat session not found.")
+
+        messages = session.execute(
+            text("""
+                SELECT id, role, content, sources, tool_calls, created_at
+                FROM chat_messages
+                WHERE session_id = :sid
+                ORDER BY created_at ASC
+            """),
+            {"sid": session_id},
+        ).fetchall()
+
+        return {
+            "session_id": session_id,
+            "messages": [
+                {
+                    "id": m[0],
+                    "role": m[1],
+                    "content": m[2],
+                    "sources": m[3],
+                    "tool_calls": m[4],
+                    "created_at": m[5].isoformat() if m[5] else None,
+                }
+                for m in messages
+            ],
+        }
+
+
+@app.delete("/api/v1/chat/sessions/{session_id}")
+def delete_chat_session(session_id: str):
+    """Delete a chat session and all its messages."""
+    engine = _require_db()
+
+    with Session(engine) as session:
+        chat = session.query(ChatSession).filter_by(id=session_id).first()
+        if not chat:
+            raise HTTPException(status_code=404, detail="Chat session not found.")
+
+        session.delete(chat)
+        session.commit()
+        return {"success": True, "deleted_id": session_id}
 
 
 # ---------------------------------------------------------------------------

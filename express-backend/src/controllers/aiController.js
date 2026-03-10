@@ -68,4 +68,76 @@ async function generateDataroom(req, res, next) {
   }
 }
 
-module.exports = { classify, generateDataroom };
+// ── Embed texts (V1 Copilot) ─────────────────────────────
+
+async function embed(req, res, next) {
+  try {
+    const { texts } = req.body;
+
+    if (!texts || !Array.isArray(texts) || texts.length === 0) {
+      return res.status(400).json({ success: false, error: 'texts array is required and must not be empty.' });
+    }
+
+    const vectors = await geminiService.embedTexts(texts);
+
+    return res.status(200).json({ success: true, vectors });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ── Extract entities (V1 Copilot) ────────────────────────
+
+async function extractEntities(req, res, next) {
+  try {
+    const { text } = req.body;
+
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ success: false, error: 'text is required.' });
+    }
+
+    const entities = await geminiService.extractEntities(text);
+
+    return res.status(200).json({ success: true, entities });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ── Summarize file (V1 Copilot) ──────────────────────────
+
+async function summarizeFile(req, res, next) {
+  try {
+    const { text } = req.body;
+
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ success: false, error: 'text is required.' });
+    }
+
+    const summary = await geminiService.summarizeFile(text);
+
+    return res.status(200).json({ success: true, summary });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ── Generate title (V1 Copilot) ──────────────────────────
+
+async function generateTitle(req, res, next) {
+  try {
+    const { message } = req.body;
+
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ success: false, error: 'message is required.' });
+    }
+
+    const title = await geminiService.generateTitle(message);
+
+    return res.status(200).json({ success: true, title });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { classify, generateDataroom, embed, extractEntities, summarizeFile, generateTitle };

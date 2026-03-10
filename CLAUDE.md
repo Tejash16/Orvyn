@@ -6,7 +6,7 @@ Claude must read and follow every rule in this file before taking any action on 
 ---
 
 ## Copilot Feature Guide
-Architecture and implementation guide for the Copilot feature: ./DocRack-V2-Copilot-guide.md
+Architecture and implementation guide for the Copilot feature: ./DocRack-Copilot-guide.md
 
 ## 1. Project Overview
 
