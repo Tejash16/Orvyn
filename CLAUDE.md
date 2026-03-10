@@ -5,6 +5,9 @@ Claude must read and follow every rule in this file before taking any action on 
 
 ---
 
+## Copilot Feature Guide
+Architecture and implementation guide for the Copilot feature: ./DocRack-V2-Copilot-guide.md
+
 ## 1. Project Overview
 
 **DocRack** is a Windows-only desktop application for intelligent document management.
@@ -92,11 +95,9 @@ across layers without an explicit instruction from the user.
 - Owns the application lifecycle (startup, shutdown, window management).
 - Reads all runtime configuration from `electron/.env` via `dotenv`.
 - Exposes configuration to React via `preload.js` using Electron's `contextBridge`.
-- Spawns and manages the Python FastAPI process with **dynamic port allocation** —
-  finds a free port at startup, preventing conflicts when port 8000 is in use.
+- Spawns and manages the Python FastAPI process with **dynamic port allocation** (see Section 13.6).
 - Handles all IPC (inter-process communication) between React and the system.
 - Is the **single source of truth** for runtime config at the desktop layer.
-- Uses `electron-log` for structured file-based logging (`%APPDATA%/DocRack/logs/`).
 
 ### React (`frontend/`)
 - Renders the UI only. No business logic, no file I/O, no direct API calls to Python.
@@ -110,12 +111,10 @@ across layers without an explicit instruction from the user.
 - Owns the Gemini API key — all LLM calls are routed through Express so that the
   API key never ships with the desktop application.
 - AI proxy endpoints (`/api/v1/ai/*`) require Bearer token authentication.
-- All routes are versioned under `/api/v1/`.
-- Uses `winston` for structured file-based logging (`express-backend/logs/`).
 - Must not contain any document processing or file system logic.
 
 ### Python FastAPI (`python-backend/`)
-- Runs locally, spawned by Electron at startup on a **dynamically allocated port**.
+- Runs locally, spawned by Electron at startup on a dynamically allocated port (see Section 13.6).
 - Owns all Smart DataRoom logic: document ingestion, text extraction, data preparation,
   and database operations. Does NOT call LLM APIs directly.
 - Prepares data (fingerprints, folder trees) for AI classification and applies
@@ -124,7 +123,6 @@ across layers without an explicit instruction from the user.
   `/init-db`) remain unversioned.
 - Reads its own config from `python-backend/.env`. Port is passed via `--port` CLI arg
   by Electron (overrides env default).
-- Uses Python's `logging` with `RotatingFileHandler` for file-based logging.
 - Exposes a local HTTP API consumed by Electron via IPC (never directly by React).
 
 ### SQLite
@@ -148,19 +146,11 @@ These rules are non-negotiable. Violating them breaks the production build.
    Any `.env` file under `frontend/` is a Vite build-time concern only (e.g., dev server
    port). It must never carry values that differ between machines or environments.
 
-3. **All runtime configuration must come from Electron.**
-   Electron reads `electron/.env` at startup and passes values to React via preload.
+3. **All runtime configuration flows: `electron/.env` → `preload.js` (contextBridge) → `window.api.getConfig()`.**
+   Electron reads `.env` via `dotenv`, exposes values through preload. React accesses them
+   only via `window.api.getConfig()`. No other path is permitted.
 
-4. **Electron reads configuration from `electron/.env`.**
-   Use `dotenv` in `electron/main.js`. This file is not committed to git.
-
-5. **Electron exposes configuration via `preload.js` using `contextBridge`.**
-   The preload script is the only permitted bridge between the Electron main process
-   and the React renderer.
-
-6. **React must access configuration only via `window.api.getConfig()`.**
-
-7. **React must NEVER call Express or Python directly using hardcoded localhost ports.**
+4. **React must NEVER call Express or Python directly using hardcoded localhost ports.**
    All backend communication must go through Electron IPC unless explicitly approved.
 
 ### Correct Pattern
@@ -172,19 +162,6 @@ Instead, React calls Electron via the preload bridge:
 ```js
 // React component
 await window.api.login({ email, password });
-```
-
-### Incorrect Pattern — NEVER DO THIS
-
-```js
-// WRONG: Vite build-time value, not runtime config
-const url = import.meta.env.VITE_EXPRESS_URL;
-
-// WRONG: hardcoded URL
-const url = "http://localhost:3000";
-
-// WRONG: process.env is not available in the React renderer
-const url = process.env.EXPRESS_URL;
 ```
 
 ---
@@ -205,7 +182,6 @@ Rules:
 - Never commit any `.env` file. Only `.env.example` files are committed.
 - Never put secrets, tokens, or API keys in `.env.example`.
 - Never add `VITE_` prefixed variables that carry production runtime values.
-- Config consumed at runtime by React always flows through `electron/.env` → preload → `window.api.getConfig()`.
 
 ---
 
@@ -245,61 +221,48 @@ instruction authorizing each specific action:
 6. **Touch build configuration** (`vite.config.js`, `electron-builder.config.js`, Babel,
    ESLint configs, etc.) without explicit approval.
 
-7. **Reintroduce frontend `.env` usage for production config.** Do not add or suggest
-   `VITE_` prefixed environment variables as a solution to runtime configuration needs.
+7. **Violate runtime configuration rules** defined in Section 4 (`import.meta.env`, `VITE_` vars,
+   hardcoded URLs/ports are all forbidden).
 
-8. **Use `import.meta.env` for runtime values.** This is categorically forbidden in
-   production code paths.
-
-9. **Hardcode API URLs, ports, or hostnames** anywhere in the codebase. All such values
-   must come from `electron/.env` → preload → `window.api.getConfig()`.
-
-10. **Introduce cross-layer coupling.** React must not import from `electron/`,
+8. **Introduce cross-layer coupling.** React must not import from `electron/`,
     `express-backend/`, or `python-backend/`. Each layer communicates only through its
     defined interface (IPC, HTTP).
 
-11. **Modify `.gitignore`** without explicit user instruction.
+9. **Violate git/security rules** in Section 6 (no `.gitignore` changes, no committed secrets).
 
-12. **Commit secrets or sensitive values** under any circumstances. This includes API keys,
-    tokens, passwords, and connection strings.
-
-13. **Remove Windows-only assumptions.** This app targets Windows exclusively. Do not
+10. **Remove Windows-only assumptions.** This app targets Windows exclusively. Do not
     introduce cross-platform abstractions (e.g., `path.posix`, `process.platform` guards)
     unless explicitly asked.
 
-14. **Modify or bypass the preload/contextBridge pattern.** Do not suggest using
+11. **Modify or bypass the preload/contextBridge pattern.** Do not suggest using
     `nodeIntegration: true`, `contextIsolation: false`, or direct `require()` calls in
     the renderer as shortcuts.
 
-15. **Auto-generate or scaffold large amounts of boilerplate** without confirmation. Propose
+12. **Auto-generate or scaffold large amounts of boilerplate** without confirmation. Propose
     first, implement after approval.
 
-16. **Rename or reorganize existing source files** without explicit instruction, even if
+13. **Rename or reorganize existing source files** without explicit instruction, even if
     the current names seem inconsistent.
 
-17. **Add logging, telemetry, or analytics** of any kind without explicit user approval.
+14. **Add logging, telemetry, or analytics** of any kind without explicit user approval.
 
-18. **Modify the root `package.json` scripts** without explicit instruction. The `dev`
+15. **Modify the root `package.json` scripts** without explicit instruction. The `dev`
     script orchestrates all four processes and must not be changed without review.
+
+16. **Rewrite existing working code** unless explicitly requested. Do not refactor large
+    modules automatically.
 
 ---
 
 ## 8. Windows-Only Assumptions
 
-This application is built exclusively for Windows. The following assumptions are in effect
-and must not be changed:
+This application targets Windows exclusively. Do not add macOS/Linux targets or cross-platform abstractions.
 
-- Windows is the only supported OS.
-- Use Node.js `path.join()` and `path.resolve()` for file path handling.
-- Do not hardcode path separators (`\\` or `/`) unless absolutely necessary.
-- Python process spawning uses `venv\Scripts\activate` and `venv\Scripts\python.exe`.
-  Do not substitute with `venv/bin/python` (Unix path).
-- Electron's `app.getPath()` calls return Windows paths. Handle them as such.
-- Installers and packaging targets (when introduced) are Windows-only: NSIS, Squirrel,
-  or similar. Do not add macOS/Linux targets.
-- No POSIX shell syntax (`#!/bin/bash`, `&&` chaining in `.sh` scripts) in production
-  scripts. Use `.bat`, `.cmd`, or PowerShell where shell scripts are needed.
-- SQLite file paths are Windows absolute paths managed by Electron.
+- Use Node.js `path.join()` / `path.resolve()` — do not hardcode path separators.
+- Python spawning uses `venv\Scripts\python.exe` (not Unix `venv/bin/python`).
+- Electron's `app.getPath()` returns Windows paths. SQLite paths are Windows absolute paths.
+- Installers/packaging: Windows-only (NSIS, Squirrel, or similar).
+- No POSIX shell syntax in production scripts. Use `.bat`, `.cmd`, or PowerShell.
 
 ---
 
@@ -323,8 +286,7 @@ This uses `concurrently` to start all four processes:
 
 1. Identify which layer owns the code being changed.
 2. Confirm the change does not violate any rule in Section 7.
-3. For config-related changes, verify the flow: `electron/.env` → `preload.js` → `window.api.getConfig()`.
-4. For dependency changes, ask the user before touching any `package.json` or `requirements.txt`.
+3. For dependency changes, ask the user before touching any `package.json` or `requirements.txt`.
 
 ### Adding a new feature
 
@@ -333,14 +295,6 @@ This uses `concurrently` to start all four processes:
 3. Expose new IPC handlers in `electron/main.js` and `electron/preload.js` if React needs
    to trigger backend actions.
 4. React calls `window.api.<methodName>()` — never calls Python or Express directly.
-
-### Environment setup for a new machine
-
-1. Copy each `.env.example` to `.env` in the corresponding directory.
-2. Fill in the actual values for that machine.
-3. Run `npm install` in root, `electron/`, `frontend/`, and `express-backend/`.
-4. Run `pip install -r requirements.txt` inside `python-backend/` with the venv activated.
-5. Run `npm run dev` from the root.
 
 ---
 
@@ -358,17 +312,14 @@ DocRack uses Redux as the official global state management layer.
 - Redux slices must be organized by domain (`authSlice`, `dataroomSlice`, `uiSlice`, etc.).
 - Business logic must not leak into React components — use thunks or middleware when needed.
 
-### Redux Persistence Rules
+### Persistence Rules
 
 - Only non-sensitive UI preferences may be persisted (e.g., theme).
 - Sensitive data (JWT tokens, API keys, secrets) must NEVER be persisted in Redux or localStorage.
 - Authentication tokens must be handled securely via Electron runtime or secure storage.
-
----
-
-## 11. Theme System Rules (Light / Dark)
-
-DocRack supports both Light and Dark themes.
+- Theme, sidebar state, or any UI preference must NOT use `localStorage`, `sessionStorage`, or cookies.
+- Theme persistence will be implemented in a future milestone via SQLite (managed by the Python backend through Electron IPC).
+- Until SQLite persistence is implemented, theme always resets to `light` on launch.
 
 ### Theme Architecture
 
@@ -378,67 +329,32 @@ DocRack supports both Light and Dark themes.
 - All colors must be defined as CSS custom properties (variables) scoped to `[data-theme="light"]` and `[data-theme="dark"]`.
 - No component may hardcode color values — all colors must use CSS variables.
 - Future UI components must support both light and dark themes from the start.
-
-### Theme Persistence
-
-- Theme must NOT be persisted to `localStorage`.
-- Theme must NOT be persisted to any browser storage mechanism.
-- Theme persistence will be implemented in a future milestone via SQLite (managed by the Python backend through Electron IPC).
-- Until SQLite persistence is implemented, theme always resets to `light` on launch.
-
-### Theme Restrictions
-
-Claude must NOT:
-
-- Implement theme using scattered `useState` across components.
-- Hardcode color values inside components or module CSS files.
-- Store theme state inside arbitrary components.
-- Introduce CSS-in-JS libraries without approval.
-- Use `localStorage`, `sessionStorage`, or cookies for theme storage.
-- Apply theme at the `document`, `html`, or `body` level — it must apply at the `app-shell` container.
-
-Theme must remain centralized, predictable, and globally controlled.
+- Do not apply theme at the `document`, `html`, or `body` level — it must apply at the `app-shell` container.
+- Do not introduce CSS-in-JS libraries without approval.
 
 ---
 
-## 12. Additional Security Hardening Rules
+## 12. Security Hardening Rules
 
 Claude must NOT:
 
-- Enable `nodeIntegration` in the Electron renderer.
-- Disable `contextIsolation`.
-- Use `eval`, `new Function()`, or dynamic script execution.
-- Expose Node.js APIs directly to the renderer process.
-- Allow React to access filesystem APIs directly.
-- Introduce remote code execution patterns.
-- Dynamically fetch and execute remote scripts.
-- Bypass preload and contextBridge protections.
+- Enable `nodeIntegration`, disable `contextIsolation`, or bypass preload/contextBridge protections.
+- Use `eval`, `new Function()`, or dynamically fetch and execute remote scripts.
+- Expose Node.js APIs or filesystem access directly to the renderer.
 - Store secrets in memory accessible to the renderer.
-- Suggest insecure Electron configuration shortcuts.
-- Use `exec()` for shell commands — always use `execFile()` to prevent command injection.
-  Arguments must be passed as an array, never interpolated into a command string.
-- Place the Gemini API key (or any LLM API key) in `electron/.env`, `python-backend/.env`,
-  or any file that ships with the packaged desktop app. LLM keys live in `express-backend/.env` only.
-- Call Gemini or any external LLM API from the Python backend or Electron main process.
-  All LLM calls must go through Express (cloud) so the API key stays server-side.
+- Use `exec()` for shell commands — use `execFile()` with array arguments to prevent injection.
+- Place any LLM API key in `electron/.env`, `python-backend/.env`, or any file shipped with the desktop app. LLM keys live in `express-backend/.env` only.
+- Call Gemini or any external LLM API from Python backend or Electron. All LLM calls go through Express.
 
-All privileged operations must follow this strict flow:
-React → preload (contextBridge) → Electron main → Python (if required).
+All privileged operations follow: React → preload (contextBridge) → Electron main → Python (if required).
+AI classification flow is detailed in Section 16.
 
-AI classification follows this secured flow:
-React → Electron IPC → Python (prepare data) → Express (Gemini call, holds API key) → Python (apply results).
+Claude must NEVER rewrite the React → Electron → Python → Express architecture.
+All cross-layer communication must follow the defined flow.
 
 ### Rate Limiting
 
-- All Express authentication endpoints must have rate limiters (`express-rate-limit`).
-- Rate limiter middleware lives in `express-backend/src/middleware/rateLimiter.js`.
-- Current rate limits (15-minute window):
-  - Register: 5 attempts
-  - Login: 5 attempts
-  - Forgot Password: 3 attempts
-  - Reset Password: 5 attempts
-  - Resend Verification: 3 attempts
-- Any new public-facing Express endpoint must include rate limiting.
+Rate limiter middleware: `express-backend/src/middleware/rateLimiter.js`. All public Express endpoints must include rate limiting. Current limits (15-min window): Register 5, Login 5, Forgot Password 3, Reset Password 5, Resend Verification 3.
 
 ---
 
@@ -452,29 +368,13 @@ React → Electron IPC → Python (prepare data) → Express (Gemini call, holds
   - MINOR = new features
   - PATCH = bug fixes
 - Do not modify versioning strategy without explicit instruction.
-- Auto-updater implementation (future feature) depends on strict version discipline.
 
 ### API Versioning
 
-All API routes are versioned to support future breaking changes without disrupting clients.
+All API routes (Express and Python business routes) are under `/api/v1/`. Python infrastructure routes (`/health`, `/init-db`) are unversioned. Backward-compat aliases at `/api/` exist temporarily in Express — new code must always use `/api/v1/`.
 
-**Express routes:**
-- All routes under `/api/v1/` (e.g., `/api/v1/auth/login`, `/api/v1/ai/classify`).
-- Backward-compat aliases exist at `/api/` — remove once all clients use `/api/v1/`.
-- Electron must always call `/api/v1/` endpoints.
-
-**Python routes:**
-- Infrastructure routes (`/health`, `/init-db`) are unversioned — internal only.
-- All business routes under `/api/v1/` (e.g., `/api/v1/datarooms`, `/api/v1/files/register`).
-- Electron must always call `/api/v1/` endpoints.
-
-**Rules:**
-- New endpoints MUST be created under `/api/v1/` (or `/api/v2/` for breaking changes).
-- When changing an existing endpoint's contract, create a new version — do not modify v1.
-- Update Electron service files when adding new API versions.
-
-Claude must re-read this file before performing structural or architectural changes.
-If a request conflicts with this file, Claude must ask for clarification.
+- New endpoints MUST be under `/api/v1/` (or `/api/v2/` for breaking changes).
+- When changing an endpoint's contract, create a new version — do not modify v1.
 
 ---
 
@@ -493,12 +393,9 @@ for diagnosing issues in packaged builds where there is no console.
 
 ### Architecture
 
-- **Electron** (`electron/services/logger.js`): Wraps `electron-log`. All Electron code
-  must use `const log = require('./logger')` instead of `console.*`.
-- **Python**: Configured at startup in `app/main.py`. Log directory is passed from Electron
-  via `DOCRACK_LOG_DIR` env var at spawn time. Falls back to `python-backend/logs/` in dev.
-- **Express** (`src/services/logger.js`): Wraps `winston`. Morgan HTTP logs are piped
-  through winston via `logger.morganStream`. Active in all environments (not just dev).
+- **Electron** (`electron/services/logger.js`): Wraps `electron-log`. Use `const log = require('./logger')`.
+- **Python**: Log directory is passed from Electron via `DOCRACK_LOG_DIR` env var. Falls back to `python-backend/logs/` in dev.
+- **Express** (`src/services/logger.js`): Wraps `winston`. Morgan HTTP logs piped through winston.
 
 ### IPC Channels for Logs
 
@@ -540,54 +437,15 @@ The Python backend runs on a dynamically allocated port to prevent conflicts.
 
 ## 14. Responsive UI & Window Resizing Rules
 
-DocRack is a desktop application and must support responsive behavior across:
+The UI must adapt fluidly across resolutions (1366x768 to 4K) and manual window resizing.
 
-- Different PC screen resolutions (1366x768, 1920x1080, 2K, 4K)
-- Manual window resizing by the user
-
-The UI must adapt fluidly without breaking layout.
-
-### Layout Rules
-
-- All major layout containers must use Flexbox or CSS Grid.
-- Fixed-width page layouts are prohibited.
-- Content areas must use `flex: 1` and avoid hardcoded pixel widths.
-- Sidebar must use fixed width with optional collapse behavior, but must not flex-grow.
+- All major layout containers must use Flexbox or CSS Grid. Fixed-width layouts are prohibited.
+- Content areas must use `flex: 1`; sidebar uses fixed width with collapse, must not flex-grow.
 - Main content area must scroll internally (`overflow: auto`) instead of breaking layout.
-
-### Error/sucess showing Rules
-
-- All the errors/sucess which are shown to user should be shown through toast.
-- The error/sucess messages which are shown to the user should be in the human readible and understandable format.
-
-### Window Constraints
-
 - Electron window must define `minWidth` and `minHeight`.
-- The UI must not rely on extremely small window sizes.
-- Layout must remain stable when resized.
-
-### Grid & Card Behavior
-
-- Use responsive grid patterns such as:
-  `grid-template-columns: repeat(auto-fit, minmax(Xpx, 1fr))`
-- Cards must reflow naturally instead of overlapping or overflowing.
-
-### Typography & Spacing
-
-- Avoid hardcoded large pixel font sizes.
-- Prefer relative units (`rem`, `%`, `clamp()`).
-- Avoid absolute positioning for layout structure.
-
-### Strict Prohibitions
-
-Claude must NOT:
-
-- Hardcode layout widths (e.g., 1200px containers).
-- Use `position: absolute` for core layout structure.
-- Use fixed heights that cause overflow clipping.
-- Create layouts that only work at one resolution.
-
-Responsive behavior is mandatory for all new UI components and pages.
+- Use responsive grid patterns: `grid-template-columns: repeat(auto-fit, minmax(Xpx, 1fr))`.
+- Prefer relative units (`rem`, `%`, `clamp()`). Avoid absolute positioning for layout structure.
+- All errors/success messages shown to the user must use toast notifications in human-readable format.
 
 ---
 
@@ -734,10 +592,7 @@ All IPC channels are defined in `electron/ipc/` handler files and exposed via
 | `file:get-paths-info` | `window.api.file.getPathsInfo(filePaths)` | Get metadata for paths without registering |
 | `file:scan-folder` | `window.api.file.scanFolder(folderPath)` | Recursively scan folder for file paths |
 
-### `ai:*` — AI Classification
-
-These IPC channels trigger the 3-step orchestration flow (see Section 16).
-Internally, Electron calls Python (prepare) → Express (Gemini) → Python (apply).
+### `ai:*` — AI Classification (see Section 16 for full flow)
 
 | Channel | Preload Method | Purpose |
 |---------|---------------|---------|
@@ -748,8 +603,7 @@ Internally, Electron calls Python (prepare) → Express (Gemini) → Python (app
 
 ## 18. Python Backend Endpoints
 
-All endpoints are defined in `python-backend/app/main.py`. The FastAPI server runs locally,
-spawned by Electron on a dynamic port. Electron communicates via HTTP — React never calls it directly.
+All endpoints defined in `python-backend/app/main.py`.
 
 ### Infrastructure (unversioned)
 
@@ -797,10 +651,7 @@ spawned by Electron on a dynamic port. Electron communicates via HTTP — React 
 | `PUT` | `/api/v1/files/{file_id}/rename` | Rename display name (`new_name`) |
 | `DELETE` | `/api/v1/files/{file_id}` | Delete file record (query param `delete_from_system=true` also deletes from disk) |
 
-### AI Data Preparation & Result Application
-
-These endpoints support the 3-step AI flow. They do NOT call Gemini directly —
-Electron orchestrates the full flow (see Section 16).
+### AI Data Preparation & Result Application (see Section 16 for full flow)
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -812,9 +663,6 @@ Electron orchestrates the full flow (see Section 16).
 ---
 
 ## 18.5. Express Endpoints
-
-All Express routes are versioned under `/api/v1/`. Backward-compat aliases at `/api/`
-exist temporarily — new code must always use `/api/v1/`.
 
 ### Auth Endpoints
 
@@ -831,10 +679,7 @@ exist temporarily — new code must always use `/api/v1/`.
 | `POST` | `/api/v1/auth/forgot-password` | Request password reset (rate limited: 3/15min) |
 | `POST` | `/api/v1/auth/reset-password` | Reset password with token (rate limited: 5/15min) |
 
-### AI Proxy Endpoints
-
-Express owns the Gemini API key and proxies all LLM calls. These endpoints require
-Bearer token authentication.
+### AI Proxy Endpoints (require Bearer token)
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -938,49 +783,32 @@ Reducers: toggleSidebar, toggleTheme, setTheme, setActivePage,
 The File Explorer (`frontend/src/components/dataroom/FileExplorer.jsx`) is the primary
 interface for browsing DataRoom contents. It mimics Windows Explorer behavior.
 
-### Virtual File References
+### File Interaction
 
 - Files are displayed by their `original_name` and metadata from the database.
-- Double-clicking a file calls `file:open` which uses `shell.openPath()` to launch the
-  system default application.
+- Double-clicking a file calls `file:open` (uses `shell.openPath()`).
 - If the file no longer exists at `original_path`, the UI shows a "File not found" state
-  with a **Relocate** button that opens a file picker to update the stored path.
+  with a **Relocate** button.
 
-### Navigation
+### Navigation & Views
 
-- **Breadcrumb bar** with clickable path segments for instant navigation to any ancestor.
-- **Back/Up buttons** for parent folder navigation.
-- **Folder double-click** navigates into the folder.
-- Navigation state is managed by `fileExplorerSlice` with `currentPath[]` tracking the
-  full breadcrumb trail.
+- Breadcrumb bar with clickable path segments, back/up buttons, folder double-click to navigate.
+- Navigation state managed by `fileExplorerSlice` with `currentPath[]`.
+- **Grid view** — Cards with icons, names (2-line clamp), size. **List view** — Sortable table (Name, Type, Size, Date, Confidence).
+- Click to select, Ctrl+click to toggle. Selection bar with count and batch actions.
 
-### View Modes
+### Right-Click Context Menus (`ContextMenu` component in `components/common/`)
 
-- **Grid view** — Card-based layout with file type icons, names (2-line clamp), and size.
-- **List view** — Table with sortable columns (Name, Type, Size, Date, Confidence).
-- Toggle between views via toolbar buttons. Persisted in Redux.
-
-### Right-Click Context Menus
-
-Uses the reusable `ContextMenu` component (`frontend/src/components/common/ContextMenu.jsx`).
-
-**File context menu** (11 items):
-Open, Open With, separator, Copy File, Copy Path, Move to Folder, separator,
-Rename (F2), Relocate, separator, Remove from DocRack, Delete from System.
-
-**Folder context menu** (6 items):
-Open, New Subfolder, separator, Rename, Edit Description, separator, Delete Folder.
-
-**Background context menu** (6 items):
-New Folder, separator, Upload Files, Upload Folder, separator, Refresh.
+- **File**: Open, Open With, Copy File, Copy Path, Move to Folder, Rename (F2), Relocate, Remove from DocRack, Delete from System.
+- **Folder**: Open, New Subfolder, Rename, Edit Description, Delete Folder.
+- **Background**: New Folder, Upload Files, Upload Folder, Refresh.
 
 ### Confirmation Dialogs
 
-- **Remove from DocRack** — Single confirmation. File stays on disk.
-- **Delete from System** — Double confirmation: user must type the exact filename to
-  enable the delete button. File is permanently deleted from disk.
-- **Delete Folder** — Single confirmation. Files inside become unclassified.
-- All dialogs support **Escape** to cancel and **Enter** to confirm.
+- **Remove from DocRack** — Single confirmation (file stays on disk).
+- **Delete from System** — Double confirmation: user types exact filename to confirm. Permanently deletes from disk.
+- **Delete Folder** — Single confirmation (files become unclassified).
+- All dialogs: **Escape** to cancel, **Enter** to confirm.
 
 ### Keyboard Shortcuts
 
@@ -993,11 +821,6 @@ New Folder, separator, Upload Files, Upload Folder, separator, Refresh.
 | `Escape` | Clear selection |
 | `Ctrl+A` | Select all items |
 | `Ctrl+C` | Copy selected file to clipboard |
-
-### Multi-Selection
-
-- Click to select single item, Ctrl+click to toggle, toolbar "Select All" button.
-- Selection bar appears with count and batch action buttons.
 
 ### Drag-and-Drop Upload
 

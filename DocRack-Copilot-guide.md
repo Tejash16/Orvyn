@@ -1,10 +1,10 @@
-# DocRack V2 — Copilot Feature: Complete Architecture & Build Guide
+# DocRack V1 with new feature — Copilot Feature: Complete Architecture & Build Guide
 
 ---
 
 ## ALREADY COMPLETED (Context Only — Do NOT Rebuild)
 
-The following was shipped in V1. The V2 build phases below assume all of this is working.
+The following was shipped in V1. The V1-new feature build phases below assume all of this is working.
 
 **Phase 1 — Security Hardening:**
 - Command injection fixed — `exec()` replaced with `execFile()` everywhere
@@ -18,11 +18,11 @@ The following was shipped in V1. The V2 build phases below assume all of this is
 - Dynamic port allocation — Python gets a free port at startup via `net.createServer()`
 - API versioning — All routes under `/api/v1/`, backward-compat aliases temporary
 
-**Critical Rule for V2:**
+**Critical Rule for V1- new feature:**
 The Gemini API key lives in `express-backend/.env` ONLY. Python never calls Gemini directly.
 Every Gemini call (embeddings, chat, entity extraction, summaries, title generation) routes
 through Express. This is the established 3-step orchestration from V1 and it extends to
-ALL new AI operations in V2.
+ALL new AI operations in V1-new feature.
 
 ---
 
@@ -347,7 +347,7 @@ def recover_stale_indexing_jobs(db_session):
 
 ---
 
-## Feature Set (V2 Launch)
+## Feature Set (V1-new feature Launch)
 
 ### CORE (Must Ship)
 
@@ -839,12 +839,12 @@ INDEX_MAX_RETRY_ATTEMPTS=3
 # === EXISTING (don't change) ===
 # ... auth secrets, MongoDB, GEMINI_API_KEY ...
 
-# === Chat model (NEW for V2) ===
+# === Chat model (NEW for V1-new feature) ===
 GEMINI_CHAT_MODEL=gemini-2.0-flash
 GEMINI_CHAT_TEMPERATURE=0.3
 GEMINI_CHAT_MAX_OUTPUT_TOKENS=4096
 
-# === Embedding model (NEW for V2) ===
+# === Embedding model (NEW for V1-new feature) ===
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 GEMINI_EMBEDDING_DIMENSIONS=3072
 ```
@@ -1506,7 +1506,7 @@ metadata = {
 
 ---
 
-## New Express Endpoints (V2)
+## New Express Endpoints (V1-new feature)
 
 All require Bearer token authentication. Add to `express-backend/src/routes/ai.js`.
 
@@ -1525,7 +1525,7 @@ All require Bearer token authentication. Add to `express-backend/src/routes/ai.j
 
 ---
 
-## New Python Endpoints (V2)
+## New Python Endpoints (V1-new feature)
 
 All under `/api/v1/`. Local data only — Python never calls Gemini.
 
@@ -2779,7 +2779,7 @@ Section: New Python Endpoints
 - List all /api/v1/copilot/* and /api/v1/indexing/* and /api/v1/chat/* endpoints
 
 Section: New Express Endpoints
-- List all /api/v1/ai/* endpoints added in V2
+- List all /api/v1/ai/* endpoints added in V1-new feature
 
 Section: copilotSlice State Shape
 - Document full state shape with descriptions
