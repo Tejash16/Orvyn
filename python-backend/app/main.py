@@ -9,9 +9,33 @@ import os
 import datetime
 import uuid
 import hashlib
+import logging
+import logging.handlers
 import mimetypes
 
 load_dotenv()
+
+# ---------------------------------------------------------------------------
+# Logging — file-based with rotation.
+# Log directory is set via DOCRACK_LOG_DIR env var (passed by Electron at spawn),
+# falling back to python-backend/logs/ for standalone dev.
+# ---------------------------------------------------------------------------
+_log_dir = os.getenv("DOCRACK_LOG_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs"))
+os.makedirs(_log_dir, exist_ok=True)
+
+_file_handler = logging.handlers.RotatingFileHandler(
+    os.path.join(_log_dir, "python.log"),
+    maxBytes=5 * 1024 * 1024,  # 5 MB
+    backupCount=5,
+    encoding="utf-8",
+)
+_file_handler.setFormatter(
+    logging.Formatter("[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s")
+)
+
+logging.basicConfig(level=logging.INFO, handlers=[_file_handler, logging.StreamHandler()])
+
+logger = logging.getLogger("docrack")
 
 app = FastAPI(title="DocRack AI Engine")
 
@@ -69,6 +93,7 @@ class DataRoom(Base):
     id = Column(String, primary_key=True, default=_generate_uuid)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
+    is_starred = Column(Boolean, default=False)
     created_by_ai = Column(Boolean, default=False)
     status = Column(String, default="active")  # active | archived
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -329,6 +354,19 @@ def init_db(request: InitDbRequest):
                 conn.execute(text("DROP TABLE IF EXISTS files"))
                 conn.commit()
 
+    # Schema migration: add is_starred column to datarooms if missing
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='datarooms'"
+        ))
+        if result.fetchone():
+            columns = [
+                row[1] for row in conn.execute(text("PRAGMA table_info(datarooms)"))
+            ]
+            if "is_starred" not in columns:
+                conn.execute(text("ALTER TABLE datarooms ADD COLUMN is_starred BOOLEAN DEFAULT 0"))
+                conn.commit()
+
     Base.metadata.create_all(engine)
 
     # Upsert user_meta row — idempotent, one row per mongo_user_id
@@ -354,7 +392,7 @@ def init_db(request: InitDbRequest):
 
 # ---- Theme settings ---------------------------------------------------------
 
-@app.get("/settings/theme")
+@app.get("/api/v1/settings/theme")
 def get_theme():
     """
     Returns the stored theme for the active user.
@@ -371,7 +409,7 @@ class ThemeRequest(BaseModel):
     theme: str
 
 
-@app.post("/settings/theme")
+@app.post("/api/v1/settings/theme")
 def set_theme(request: ThemeRequest):
     """
     Persists the theme to the settings table.
@@ -409,6 +447,7 @@ class CreateDataRoomRequest(BaseModel):
 class UpdateDataRoomRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    is_starred: Optional[bool] = None
 
 
 class CreateFolderRequest(BaseModel):
@@ -436,10 +475,12 @@ class RelocateFileRequest(BaseModel):
 
 class MoveToFolderRequest(BaseModel):
     folder_id: Optional[str] = None
+    dataroom_id: Optional[str] = None
 
 
 class RenameFileRequest(BaseModel):
     new_name: str
+    new_path: Optional[str] = None
 
 
 # -- Serialisation helpers --
@@ -454,6 +495,7 @@ def _dataroom_dict(dr):
         "id": dr.id,
         "name": dr.name,
         "description": dr.description,
+        "is_starred": bool(dr.is_starred),
         "created_by_ai": dr.created_by_ai,
         "status": dr.status,
         "created_at": _dt(dr.created_at),
@@ -494,22 +536,32 @@ def _file_dict(f):
 
 # -- DataRoom endpoints --
 
-@app.post("/datarooms", status_code=201)
+@app.post("/api/v1/datarooms", status_code=201)
 def create_dataroom(request: CreateDataRoomRequest):
     if not request.name or not request.name.strip():
         raise HTTPException(status_code=400, detail="DataRoom name is required.")
 
     engine = _require_db()
-    dr = DataRoom(name=request.name.strip(), description=request.description)
+    trimmed_name = request.name.strip()
 
     with Session(engine) as session:
+        existing = session.query(DataRoom).filter(
+            func.lower(DataRoom.name) == trimmed_name.lower()
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="DataRoom with this name already exists",
+            )
+
+        dr = DataRoom(name=trimmed_name, description=request.description)
         session.add(dr)
         session.commit()
         session.refresh(dr)
         return _dataroom_dict(dr)
 
 
-@app.get("/datarooms")
+@app.get("/api/v1/datarooms")
 def list_datarooms():
     engine = _require_db()
     with Session(engine) as session:
@@ -527,7 +579,7 @@ def list_datarooms():
         return results
 
 
-@app.get("/datarooms/{dataroom_id}")
+@app.get("/api/v1/datarooms/{dataroom_id}")
 def get_dataroom(dataroom_id: str):
     engine = _require_db()
     with Session(engine) as session:
@@ -553,7 +605,7 @@ def get_dataroom(dataroom_id: str):
         return result
 
 
-@app.put("/datarooms/{dataroom_id}")
+@app.put("/api/v1/datarooms/{dataroom_id}")
 def update_dataroom(dataroom_id: str, request: UpdateDataRoomRequest):
     engine = _require_db()
     with Session(engine) as session:
@@ -564,10 +616,23 @@ def update_dataroom(dataroom_id: str, request: UpdateDataRoomRequest):
         if request.name is not None:
             if not request.name.strip():
                 raise HTTPException(status_code=400, detail="DataRoom name cannot be empty.")
-            dr.name = request.name.strip()
+            trimmed_name = request.name.strip()
+            existing = session.query(DataRoom).filter(
+                DataRoom.id != dataroom_id,
+                func.lower(DataRoom.name) == trimmed_name.lower(),
+            ).first()
+            if existing:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"A DataRoom with this name already exists",
+                )
+            dr.name = trimmed_name
 
         if request.description is not None:
             dr.description = request.description
+
+        if request.is_starred is not None:
+            dr.is_starred = request.is_starred
 
         dr.updated_at = datetime.datetime.utcnow()
         session.commit()
@@ -575,7 +640,7 @@ def update_dataroom(dataroom_id: str, request: UpdateDataRoomRequest):
         return _dataroom_dict(dr)
 
 
-@app.delete("/datarooms/{dataroom_id}")
+@app.delete("/api/v1/datarooms/{dataroom_id}")
 def delete_dataroom(dataroom_id: str):
     engine = _require_db()
     with Session(engine) as session:
@@ -590,7 +655,7 @@ def delete_dataroom(dataroom_id: str):
 
 # -- Folder endpoints --
 
-@app.post("/datarooms/{dataroom_id}/folders", status_code=201)
+@app.post("/api/v1/datarooms/{dataroom_id}/folders", status_code=201)
 def create_folder(dataroom_id: str, request: CreateFolderRequest):
     if not request.name or not request.name.strip():
         raise HTTPException(status_code=400, detail="Folder name is required.")
@@ -611,9 +676,22 @@ def create_folder(dataroom_id: str, request: CreateFolderRequest):
             if parent.dataroom_id != dataroom_id:
                 raise HTTPException(status_code=400, detail="Parent folder does not belong to this DataRoom.")
 
+        # Check for duplicate folder name at the same parent level
+        trimmed_name = request.name.strip()
+        existing = session.query(Folder).filter(
+            Folder.dataroom_id == dataroom_id,
+            Folder.parent_id == request.parent_id,
+            func.lower(Folder.name) == trimmed_name.lower(),
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="A folder with this name already exists here",
+            )
+
         folder = Folder(
             dataroom_id=dataroom_id,
-            name=request.name.strip(),
+            name=trimmed_name,
             context=request.context.strip(),
             parent_id=request.parent_id,
         )
@@ -623,7 +701,7 @@ def create_folder(dataroom_id: str, request: CreateFolderRequest):
         return _folder_dict(folder)
 
 
-@app.get("/datarooms/{dataroom_id}/folders")
+@app.get("/api/v1/datarooms/{dataroom_id}/folders")
 def list_folders(dataroom_id: str):
     engine = _require_db()
     with Session(engine) as session:
@@ -641,7 +719,7 @@ def list_folders(dataroom_id: str):
         return results
 
 
-@app.put("/folders/{folder_id}")
+@app.put("/api/v1/folders/{folder_id}")
 def update_folder(folder_id: str, request: UpdateFolderRequest):
     engine = _require_db()
     with Session(engine) as session:
@@ -652,7 +730,19 @@ def update_folder(folder_id: str, request: UpdateFolderRequest):
         if request.name is not None:
             if not request.name.strip():
                 raise HTTPException(status_code=400, detail="Folder name cannot be empty.")
-            folder.name = request.name.strip()
+            trimmed_name = request.name.strip()
+            existing = session.query(Folder).filter(
+                Folder.id != folder_id,
+                Folder.parent_id == folder.parent_id,
+                Folder.dataroom_id == folder.dataroom_id,
+                func.lower(Folder.name) == trimmed_name.lower(),
+            ).first()
+            if existing:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"A folder with this name already exists here",
+                )
+            folder.name = trimmed_name
 
         if request.context is not None:
             if not request.context.strip():
@@ -679,25 +769,114 @@ def update_folder(folder_id: str, request: UpdateFolderRequest):
         return _folder_dict(folder)
 
 
-@app.delete("/folders/{folder_id}")
-def delete_folder(folder_id: str):
+@app.get("/api/v1/folders/{folder_id}/delete-preview")
+def folder_delete_preview(folder_id: str):
+    """Return counts of nested subfolders and files for the delete confirmation dialog."""
     engine = _require_db()
     with Session(engine) as session:
         folder = session.query(Folder).filter_by(id=folder_id).first()
         if not folder:
             raise HTTPException(status_code=404, detail="Folder not found.")
 
-        # Files in this folder get folder_id = NULL (handled by ON DELETE SET NULL),
-        # but SQLAlchemy relationship cache may be stale — flush explicitly.
-        session.query(File).filter_by(folder_id=folder_id).update({"folder_id": None})
-        session.delete(folder)
+        # Recursive CTE to find all nested folder IDs
+        all_folder_ids = _get_all_nested_folder_ids(session, folder_id)
+        subfolder_count = len(all_folder_ids) - 1  # Exclude the target folder itself
+        file_count = session.query(func.count(File.id)).filter(
+            File.folder_id.in_(all_folder_ids)
+        ).scalar()
+
+        return {
+            "subfolder_count": subfolder_count,
+            "file_count": file_count,
+        }
+
+
+@app.delete("/api/v1/folders/{folder_id}")
+def delete_folder(
+    folder_id: str,
+    file_action: str = Query(default="unassign", regex="^(unassign|remove|delete_system)$"),
+):
+    """
+    Delete a folder and all nested subfolders.
+
+    file_action controls what happens to files inside:
+      - unassign: files become unclassified (folder_id = NULL) — legacy default
+      - remove: delete file records from DB only (disk untouched)
+      - delete_system: delete files from disk AND from DB
+    """
+    engine = _require_db()
+    with Session(engine) as session:
+        folder = session.query(Folder).filter_by(id=folder_id).first()
+        if not folder:
+            raise HTTPException(status_code=404, detail="Folder not found.")
+
+        # Recursive CTE to find ALL nested folder IDs
+        all_folder_ids = _get_all_nested_folder_ids(session, folder_id)
+
+        # Find all files in these folders
+        affected_files = session.query(File).filter(
+            File.folder_id.in_(all_folder_ids)
+        ).all()
+
+        files_deleted = 0
+        files_removed = 0
+        disk_errors = []
+
+        if file_action == "delete_system":
+            for f in affected_files:
+                try:
+                    if f.original_path and os.path.exists(f.original_path):
+                        os.remove(f.original_path)
+                    files_deleted += 1
+                except OSError as e:
+                    disk_errors.append(f"{f.original_name}: {str(e)}")
+                session.delete(f)
+        elif file_action == "remove":
+            for f in affected_files:
+                session.delete(f)
+                files_removed += 1
+        else:
+            # unassign — legacy behavior: set folder_id to NULL
+            for f in affected_files:
+                f.folder_id = None
+
+        # Delete all folders (children first by deleting all at once)
+        session.query(Folder).filter(Folder.id.in_(all_folder_ids)).delete(
+            synchronize_session="fetch"
+        )
         session.commit()
-        return {"success": True}
+
+        result = {
+            "success": True,
+            "folders_deleted": len(all_folder_ids),
+        }
+        if file_action == "delete_system":
+            result["files_deleted"] = files_deleted
+            if disk_errors:
+                result["disk_errors"] = disk_errors
+        elif file_action == "remove":
+            result["files_removed"] = files_removed
+
+        return result
+
+
+def _get_all_nested_folder_ids(session, root_folder_id: str) -> list:
+    """Use recursive CTE to find root folder + all descendant folder IDs."""
+    cte = (
+        session.query(Folder.id)
+        .filter(Folder.id == root_folder_id)
+        .cte(name="folder_tree", recursive=True)
+    )
+    cte = cte.union_all(
+        session.query(Folder.id).filter(Folder.parent_id == cte.c.id)
+    )
+    rows = session.query(cte.c.id).all()
+    return [r[0] for r in rows]
 
 
 # ---- File endpoints ---------------------------------------------------------
 
-@app.post("/files/register", status_code=201)
+@app.post("/api/v1/files/register", status_code=201)
 def register_files(request: RegisterFilesRequest):
     """
     Register file paths and extract text content.
@@ -832,7 +1011,7 @@ def register_files(request: RegisterFilesRequest):
     }
 
 
-@app.get("/files/{file_id}")
+@app.get("/api/v1/files/{file_id}")
 def get_file(file_id: str):
     """Returns full file metadata including original_path."""
     engine = _require_db()
@@ -846,7 +1025,7 @@ def get_file(file_id: str):
         return result
 
 
-@app.post("/files/{file_id}/check-exists")
+@app.post("/api/v1/files/{file_id}/check-exists")
 def check_file_exists(file_id: str):
     """Checks if the file still exists at its original_path on disk."""
     engine = _require_db()
@@ -859,7 +1038,7 @@ def check_file_exists(file_id: str):
         return {"exists": exists, "path": file_record.original_path}
 
 
-@app.put("/files/{file_id}/relocate")
+@app.put("/api/v1/files/{file_id}/relocate")
 def relocate_file(file_id: str, request: RelocateFileRequest):
     """
     Update the stored path after a user has moved a file on disk.
@@ -900,7 +1079,7 @@ def relocate_file(file_id: str, request: RelocateFileRequest):
         return _file_dict(file_record)
 
 
-@app.put("/files/{file_id}/move-to-folder")
+@app.put("/api/v1/files/{file_id}/move-to-folder")
 def move_to_folder(file_id: str, request: MoveToFolderRequest):
     """Move file to a different virtual folder (null = unclassified)."""
     engine = _require_db()
@@ -913,17 +1092,21 @@ def move_to_folder(file_id: str, request: MoveToFolderRequest):
             folder = session.query(Folder).filter_by(id=request.folder_id).first()
             if not folder:
                 raise HTTPException(status_code=404, detail="Folder not found.")
-            if folder.dataroom_id != file_record.dataroom_id:
-                raise HTTPException(status_code=400, detail="Folder does not belong to the same DataRoom.")
+            # If dataroom_id is provided, use it; otherwise check against file's current dataroom
+            target_dataroom = request.dataroom_id or file_record.dataroom_id
+            if folder.dataroom_id != target_dataroom:
+                raise HTTPException(status_code=400, detail="Folder does not belong to the target DataRoom.")
 
         file_record.folder_id = request.folder_id
+        if request.dataroom_id is not None:
+            file_record.dataroom_id = request.dataroom_id
         file_record.updated_at = datetime.datetime.utcnow()
         session.commit()
         session.refresh(file_record)
         return _file_dict(file_record)
 
 
-@app.delete("/files/{file_id}")
+@app.delete("/api/v1/files/{file_id}")
 def delete_file(file_id: str, delete_from_system: bool = Query(default=False)):
     """
     Remove file record from SQLite.
@@ -952,7 +1135,7 @@ def delete_file(file_id: str, delete_from_system: bool = Query(default=False)):
         return {"success": True, "deleted_from_system": deleted_from_system}
 
 
-@app.get("/datarooms/{dataroom_id}/files")
+@app.get("/api/v1/datarooms/{dataroom_id}/files")
 def list_dataroom_files(
     dataroom_id: str,
     folder_id: Optional[str] = Query(default=None),
@@ -997,7 +1180,7 @@ def list_dataroom_files(
         return results
 
 
-@app.put("/files/{file_id}/rename")
+@app.put("/api/v1/files/{file_id}/rename")
 def rename_file(file_id: str, request: RenameFileRequest):
     """
     Update display name in SQLite only — does NOT rename the actual file on disk.
@@ -1013,32 +1196,47 @@ def rename_file(file_id: str, request: RenameFileRequest):
             raise HTTPException(status_code=404, detail="File not found.")
 
         file_record.original_name = request.new_name.strip()
+        if request.new_path is not None:
+            file_record.original_path = request.new_path
         file_record.updated_at = datetime.datetime.utcnow()
         session.commit()
         session.refresh(file_record)
         return _file_dict(file_record)
 
 
-# ---- AI Classification endpoints --------------------------------------------
+# ---- AI Data Preparation & Result Application endpoints ---------------------
+# Gemini API calls have moved to the Express backend (holds the API key).
+# Python now only prepares data (fingerprints, folder trees) and applies
+# the AI results to the database. Electron orchestrates the full flow.
 
-class ClassifyRequest(BaseModel):
+class PrepareClassifyRequest(BaseModel):
     dataroom_id: str
     file_ids: List[str]
 
 
-class GenerateDataRoomRequest(BaseModel):
-    dataroom_name: str
-    dataroom_description: Optional[str] = None
+class ApplyClassifyRequest(BaseModel):
+    dataroom_id: str
+    results: list  # Each: {file_id, folder_id, confidence, reasoning}
+
+
+class PrepareGenerateRequest(BaseModel):
     file_ids: List[str]
 
 
-@app.post("/ai/classify")
-async def ai_classify(request: ClassifyRequest):
+class ApplyGenerateRequest(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    gemini_result: dict  # {folders: [...], assignments: [...]}
+    file_ids: List[str]
+
+
+@app.post("/api/v1/ai/prepare-classify")
+async def ai_prepare_classify(request: PrepareClassifyRequest):
     """
-    Classify files into existing DataRoom folders using Gemini AI.
-    Files are matched to folders based on content and folder context.
+    Prepare fingerprints and folder tree for external AI classification.
+    Does NOT call Gemini — returns data for Electron to forward to Express.
     """
-    from app.services.classification_service import classify_files
+    from app.services.classification_service import prepare_classify
 
     engine = _require_db()
 
@@ -1051,33 +1249,52 @@ async def ai_classify(request: ClassifyRequest):
             detail=f"Maximum {_MAX_FILES_PER_REQUEST} files per request. Received {len(request.file_ids)}.",
         )
 
-    # Verify DataRoom exists
     with Session(engine) as session:
         dr = session.query(DataRoom).filter_by(id=request.dataroom_id).first()
         if not dr:
             raise HTTPException(status_code=404, detail="DataRoom not found.")
 
     try:
-        result = await classify_files(engine, request.dataroom_id, request.file_ids)
+        result = prepare_classify(engine, request.dataroom_id, request.file_ids)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
 
 
-@app.post("/ai/generate-dataroom")
-async def ai_generate_dataroom(request: GenerateDataRoomRequest):
+@app.post("/api/v1/ai/apply-classify")
+async def ai_apply_classify(request: ApplyClassifyRequest):
     """
-    Generate a new DataRoom with AI-created folder structure and file assignments.
-    Uses Gemini to analyze files and create an organized structure.
+    Apply classification results (from Express/Gemini) to the database.
+    Updates file folder assignments and creates Classification records.
     """
-    from app.services.classification_service import generate_dataroom
+    from app.services.classification_service import apply_classify_results
 
     engine = _require_db()
 
-    if not request.dataroom_name or not request.dataroom_name.strip():
-        raise HTTPException(status_code=400, detail="dataroom_name is required.")
+    if not request.results:
+        raise HTTPException(status_code=400, detail="results list cannot be empty.")
+
+    with Session(engine) as session:
+        dr = session.query(DataRoom).filter_by(id=request.dataroom_id).first()
+        if not dr:
+            raise HTTPException(status_code=404, detail="DataRoom not found.")
+
+    try:
+        result = apply_classify_results(engine, request.dataroom_id, request.results)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/v1/ai/prepare-generate")
+async def ai_prepare_generate(request: PrepareGenerateRequest):
+    """
+    Prepare file fingerprints for AI DataRoom generation.
+    Does NOT call Gemini — returns data for Electron to forward to Express.
+    """
+    from app.services.classification_service import prepare_generate
+
+    engine = _require_db()
 
     if not request.file_ids:
         raise HTTPException(status_code=400, detail="file_ids list cannot be empty.")
@@ -1089,15 +1306,39 @@ async def ai_generate_dataroom(request: GenerateDataRoomRequest):
         )
 
     try:
-        result = await generate_dataroom(
+        result = prepare_generate(engine, request.file_ids)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/v1/ai/apply-generate")
+async def ai_apply_generate(request: ApplyGenerateRequest):
+    """
+    Apply AI-generated DataRoom structure (from Express/Gemini) to the database.
+    Creates the DataRoom, folders, and assigns files.
+    """
+    from app.services.classification_service import apply_generate_results
+
+    engine = _require_db()
+
+    if not request.name or not request.name.strip():
+        raise HTTPException(status_code=400, detail="name is required.")
+
+    if not request.gemini_result:
+        raise HTTPException(status_code=400, detail="gemini_result is required.")
+
+    try:
+        result = apply_generate_results(
             engine,
-            request.dataroom_name.strip(),
-            request.dataroom_description,
+            request.name.strip(),
+            request.description,
+            request.gemini_result,
             request.file_ids,
         )
         return result
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ---------------------------------------------------------------------------

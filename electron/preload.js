@@ -69,8 +69,10 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('folder:rename', { folder_id: folderId, new_name: newName }),
     updateContext: (folderId, context) =>
       ipcRenderer.invoke('folder:update-context', { folder_id: folderId, context }),
-    delete:        (folderId) =>
-      ipcRenderer.invoke('folder:delete', { folder_id: folderId }),
+    deletePreview: (folderId) =>
+      ipcRenderer.invoke('folder:delete-preview', { folder_id: folderId }),
+    delete:        (folderId, fileAction) =>
+      ipcRenderer.invoke('folder:delete', { folder_id: folderId, file_action: fileAction }),
     move:          (folderId, newParentId) =>
       ipcRenderer.invoke('folder:move', { folder_id: folderId, new_parent_id: newParentId }),
   },
@@ -80,7 +82,7 @@ contextBridge.exposeInMainWorld('api', {
     selectFiles:       ()                                  => ipcRenderer.invoke('file:select-files'),
     selectFolder:      ()                                  => ipcRenderer.invoke('file:select-folder'),
     register:          (dataroomId, filePaths)              => ipcRenderer.invoke('file:register', { dataroom_id: dataroomId, file_paths: filePaths }),
-    moveToFolder:      (fileId, folderId)                  => ipcRenderer.invoke('file:move-to-folder', { file_id: fileId, folder_id: folderId }),
+    moveToFolder:      (fileId, folderId, dataroomId)       => ipcRenderer.invoke('file:move-to-folder', { file_id: fileId, folder_id: folderId, dataroom_id: dataroomId }),
     removeFromDocrack: (fileId)                            => ipcRenderer.invoke('file:remove-from-docrack', { file_id: fileId }),
     deleteFromSystem:  (fileId)                            => ipcRenderer.invoke('file:delete-from-system', { file_id: fileId }),
     checkExists:       (fileId)                            => ipcRenderer.invoke('file:check-exists', { file_id: fileId }),
@@ -100,6 +102,12 @@ contextBridge.exposeInMainWorld('api', {
   ai: {
     classify:         (dataroomId, fileIds)                => ipcRenderer.invoke('ai:classify', { dataroom_id: dataroomId, file_ids: fileIds }),
     generateDataroom: (name, description, fileIds)         => ipcRenderer.invoke('ai:generate-dataroom', { dataroom_name: name, dataroom_description: description, file_ids: fileIds }),
+  },
+
+  // Logs — lets the UI offer a "Help > Open Logs" action
+  logs: {
+    getPath:    () => ipcRenderer.invoke('app:getLogsPath'),
+    openFolder: () => ipcRenderer.invoke('app:openLogsFolder'),
   },
 
   // App-level push events from the main process

@@ -11,30 +11,33 @@ import {
   setSortBy,
   setSortOrder,
   setSearchQuery,
+  setSelectedItems,
   toggleItemSelection,
   selectAll,
   clearSelection,
+  markFileForMove,
+  unmarkFileForMove,
 } from '../../store/fileExplorerSlice';
 import {
   createFolder,
   renameFolder,
   deleteFolder,
+  fetchFolderDeletePreview,
   updateFolderContext,
 } from '../../store/folderSlice';
+import { fetchDatarooms } from '../../store/dataroomSlice';
 import {
   openFile,
   openFileWith,
   copyFilePath,
   copyFileToClipboard,
-  moveFileToFolder,
   renameFile,
-  relocateFile,
   removeFromDocrack,
   deleteFromSystem,
 } from '../../store/fileSlice';
 import { addToast } from '../../store/uiSlice';
 import ContextMenu from '../common/ContextMenu';
-import FolderPicker from '../common/FolderPicker';
+import MoveMarkedFilesModal from './MoveMarkedFilesModal';
 import styles from './FileExplorer.module.css';
 
 /* ── File-type helpers ──────────────────────────────────── */
@@ -149,15 +152,6 @@ const IconFolderPlus = () => (
   </svg>
 );
 
-const IconUpload = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="16 16 12 12 8 16" />
-    <line x1="12" y1="12" x2="12" y2="21" />
-    <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-  </svg>
-);
-
 const IconFolder = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -184,13 +178,6 @@ const IconX = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="3" strokeLinecap="round">
     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
-const IconChevronDown = () => (
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="6 9 12 15 18 9" />
   </svg>
 );
 
@@ -242,14 +229,6 @@ const IconMove = () => (
   </svg>
 );
 
-const IconLink = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-  </svg>
-);
-
 const IconFileText = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -275,6 +254,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
     searchQuery,
     isLoading,
     error,
+    pendingMoves,
   } = useSelector((s) => s.fileExplorer);
 
   // Back / forward history — local state
@@ -282,32 +262,33 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const isNavigatingRef = useRef(false);
 
-  // New folder inline form
-  const [showNewFolder, setShowNewFolder] = useState(false);
+  // New folder modal
+  const [newFolderDialog, setNewFolderDialog] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderContext, setNewFolderContext] = useState('');
   const newFolderRef = useRef(null);
 
   // Rename inline
   const [renamingId, setRenamingId] = useState(null);
   const [renamingType, setRenamingType] = useState(null);
   const [renameValue, setRenameValue] = useState('');
+  const [renameOriginalName, setRenameOriginalName] = useState('');
   const renameRef = useRef(null);
+  const renameSavingRef = useRef(false);
 
   // Context menu
   const [ctxMenu, setCtxMenu] = useState(null);
 
-  // Dropdown menus
-  const [openDropdown, setOpenDropdown] = useState(null);
-  const dropdownRef = useRef(null);
-
-  // Folder picker (Move to Folder)
-  const [folderPickerTarget, setFolderPickerTarget] = useState(null);
+  // Move marked files modal
+  const [moveModal, setMoveModal] = useState(null);
 
   // Confirmation dialogs
   const [removeConfirm, setRemoveConfirm] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState(null);
+  const [deleteFolderPreview, setDeleteFolderPreview] = useState(null); // {subfolder_count, file_count}
+  const [deleteFolderStep, setDeleteFolderStep] = useState(1); // 1 = choose action, 2 = confirm system delete
 
   // Subfolder dialog
   const [subfolderDialog, setSubfolderDialog] = useState(null);
@@ -325,6 +306,16 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
 
   // Ref for keyboard shortcuts
   const explorerRef = useRef(null);
+
+  // Click vs double-click timer
+  const clickTimerRef = useRef(null);
+
+  // Clean up click timer on unmount
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    };
+  }, []);
 
   // ── Navigate to DataRoom on mount / dataroomId change ──
   useEffect(() => {
@@ -351,8 +342,8 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
 
   // ── Focus inputs ──
   useEffect(() => {
-    if (showNewFolder) newFolderRef.current?.focus();
-  }, [showNewFolder]);
+    if (newFolderDialog) newFolderRef.current?.focus();
+  }, [newFolderDialog]);
 
   useEffect(() => {
     if (renamingId && renameRef.current) {
@@ -369,14 +360,10 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
     if (editDescDialog && editDescRef.current) editDescRef.current.focus();
   }, [editDescDialog]);
 
-  // ── Close dropdown on outside click ──
-  useEffect(() => {
-    function handleClick(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpenDropdown(null);
-    }
-    if (openDropdown) document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [openDropdown]);
+  // ── Filtered items ──
+  const filtered = searchQuery
+    ? items.filter((i) => (i.name || '').toLowerCase().includes(searchQuery.toLowerCase()))
+    : items;
 
   // ── Keyboard shortcuts ──
   useEffect(() => {
@@ -384,7 +371,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
       // Don't handle if inside an input/textarea
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       // Don't handle if a modal is open
-      if (folderPickerTarget || removeConfirm || deleteConfirm || deleteFolderConfirm || subfolderDialog || editDescDialog) return;
+      if (moveModal || removeConfirm || deleteConfirm || deleteFolderConfirm || subfolderDialog || editDescDialog || newFolderDialog) return;
 
       const selected = selectedItems.length === 1
         ? items.find((it) => it.id === selectedItems[0].id)
@@ -401,7 +388,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
         if (selected.type === 'file') {
           setRemoveConfirm(selected);
         } else {
-          setDeleteFolderConfirm(selected);
+          openDeleteFolderDialog(selected);
         }
         return;
       }
@@ -414,7 +401,15 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
 
       if (e.key === 'Enter' && selected) {
         e.preventDefault();
-        handleItemDoubleClick(selected);
+        if (selected.type === 'folder') {
+          dispatch(navigateToFolder({ folderId: selected.id, folderName: selected.name }));
+        } else {
+          dispatch(openFile(selected.original_path))
+            .unwrap()
+            .catch((err) => {
+              dispatch(addToast({ message: err || 'File not found at its original location', type: 'error' }));
+            });
+        }
         return;
       }
 
@@ -432,8 +427,10 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
 
       if (e.ctrlKey && e.key === 'c' && selected && selected.type === 'file') {
         e.preventDefault();
-        dispatch(copyFilePath(selected.file_path));
-        dispatch(addToast({ message: 'Path copied', type: 'info' }));
+        dispatch(copyFileToClipboard(selected.original_path))
+          .unwrap()
+          .then((result) => dispatch(addToast({ message: result?.fallback ? 'File path copied to clipboard' : 'File copied to clipboard', type: 'success' })))
+          .catch((err) => dispatch(addToast({ message: err || 'Failed to copy file', type: 'error' })));
         return;
       }
     }
@@ -443,12 +440,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
       el.addEventListener('keydown', handleKeyDown);
       return () => el.removeEventListener('keydown', handleKeyDown);
     }
-  }, [selectedItems, items, ctxMenu, folderPickerTarget, removeConfirm, deleteConfirm, deleteFolderConfirm, subfolderDialog, editDescDialog, dispatch]);
-
-  // ── Filtered items ──
-  const filtered = searchQuery
-    ? items.filter((i) => (i.name || '').toLowerCase().includes(searchQuery.toLowerCase()))
-    : items;
+  }, [selectedItems, items, filtered, ctxMenu, moveModal, removeConfirm, deleteConfirm, deleteFolderConfirm, subfolderDialog, editDescDialog, newFolderDialog, dispatch]);
 
   // ── Navigation handlers ──
 
@@ -478,20 +470,61 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
     dispatch(navigateToPathIndex(index));
   }
 
-  function handleItemDoubleClick(item) {
+  function handleItemDoubleClick(e, item) {
+    e.stopPropagation();
+    // Cancel pending single-click selection
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
     if (item.type === 'folder') {
       dispatch(navigateToFolder({ folderId: item.id, folderName: item.name }));
     } else {
-      dispatch(openFile(item.file_path));
+      dispatch(openFile(item.original_path))
+        .unwrap()
+        .catch((err) => {
+          dispatch(addToast({ message: err || 'File not found at its original location', type: 'error' }));
+        });
     }
   }
 
   function handleItemClick(e, item) {
+    e.stopPropagation();
+    // Shift+click and Ctrl+click are immediate (no delay)
+    if (e.shiftKey && selectedItems.length > 0) {
+      const lastSelected = selectedItems[selectedItems.length - 1];
+      const lastIndex = filtered.findIndex((i) => i.id === lastSelected.id);
+      const currentIndex = filtered.findIndex((i) => i.id === item.id);
+      if (lastIndex >= 0 && currentIndex >= 0) {
+        const start = Math.min(lastIndex, currentIndex);
+        const end = Math.max(lastIndex, currentIndex);
+        const rangeItems = filtered.slice(start, end + 1).map((i) => ({ id: i.id, type: i.type }));
+        const existingIds = new Set(selectedItems.map((s) => s.id));
+        const merged = [...selectedItems];
+        for (const ri of rangeItems) {
+          if (!existingIds.has(ri.id)) merged.push(ri);
+        }
+        dispatch(setSelectedItems(merged));
+      }
+      return;
+    }
     if (e.ctrlKey || e.metaKey) {
       dispatch(toggleItemSelection({ id: item.id, type: item.type }));
-    } else {
+      return;
+    }
+    // Delay single-click selection to avoid conflict with double-click
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+    }
+    clickTimerRef.current = setTimeout(() => {
+      clickTimerRef.current = null;
+      dispatch(setSelectedItems([{ id: item.id, type: item.type }]));
+    }, 200);
+  }
+
+  function handleBackgroundClick(e) {
+    if (e.target === e.currentTarget) {
       dispatch(clearSelection());
-      dispatch(toggleItemSelection({ id: item.id, type: item.type }));
     }
   }
 
@@ -510,16 +543,44 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
 
   function buildFileContextMenuItems(item) {
     return [
-      { type: 'action', label: 'Open', icon: <IconOpen />, shortcut: 'Enter', onClick: () => dispatch(openFile(item.file_path)) },
-      { type: 'action', label: 'Open With...', icon: <IconOpen />, onClick: () => dispatch(openFileWith(item.file_path)) },
+      { type: 'action', label: 'Open', icon: <IconOpen />, shortcut: 'Enter', onClick: () => {
+        dispatch(openFile(item.original_path)).unwrap().catch((err) => {
+          dispatch(addToast({ message: err || 'File not found at its original location', type: 'error' }));
+        });
+      }},
+      { type: 'action', label: 'Open With...', icon: <IconOpen />, onClick: () => {
+        dispatch(openFileWith(item.original_path)).unwrap().catch((err) => {
+          dispatch(addToast({ message: err || 'Failed to open file', type: 'error' }));
+        });
+      }},
       { type: 'separator' },
-      { type: 'action', label: 'Copy', icon: <IconCopy />, onClick: () => { dispatch(copyFileToClipboard(item.file_path)); dispatch(addToast({ message: 'File copied to clipboard', type: 'success' })); } },
-      { type: 'action', label: 'Copy Path', icon: <IconCopy />, shortcut: 'Ctrl+C', onClick: () => { dispatch(copyFilePath(item.file_path)); dispatch(addToast({ message: 'Path copied', type: 'info' })); } },
+      { type: 'action', label: 'Copy', icon: <IconCopy />, shortcut: 'Ctrl+C', onClick: () => {
+        dispatch(copyFileToClipboard(item.original_path)).unwrap()
+          .then((result) => dispatch(addToast({ message: result?.fallback ? 'File path copied to clipboard' : 'File copied to clipboard', type: 'success' })))
+          .catch((err) => dispatch(addToast({ message: err || 'Failed to copy file', type: 'error' })));
+      }},
+      { type: 'action', label: 'Copy Path', icon: <IconCopy />, onClick: () => {
+        dispatch(copyFilePath(item.original_path)).unwrap()
+          .then(() => dispatch(addToast({ message: 'Path copied to clipboard', type: 'success' })))
+          .catch((err) => dispatch(addToast({ message: err || 'Failed to copy path', type: 'error' })));
+      }},
       { type: 'separator' },
-      { type: 'action', label: 'Move to Folder...', icon: <IconMove />, onClick: () => setFolderPickerTarget(item) },
+      pendingMoves.some((m) => m.id === item.id)
+        ? { type: 'action', label: 'Unmark', icon: <IconX />, onClick: (e) => { e?.stopPropagation?.(); dispatch(unmarkFileForMove(item.id)); } }
+        : { type: 'action', label: 'Mark for Move', icon: <IconMove />, onClick: (e) => {
+            e?.stopPropagation?.();
+            dispatch(markFileForMove({
+              id: item.id,
+              original_name: item.name,
+              dataroomId: currentDataroomId,
+              dataroomName: currentPath[0]?.name || 'DataRoom',
+              folderId: currentFolderId,
+              folderName: currentPath.length > 1 ? currentPath[currentPath.length - 1].name : null,
+            }));
+          }
+        },
       { type: 'separator' },
       { type: 'action', label: 'Rename', icon: <IconPencil />, shortcut: 'F2', onClick: () => startRename(item) },
-      { type: 'action', label: 'Relocate', icon: <IconLink />, onClick: () => { dispatch(relocateFile(item.id)); dispatch(addToast({ message: 'File relocated', type: 'success' })); } },
       { type: 'separator' },
       { type: 'action', label: 'Remove from DocRack', icon: <IconTrash />, danger: true, shortcut: 'Del', onClick: () => setRemoveConfirm(item) },
       { type: 'action', label: 'Delete from System', icon: <IconTrash />, danger: true, onClick: () => setDeleteConfirm(item) },
@@ -531,45 +592,62 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
       { type: 'action', label: 'Open', icon: <IconOpen />, shortcut: 'Enter', onClick: () => dispatch(navigateToFolder({ folderId: item.id, folderName: item.name })) },
       { type: 'separator' },
       { type: 'action', label: 'New Subfolder', icon: <IconFolderPlus />, onClick: () => { setSubfolderDialog(item); setSubfolderName(''); setSubfolderContext(''); } },
+      {
+        type: 'action',
+        label: 'Move Marked Files Here',
+        icon: <IconMove />,
+        disabled: pendingMoves.length === 0,
+        disabledTooltip: 'No files marked for move',
+        onClick: () => {
+          if (pendingMoves.length > 0) {
+            setMoveModal({ folderId: item.id, folderName: item.name, dataroomId: currentDataroomId });
+          }
+        },
+      },
       { type: 'separator' },
       { type: 'action', label: 'Rename', icon: <IconPencil />, shortcut: 'F2', onClick: () => startRename(item) },
       { type: 'action', label: 'Edit Description', icon: <IconFileText />, onClick: () => { setEditDescDialog(item); setEditDescValue(item.context || ''); } },
       { type: 'separator' },
-      { type: 'action', label: 'Delete Folder', icon: <IconTrash />, danger: true, shortcut: 'Del', onClick: () => setDeleteFolderConfirm(item) },
+      { type: 'action', label: 'Delete Folder', icon: <IconTrash />, danger: true, shortcut: 'Del', onClick: () => openDeleteFolderDialog(item) },
     ];
   }
 
   function buildBackgroundContextMenuItems() {
     return [
-      { type: 'action', label: 'New Folder', icon: <IconFolderPlus />, onClick: () => setShowNewFolder(true) },
-      { type: 'action', label: 'Upload Files', icon: <IconUpload />, onClick: () => { if (onOpenUpload) onOpenUpload('files'); } },
-      { type: 'action', label: 'Upload Folder', icon: <IconUpload />, onClick: () => { if (onOpenUpload) onOpenUpload('folder'); } },
+      { type: 'action', label: 'New Folder', icon: <IconFolderPlus />, onClick: openNewFolderDialog },
       { type: 'separator' },
       { type: 'label', text: 'View' },
       { type: 'action', label: viewMode === 'grid' ? 'Switch to List' : 'Switch to Grid', icon: viewMode === 'grid' ? <IconList /> : <IconGrid />, onClick: () => dispatch(setViewMode(viewMode === 'grid' ? 'list' : 'grid')) },
       { type: 'separator' },
-      { type: 'action', label: 'Refresh', icon: <IconRefresh />, onClick: () => dispatch(refreshCurrentView()) },
+      { type: 'action', label: 'Refresh', icon: <IconRefresh />, onClick: () => { dispatch(refreshCurrentView()); dispatch(fetchDatarooms()); } },
     ];
   }
 
   // ── New folder ──
 
+  function openNewFolderDialog() {
+    setNewFolderName('');
+    setNewFolderContext('');
+    setNewFolderDialog(true);
+  }
+
   function submitNewFolder() {
     const trimmed = newFolderName.trim();
-    if (!trimmed) { setShowNewFolder(false); return; }
+    if (!trimmed) return;
     dispatch(createFolder({
       dataroomId: currentDataroomId,
       parentFolderId: currentFolderId,
       name: trimmed,
-      context: null,
-    }));
-    setNewFolderName('');
-    setShowNewFolder(false);
-  }
-
-  function handleNewFolderKeyDown(e) {
-    if (e.key === 'Enter') submitNewFolder();
-    if (e.key === 'Escape') { setShowNewFolder(false); setNewFolderName(''); }
+      context: newFolderContext.trim() || null,
+    }))
+      .unwrap()
+      .then(() => {
+        dispatch(addToast({ message: `Created folder "${trimmed}"`, type: 'success' }));
+      })
+      .catch((err) => {
+        dispatch(addToast({ message: err || 'Failed to create folder', type: 'error' }));
+      });
+    setNewFolderDialog(false);
   }
 
   // ── Rename ──
@@ -577,42 +655,96 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
   function startRename(item) {
     setRenamingId(item.id);
     setRenamingType(item.type);
-    setRenameValue(item.name);
+    setRenameOriginalName(item.name);
+    // For files, show name without extension
+    if (item.type === 'file') {
+      const dot = item.name.lastIndexOf('.');
+      setRenameValue(dot > 0 ? item.name.slice(0, dot) : item.name);
+    } else {
+      setRenameValue(item.name);
+    }
     setCtxMenu(null);
   }
 
   function submitRename() {
     const trimmed = renameValue.trim();
     if (!trimmed) {
-      setRenamingId(null);
-      return;
+      dispatch(addToast({ message: 'Name cannot be empty', type: 'error' }));
+      return; // Stay in edit mode
     }
     const item = items.find((i) => i.id === renamingId);
-    if (item && trimmed !== item.name) {
-      if (renamingType === 'file') {
-        dispatch(renameFile({ fileId: renamingId, newName: trimmed }));
-      } else {
-        dispatch(renameFolder({ folderId: renamingId, newName: trimmed }));
+    if (!item) { cancelRename(); return; }
+
+    if (renamingType === 'file') {
+      // Auto-append original extension
+      const dot = item.name.lastIndexOf('.');
+      const ext = dot > 0 ? item.name.slice(dot) : '';
+      const fullName = trimmed + ext;
+      if (fullName === item.name) { cancelRename(); return; }
+      // Check for duplicate file names
+      const duplicate = items.some(
+        (i) => i.type === 'file' && i.id !== renamingId && (i.name || '').toLowerCase() === fullName.toLowerCase()
+      );
+      if (duplicate) {
+        dispatch(addToast({ message: 'Name already exists', type: 'error' }));
+        return; // Stay in edit mode
       }
+      dispatch(renameFile({ fileId: renamingId, newName: fullName }))
+        .unwrap()
+        .then(() => {
+          dispatch(addToast({ message: `Renamed to "${fullName}"`, type: 'success' }));
+          cancelRename();
+        })
+        .catch((err) => {
+          dispatch(addToast({ message: err || 'Failed to rename file', type: 'error' }));
+          // Stay in edit mode on error
+        });
+    } else {
+      if (trimmed === item.name) { cancelRename(); return; }
+      // Check for duplicate folder names
+      const duplicate = items.some(
+        (i) => i.type === 'folder' && i.id !== renamingId && (i.name || '').toLowerCase() === trimmed.toLowerCase()
+      );
+      if (duplicate) {
+        dispatch(addToast({ message: 'Name already exists', type: 'error' }));
+        return; // Stay in edit mode
+      }
+      dispatch(renameFolder({ folderId: renamingId, newName: trimmed }))
+        .unwrap()
+        .then(() => {
+          dispatch(addToast({ message: `Renamed to "${trimmed}"`, type: 'success' }));
+          cancelRename();
+        })
+        .catch((err) => {
+          dispatch(addToast({ message: err || 'Failed to rename folder', type: 'error' }));
+          // Stay in edit mode on error
+        });
     }
+  }
+
+  function cancelRename() {
     setRenamingId(null);
+    setRenamingType(null);
+    setRenameValue('');
+    setRenameOriginalName('');
   }
 
   function handleRenameKeyDown(e) {
-    if (e.key === 'Enter') submitRename();
-    if (e.key === 'Escape') setRenamingId(null);
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      renameSavingRef.current = true;
+      submitRename();
+      setTimeout(() => { renameSavingRef.current = false; }, 100);
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelRename();
+    }
   }
 
-  // ── Upload ──
-
-  function handleUploadFiles() {
-    setOpenDropdown(null);
-    if (onOpenUpload) onOpenUpload('files');
-  }
-
-  function handleUploadFolder() {
-    setOpenDropdown(null);
-    if (onOpenUpload) onOpenUpload('folder');
+  function handleRenameBlur() {
+    if (renameSavingRef.current) return; // Enter already handled it
+    cancelRename();
   }
 
   // ── Drag-and-drop ──
@@ -645,38 +777,74 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
     }
   }
 
-  // ── Move to Folder ──
-
-  function handleMoveToFolder(folderId) {
-    if (!folderPickerTarget) return;
-    dispatch(moveFileToFolder({ fileId: folderPickerTarget.id, folderId }));
-    dispatch(addToast({ message: `Moved "${folderPickerTarget.name}"`, type: 'success' }));
-    setFolderPickerTarget(null);
-  }
-
   // ── Confirmations ──
 
   function confirmRemove() {
     if (!removeConfirm) return;
-    dispatch(removeFromDocrack(removeConfirm.id));
-    dispatch(addToast({ message: `Removed "${removeConfirm.name}"`, type: 'info' }));
+    dispatch(removeFromDocrack(removeConfirm.id))
+      .unwrap()
+      .then(() => {
+        dispatch(addToast({ message: `'${removeConfirm.name}' removed from DocRack`, type: 'success' }));
+      })
+      .catch((err) => {
+        dispatch(addToast({ message: err || 'Failed to remove file', type: 'error' }));
+      });
     setRemoveConfirm(null);
   }
 
   function confirmDeleteFromSystem() {
     if (!deleteConfirm) return;
     if (deleteConfirmName !== deleteConfirm.name) return;
-    dispatch(deleteFromSystem(deleteConfirm.id));
-    dispatch(addToast({ message: `Deleted "${deleteConfirm.name}" from system`, type: 'info' }));
+    const name = deleteConfirm.name;
+    dispatch(deleteFromSystem(deleteConfirm.id))
+      .unwrap()
+      .then(() => {
+        dispatch(addToast({ message: `'${name}' permanently deleted`, type: 'success' }));
+      })
+      .catch((err) => {
+        dispatch(addToast({ message: err || 'Failed to delete file', type: 'error' }));
+      });
     setDeleteConfirm(null);
     setDeleteConfirmName('');
   }
 
-  function confirmDeleteFolder() {
-    if (!deleteFolderConfirm) return;
-    dispatch(deleteFolder(deleteFolderConfirm.id));
-    dispatch(addToast({ message: `Deleted folder "${deleteFolderConfirm.name}"`, type: 'info' }));
+  function openDeleteFolderDialog(folder) {
+    setDeleteFolderConfirm(folder);
+    setDeleteFolderPreview(null);
+    setDeleteFolderStep(1);
+    // Fetch preview counts
+    dispatch(fetchFolderDeletePreview(folder.id))
+      .unwrap()
+      .then((data) => {
+        setDeleteFolderPreview({ subfolder_count: data.subfolder_count, file_count: data.file_count });
+      })
+      .catch(() => {
+        setDeleteFolderPreview({ subfolder_count: 0, file_count: 0 });
+      });
+  }
+
+  function closeFolderDeleteDialog() {
     setDeleteFolderConfirm(null);
+    setDeleteFolderPreview(null);
+    setDeleteFolderStep(1);
+  }
+
+  function confirmDeleteFolder(fileAction) {
+    if (!deleteFolderConfirm) return;
+    const name = deleteFolderConfirm.name;
+    dispatch(deleteFolder({ folderId: deleteFolderConfirm.id, fileAction }))
+      .unwrap()
+      .then((result) => {
+        let msg = `Deleted folder "${name}"`;
+        if (result.files_deleted) msg += ` and ${result.files_deleted} file(s) from system`;
+        if (result.files_removed) msg += ` and ${result.files_removed} file record(s)`;
+        if (result.disk_errors?.length) msg += ` (${result.disk_errors.length} file(s) could not be removed from disk)`;
+        dispatch(addToast({ message: msg, type: 'success' }));
+      })
+      .catch((err) => {
+        dispatch(addToast({ message: err || 'Failed to delete folder', type: 'error' }));
+      });
+    closeFolderDeleteDialog();
   }
 
   // ── Subfolder ──
@@ -689,8 +857,14 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
       parentFolderId: subfolderDialog.id,
       name: trimmed,
       context: subfolderContext.trim() || null,
-    }));
-    dispatch(addToast({ message: `Created subfolder "${trimmed}"`, type: 'success' }));
+    }))
+      .unwrap()
+      .then(() => {
+        dispatch(addToast({ message: `Created subfolder "${trimmed}"`, type: 'success' }));
+      })
+      .catch((err) => {
+        dispatch(addToast({ message: err || 'Failed to create folder', type: 'error' }));
+      });
     setSubfolderDialog(null);
   }
 
@@ -737,7 +911,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
         <button className={styles.navBtn} onClick={goBack} disabled={historyIndex <= 0} title="Back" type="button"><IconBack /></button>
         <button className={styles.navBtn} onClick={goForward} disabled={historyIndex >= history.length - 1} title="Forward" type="button"><IconForward /></button>
         <button className={styles.navBtn} onClick={goHome} disabled={currentPath.length <= 1} title="Home" type="button"><IconHome /></button>
-        <button className={styles.navBtn} onClick={() => dispatch(refreshCurrentView())} title="Refresh" type="button"><IconRefresh /></button>
+        <button className={styles.navBtn} onClick={() => { dispatch(refreshCurrentView()); dispatch(fetchDatarooms()); }} title="Refresh" type="button"><IconRefresh /></button>
 
         <div className={styles.navSep} />
 
@@ -766,25 +940,9 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
     return (
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
-          <button className={styles.toolBtn} onClick={() => setShowNewFolder(true)} type="button">
+          <button className={styles.toolBtn} onClick={openNewFolderDialog} type="button">
             <IconFolderPlus /> New Folder
           </button>
-
-          <div className={styles.dropdownWrap} ref={openDropdown === 'upload' ? dropdownRef : null}>
-            <button
-              className={`${styles.toolBtn} ${styles.toolBtnPrimary}`}
-              onClick={() => setOpenDropdown(openDropdown === 'upload' ? null : 'upload')}
-              type="button"
-            >
-              <IconUpload /> Upload <IconChevronDown />
-            </button>
-            {openDropdown === 'upload' && (
-              <div className={styles.dropdown}>
-                <button className={styles.dropdownItem} onClick={handleUploadFiles} type="button">Upload Files</button>
-                <button className={styles.dropdownItem} onClick={handleUploadFolder} type="button">Upload Folder</button>
-              </div>
-            )}
-          </div>
         </div>
 
         <div className={styles.toolbarRight}>
@@ -842,28 +1000,8 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
     );
   }
 
-  // ── Render: new folder inline ──
-
-  function renderNewFolderBar() {
-    if (!showNewFolder) return null;
-    return (
-      <div className={styles.newFolderInline}>
-        <IconFolderPlus />
-        <input
-          ref={newFolderRef}
-          className={styles.newFolderInput}
-          type="text"
-          placeholder="Folder name..."
-          value={newFolderName}
-          onChange={(e) => setNewFolderName(e.target.value)}
-          onKeyDown={handleNewFolderKeyDown}
-          onBlur={submitNewFolder}
-        />
-        <button className={`${styles.newFolderBtn} ${styles.newFolderBtnConfirm}`} onClick={submitNewFolder} type="button" title="Create"><IconCheck /></button>
-        <button className={`${styles.newFolderBtn} ${styles.newFolderBtnCancel}`} onClick={() => { setShowNewFolder(false); setNewFolderName(''); }} type="button" title="Cancel"><IconX /></button>
-      </div>
-    );
-  }
+  // ── Render: new folder modal ──
+  // (rendered in the main return below)
 
   // ── Render inline rename ──
 
@@ -876,7 +1014,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
         type="text"
         value={renameValue}
         onChange={(e) => setRenameValue(e.target.value)}
-        onBlur={submitRename}
+        onBlur={handleRenameBlur}
         onKeyDown={handleRenameKeyDown}
         onClick={(e) => e.stopPropagation()}
       />
@@ -891,23 +1029,27 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
         {filtered.map((item) => {
           const isSelected = selectedItems.some((s) => s.id === item.id);
           const confColor = item.type === 'file' ? confidenceColor(item.classification_score) : null;
+          const isMarked = item.type === 'file' && pendingMoves.some((m) => m.id === item.id);
 
           return (
             <div
               key={item.id}
               className={`${styles.gridCard} ${isSelected ? styles.gridCardSelected : ''}`}
               onClick={(e) => handleItemClick(e, item)}
-              onDoubleClick={() => handleItemDoubleClick(item)}
+              onDoubleClick={(e) => handleItemDoubleClick(e, item)}
               onContextMenu={(e) => handleContextMenu(e, item)}
             >
-              {confColor && (
+              {isMarked && <span className={styles.scissorsIndicator} title="Marked for move">&#9986;</span>}
+              {confColor && !isMarked && (
                 <span
                   className={styles.confidenceDot}
                   style={{ backgroundColor: confColor }}
                   title={`Confidence: ${Math.round((item.classification_score || 0) * 100)}%`}
                 />
               )}
-              {renderItemIcon(item, 'grid')}
+              <div className={isMarked ? styles.markedIcon : undefined}>
+                {renderItemIcon(item, 'grid')}
+              </div>
               {renamingId === item.id ? renderInlineRename(item) : (
                 <span className={styles.gridCardName} title={item.name}>{item.name}</span>
               )}
@@ -949,18 +1091,21 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
             const ext = item.type === 'file' ? getExtension(item.name) : '';
             const typeInfo = item.type === 'file' ? getFileTypeInfo(ext) : null;
             const confColor = item.type === 'file' ? confidenceColor(item.classification_score) : null;
+            const isMarked = item.type === 'file' && pendingMoves.some((m) => m.id === item.id);
 
             return (
               <tr
                 key={item.id}
                 className={`${styles.listRow} ${isSelected ? styles.listRowSelected : ''}`}
                 onClick={(e) => handleItemClick(e, item)}
-                onDoubleClick={() => handleItemDoubleClick(item)}
+                onDoubleClick={(e) => handleItemDoubleClick(e, item)}
                 onContextMenu={(e) => handleContextMenu(e, item)}
               >
                 <td>
                   <div className={styles.listNameCell}>
-                    {renderItemIcon(item, 'list')}
+                    <div className={isMarked ? styles.markedIcon : undefined}>
+                      {renderItemIcon(item, 'list')}
+                    </div>
                     {renamingId === item.id ? (
                       <input
                         ref={renameRef}
@@ -968,7 +1113,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
                         type="text"
                         value={renameValue}
                         onChange={(e) => setRenameValue(e.target.value)}
-                        onBlur={submitRename}
+                        onBlur={handleRenameBlur}
                         onKeyDown={handleRenameKeyDown}
                         onClick={(e) => e.stopPropagation()}
                         style={{ textAlign: 'left' }}
@@ -976,7 +1121,8 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
                     ) : (
                       <span className={styles.listFileName} title={item.name}>{item.name}</span>
                     )}
-                    {confColor && (
+                    {isMarked && <span className={styles.listMarkedIndicator} title="Marked for move">&#9986;</span>}
+                    {confColor && !isMarked && (
                       <span
                         className={styles.confidenceDot}
                         style={{ backgroundColor: confColor, position: 'static', marginLeft: 6 }}
@@ -1017,18 +1163,15 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
     }
 
     return (
-      <div className={styles.emptyState}>
+      <div className={styles.emptyStateCentered}>
         <IconEmptyFolder />
         <span className={styles.emptyTitle}>This folder is empty</span>
         <span className={styles.emptyHint}>
-          Create a new folder or upload files to get started.
+          Create a new folder to get started.
         </span>
         <div className={styles.emptyAction}>
-          <button className={styles.toolBtn} onClick={() => setShowNewFolder(true)} type="button">
+          <button className={styles.toolBtn} onClick={openNewFolderDialog} type="button">
             <IconFolderPlus /> New Folder
-          </button>
-          <button className={`${styles.toolBtn} ${styles.toolBtnPrimary}`} onClick={handleUploadFiles} type="button">
-            <IconUpload /> Upload Files
           </button>
         </div>
       </div>
@@ -1049,7 +1192,6 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
       {renderNavBar()}
       {renderToolbar()}
       {renderSelectionBar()}
-      {renderNewFolderBar()}
 
       {isLoading ? (
         <div className={styles.loadingOverlay}>
@@ -1060,7 +1202,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
       ) : (
         <div
           className={styles.content}
-          onClick={() => dispatch(clearSelection())}
+          onClick={handleBackgroundClick}
           onContextMenu={handleBackgroundContextMenu}
         >
           {viewMode === 'grid' ? renderGridView() : renderListView()}
@@ -1108,14 +1250,13 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
         />
       )}
 
-      {/* Folder picker modal */}
-      {folderPickerTarget && (
-        <FolderPicker
-          dataroomId={currentDataroomId}
-          dataroomName={currentPath[0]?.name || 'DataRoom'}
-          currentFolderId={currentFolderId}
-          onSelect={handleMoveToFolder}
-          onClose={() => setFolderPickerTarget(null)}
+      {/* Move marked files modal */}
+      {moveModal && (
+        <MoveMarkedFilesModal
+          targetFolderId={moveModal.folderId}
+          targetFolderName={moveModal.folderName}
+          targetDataroomId={moveModal.dataroomId}
+          onClose={() => setMoveModal(null)}
         />
       )}
 
@@ -1125,8 +1266,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
           <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.confirmTitle}>Remove from DocRack</h3>
             <p className={styles.confirmText}>
-              Remove &quot;{removeConfirm.name}&quot; from DocRack?
-              The file will NOT be deleted from your computer.
+              Remove &quot;{removeConfirm.name}&quot; from DocRack? The file will remain on your computer.
             </p>
             <div className={styles.confirmActions}>
               <button className={styles.confirmBtnSecondary} onClick={() => setRemoveConfirm(null)} type="button">Cancel</button>
@@ -1142,8 +1282,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
           <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.confirmTitle}>Delete from System</h3>
             <p className={styles.confirmText}>
-              This will <strong>PERMANENTLY DELETE</strong> &quot;{deleteConfirm.name}&quot; from your computer.
-              This cannot be undone.
+              This will permanently delete &quot;{deleteConfirm.name}&quot; from your computer. This cannot be undone.
             </p>
             <p className={styles.confirmText} style={{ marginTop: 12 }}>
               Type the filename to confirm:
@@ -1172,18 +1311,70 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
         </div>
       )}
 
-      {/* Delete folder confirmation */}
-      {deleteFolderConfirm && (
-        <div className={styles.confirmBackdrop} onClick={() => setDeleteFolderConfirm(null)} onKeyDown={(e) => { if (e.key === 'Escape') setDeleteFolderConfirm(null); if (e.key === 'Enter') confirmDeleteFolder(); }}>
+      {/* Delete folder confirmation — step 1: choose file action */}
+      {deleteFolderConfirm && deleteFolderStep === 1 && (
+        <div className={styles.confirmBackdrop} onClick={closeFolderDeleteDialog} onKeyDown={(e) => { if (e.key === 'Escape') closeFolderDeleteDialog(); }}>
           <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
             <h3 className={styles.confirmTitle}>Delete Folder</h3>
             <p className={styles.confirmText}>
               Delete &quot;{deleteFolderConfirm.name}&quot;?
-              All files inside will become unclassified.
+            </p>
+            {deleteFolderPreview ? (
+              <p className={styles.confirmText} style={{ marginTop: 8 }}>
+                This folder contains: <strong>{deleteFolderPreview.subfolder_count}</strong> subfolder{deleteFolderPreview.subfolder_count !== 1 ? 's' : ''}, <strong>{deleteFolderPreview.file_count}</strong> file{deleteFolderPreview.file_count !== 1 ? 's' : ''}.
+                {deleteFolderPreview.file_count > 0
+                  ? ' What should happen to the files?'
+                  : ''}
+              </p>
+            ) : (
+              <p className={styles.confirmText} style={{ marginTop: 8, opacity: 0.6 }}>Loading folder contents...</p>
+            )}
+            <div className={styles.confirmActions}>
+              <button className={styles.confirmBtnSecondary} onClick={closeFolderDeleteDialog} type="button">Cancel</button>
+              {deleteFolderPreview && deleteFolderPreview.file_count > 0 && (
+                <button
+                  className={styles.confirmBtnDanger}
+                  onClick={() => confirmDeleteFolder('remove')}
+                  type="button"
+                >
+                  Remove from DocRack
+                </button>
+              )}
+              {deleteFolderPreview && deleteFolderPreview.file_count > 0 && (
+                <button
+                  className={styles.confirmBtnDanger}
+                  onClick={() => setDeleteFolderStep(2)}
+                  type="button"
+                >
+                  Delete from System
+                </button>
+              )}
+              {deleteFolderPreview && deleteFolderPreview.file_count === 0 && (
+                <button
+                  className={styles.confirmBtnDanger}
+                  onClick={() => confirmDeleteFolder('remove')}
+                  type="button"
+                  autoFocus
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete folder confirmation — step 2: confirm system delete */}
+      {deleteFolderConfirm && deleteFolderStep === 2 && (
+        <div className={styles.confirmBackdrop} onClick={closeFolderDeleteDialog} onKeyDown={(e) => { if (e.key === 'Escape') closeFolderDeleteDialog(); }}>
+          <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles.confirmTitle}>Permanently Delete Files</h3>
+            <p className={styles.confirmText}>
+              This will permanently delete <strong>{deleteFolderPreview?.file_count || 0}</strong> file{(deleteFolderPreview?.file_count || 0) !== 1 ? 's' : ''} from your computer. This cannot be undone.
             </p>
             <div className={styles.confirmActions}>
-              <button className={styles.confirmBtnSecondary} onClick={() => setDeleteFolderConfirm(null)} type="button">Cancel</button>
-              <button className={styles.confirmBtnDanger} onClick={confirmDeleteFolder} type="button" autoFocus>Delete</button>
+              <button className={styles.confirmBtnSecondary} onClick={closeFolderDeleteDialog} type="button">Cancel</button>
+              <button className={styles.confirmBtnDanger} onClick={() => confirmDeleteFolder('delete_system')} type="button" autoFocus>Delete Permanently</button>
             </div>
           </div>
         </div>
@@ -1244,6 +1435,41 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
             <div className={styles.confirmActions}>
               <button className={styles.confirmBtnSecondary} onClick={() => setEditDescDialog(null)} type="button">Cancel</button>
               <button className={styles.confirmBtnPrimary} onClick={submitEditDesc} type="button">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New folder modal */}
+      {newFolderDialog && (
+        <div className={styles.confirmBackdrop} onClick={() => setNewFolderDialog(false)}>
+          <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles.confirmTitle}>New Folder</h3>
+            <div className={styles.dialogField}>
+              <label className={styles.dialogLabel}>Name</label>
+              <input
+                ref={newFolderRef}
+                className={styles.confirmInput}
+                type="text"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="Folder name..."
+                onKeyDown={(e) => { if (e.key === 'Enter') submitNewFolder(); if (e.key === 'Escape') setNewFolderDialog(false); }}
+              />
+            </div>
+            <div className={styles.dialogField}>
+              <label className={styles.dialogLabel}>Description <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
+              <textarea
+                className={styles.confirmTextarea}
+                value={newFolderContext}
+                onChange={(e) => setNewFolderContext(e.target.value)}
+                placeholder="What kind of files go here..."
+                rows={2}
+              />
+            </div>
+            <div className={styles.confirmActions}>
+              <button className={styles.confirmBtnSecondary} onClick={() => setNewFolderDialog(false)} type="button">Cancel</button>
+              <button className={styles.confirmBtnPrimary} onClick={submitNewFolder} disabled={!newFolderName.trim()} type="button">Create</button>
             </div>
           </div>
         </div>

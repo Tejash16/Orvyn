@@ -4,12 +4,14 @@ import {
   fetchDatarooms,
   updateDataroom,
   deleteDataroom,
+  toggleStarDataroom,
 } from '../store/dataroomSlice';
 import {
   setActivePage,
   setUploadInitialFiles,
   setUploadPreselectedDataroomId,
   clearPendingViewDataroomId,
+  addToast,
 } from '../store/uiSlice';
 import CreateDataRoomModal from '../components/dataroom/CreateDataRoomModal';
 import FileExplorer from '../components/dataroom/FileExplorer';
@@ -84,13 +86,13 @@ function DataRoomList() {
   const [selectedId, setSelectedId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Favorites — visual only, local state (V1)
-  const [favorites, setFavorites] = useState(new Set());
 
   // Inline rename
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
+  const [renameOriginalName, setRenameOriginalName] = useState('');
   const renameRef = useRef(null);
+  const renameSavingRef = useRef(false);
 
   // Dropdown menu
   const [menuOpenId, setMenuOpenId] = useState(null);
@@ -130,9 +132,12 @@ function DataRoomList() {
 
   // ── Filtered list ──────────────────────────────────────
 
-  const filtered = datarooms.filter((dr) =>
-    dr.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = [...datarooms]
+    .sort((a, b) => {
+      if (b.is_starred !== a.is_starred) return (b.is_starred ? 1 : 0) - (a.is_starred ? 1 : 0);
+      return new Date(b.updated_at) - new Date(a.updated_at);
+    })
+    .filter((dr) => dr.name.toLowerCase().includes(search.toLowerCase()));
 
   // ── Handlers ───────────────────────────────────────────
 
@@ -143,12 +148,7 @@ function DataRoomList() {
 
   function handleToggleStar(e, id) {
     e.stopPropagation();
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    dispatch(toggleStarDataroom(id));
   }
 
   function handleMenuToggle(e, id) {
@@ -159,20 +159,61 @@ function DataRoomList() {
   function startRename(dr) {
     setRenamingId(dr.id);
     setRenameValue(dr.name);
+    setRenameOriginalName(dr.name);
     setMenuOpenId(null);
+  }
+
+  function cancelRename() {
+    setRenamingId(null);
+    setRenameValue('');
+    setRenameOriginalName('');
   }
 
   function submitRename() {
     const trimmed = renameValue.trim();
-    if (trimmed && trimmed !== datarooms.find((d) => d.id === renamingId)?.name) {
-      dispatch(updateDataroom({ id: renamingId, updates: { name: trimmed } }));
+    if (!trimmed) {
+      dispatch(addToast({ message: 'Name cannot be empty', type: 'error' }));
+      return; // Stay in edit mode
     }
-    setRenamingId(null);
+    const original = datarooms.find((d) => d.id === renamingId);
+    if (!original) { cancelRename(); return; }
+    if (trimmed === original.name) { cancelRename(); return; }
+    // Check for duplicate names
+    const duplicate = datarooms.some(
+      (d) => d.id !== renamingId && d.name.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (duplicate) {
+      dispatch(addToast({ message: 'Name already exists', type: 'error' }));
+      return; // Stay in edit mode
+    }
+    dispatch(updateDataroom({ id: renamingId, updates: { name: trimmed } }))
+      .unwrap()
+      .then(() => {
+        dispatch(addToast({ message: `Renamed to "${trimmed}"`, type: 'success' }));
+        cancelRename();
+      })
+      .catch((err) => {
+        dispatch(addToast({ message: err || 'Failed to rename DataRoom', type: 'error' }));
+        // Stay in edit mode on error
+      });
   }
 
   function handleRenameKeyDown(e) {
-    if (e.key === 'Enter') submitRename();
-    if (e.key === 'Escape') setRenamingId(null);
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      renameSavingRef.current = true;
+      submitRename();
+      setTimeout(() => { renameSavingRef.current = false; }, 100);
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelRename();
+    }
+  }
+
+  function handleRenameBlur() {
+    if (renameSavingRef.current) return;
+    cancelRename();
   }
 
   function startDelete(dr) {
@@ -254,7 +295,7 @@ function DataRoomList() {
                       type="text"
                       value={renameValue}
                       onChange={(e) => setRenameValue(e.target.value)}
-                      onBlur={submitRename}
+                      onBlur={handleRenameBlur}
                       onKeyDown={handleRenameKeyDown}
                       onClick={(e) => e.stopPropagation()}
                     />
@@ -270,27 +311,29 @@ function DataRoomList() {
                   </div>
                 </div>
 
-                <button
-                  className={`${styles.starBtn} ${
-                    favorites.has(dr.id) ? styles.starBtnActive : ''
-                  }`}
-                  onClick={(e) => handleToggleStar(e, dr.id)}
-                  title={favorites.has(dr.id) ? 'Unfavorite' : 'Favorite'}
-                  type="button"
-                >
-                  <IconStar filled={favorites.has(dr.id)} />
-                </button>
+                <div className={`${styles.itemActions} ${dr.is_starred ? styles.itemActionsStarred : ''}`}>
+                  <button
+                    className={`${styles.starBtn} ${
+                      dr.is_starred ? styles.starBtnActive : ''
+                    }`}
+                    onClick={(e) => handleToggleStar(e, dr.id)}
+                    title={dr.is_starred ? 'Unfavorite' : 'Favorite'}
+                    type="button"
+                  >
+                    <IconStar filled={dr.is_starred} />
+                  </button>
 
-                <button
-                  className={`${styles.menuBtn} ${
-                    menuOpenId === dr.id ? styles.menuBtnOpen : ''
-                  }`}
-                  onClick={(e) => handleMenuToggle(e, dr.id)}
-                  title="Options"
-                  type="button"
-                >
-                  <IconDots />
-                </button>
+                  <button
+                    className={`${styles.menuBtn} ${
+                      menuOpenId === dr.id ? styles.menuBtnOpen : ''
+                    }`}
+                    onClick={(e) => handleMenuToggle(e, dr.id)}
+                    title="Options"
+                    type="button"
+                  >
+                    <IconDots />
+                  </button>
+                </div>
 
                 {menuOpenId === dr.id && (
                   <div

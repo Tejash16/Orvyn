@@ -58,7 +58,7 @@ async function initDb(databasePath, mongoUserId) {
  * @returns {Promise<string>} "light" or "dark"
  */
 async function getTheme() {
-  const res = await fetch(`${getPythonUrl()}/settings/theme`);
+  const res = await fetch(`${getPythonUrl()}/api/v1/settings/theme`);
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.detail || 'Failed to fetch theme from Python.');
@@ -73,7 +73,7 @@ async function getTheme() {
  * @param {string} theme - "light" or "dark"
  */
 async function setTheme(theme) {
-  const res = await fetch(`${getPythonUrl()}/settings/theme`, {
+  const res = await fetch(`${getPythonUrl()}/api/v1/settings/theme`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ theme }),
@@ -92,7 +92,7 @@ async function setTheme(theme) {
 // ---------------------------------------------------------------------------
 
 async function createDataroom(name, description) {
-  const res = await fetch(`${getPythonUrl()}/datarooms`, {
+  const res = await fetch(`${getPythonUrl()}/api/v1/datarooms`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, description }),
@@ -103,21 +103,21 @@ async function createDataroom(name, description) {
 }
 
 async function listDatarooms() {
-  const res = await fetch(`${getPythonUrl()}/datarooms`);
+  const res = await fetch(`${getPythonUrl()}/api/v1/datarooms`);
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Failed to list DataRooms.');
   return data;
 }
 
 async function getDataroom(id) {
-  const res = await fetch(`${getPythonUrl()}/datarooms/${encodeURIComponent(id)}`);
+  const res = await fetch(`${getPythonUrl()}/api/v1/datarooms/${encodeURIComponent(id)}`);
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Failed to get DataRoom.');
   return data;
 }
 
 async function updateDataroom(id, updates) {
-  const res = await fetch(`${getPythonUrl()}/datarooms/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${getPythonUrl()}/api/v1/datarooms/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
@@ -128,7 +128,7 @@ async function updateDataroom(id, updates) {
 }
 
 async function deleteDataroom(id) {
-  const res = await fetch(`${getPythonUrl()}/datarooms/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${getPythonUrl()}/api/v1/datarooms/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
   const data = await res.json();
@@ -145,7 +145,7 @@ async function createFolder(dataroomId, name, context, parentId) {
   if (parentId != null) body.parent_id = parentId;
 
   const res = await fetch(
-    `${getPythonUrl()}/datarooms/${encodeURIComponent(dataroomId)}/folders`,
+    `${getPythonUrl()}/api/v1/datarooms/${encodeURIComponent(dataroomId)}/folders`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -159,7 +159,7 @@ async function createFolder(dataroomId, name, context, parentId) {
 
 async function listFolders(dataroomId) {
   const res = await fetch(
-    `${getPythonUrl()}/datarooms/${encodeURIComponent(dataroomId)}/folders`
+    `${getPythonUrl()}/api/v1/datarooms/${encodeURIComponent(dataroomId)}/folders`
   );
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Failed to list folders.');
@@ -168,7 +168,7 @@ async function listFolders(dataroomId) {
 
 async function updateFolder(folderId, updates) {
   const res = await fetch(
-    `${getPythonUrl()}/folders/${encodeURIComponent(folderId)}`,
+    `${getPythonUrl()}/api/v1/folders/${encodeURIComponent(folderId)}`,
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -180,9 +180,19 @@ async function updateFolder(folderId, updates) {
   return data;
 }
 
-async function deleteFolder(folderId) {
+async function deleteFolderPreview(folderId) {
   const res = await fetch(
-    `${getPythonUrl()}/folders/${encodeURIComponent(folderId)}`,
+    `${getPythonUrl()}/api/v1/folders/${encodeURIComponent(folderId)}/delete-preview`
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Failed to get folder delete preview.');
+  return data;
+}
+
+async function deleteFolder(folderId, fileAction) {
+  const qs = fileAction ? `?file_action=${encodeURIComponent(fileAction)}` : '';
+  const res = await fetch(
+    `${getPythonUrl()}/api/v1/folders/${encodeURIComponent(folderId)}${qs}`,
     { method: 'DELETE' }
   );
   const data = await res.json();
@@ -195,7 +205,7 @@ async function deleteFolder(folderId) {
 // ---------------------------------------------------------------------------
 
 async function registerFiles(dataroomId, filePaths) {
-  const res = await fetch(`${getPythonUrl()}/files/register`, {
+  const res = await fetch(`${getPythonUrl()}/api/v1/files/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ dataroom_id: dataroomId, file_paths: filePaths }),
@@ -207,7 +217,7 @@ async function registerFiles(dataroomId, filePaths) {
 
 async function getFile(fileId) {
   const res = await fetch(
-    `${getPythonUrl()}/files/${encodeURIComponent(fileId)}`
+    `${getPythonUrl()}/api/v1/files/${encodeURIComponent(fileId)}`
   );
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Failed to get file.');
@@ -216,7 +226,7 @@ async function getFile(fileId) {
 
 async function checkFileExists(fileId) {
   const res = await fetch(
-    `${getPythonUrl()}/files/${encodeURIComponent(fileId)}/check-exists`,
+    `${getPythonUrl()}/api/v1/files/${encodeURIComponent(fileId)}/check-exists`,
     { method: 'POST' }
   );
   const data = await res.json();
@@ -226,7 +236,7 @@ async function checkFileExists(fileId) {
 
 async function relocateFile(fileId, newPath) {
   const res = await fetch(
-    `${getPythonUrl()}/files/${encodeURIComponent(fileId)}/relocate`,
+    `${getPythonUrl()}/api/v1/files/${encodeURIComponent(fileId)}/relocate`,
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -238,13 +248,15 @@ async function relocateFile(fileId, newPath) {
   return data;
 }
 
-async function moveFileToFolder(fileId, folderId) {
+async function moveFileToFolder(fileId, folderId, dataroomId) {
+  const body = { folder_id: folderId };
+  if (dataroomId != null) body.dataroom_id = dataroomId;
   const res = await fetch(
-    `${getPythonUrl()}/files/${encodeURIComponent(fileId)}/move-to-folder`,
+    `${getPythonUrl()}/api/v1/files/${encodeURIComponent(fileId)}/move-to-folder`,
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folder_id: folderId }),
+      body: JSON.stringify(body),
     }
   );
   const data = await res.json();
@@ -255,7 +267,7 @@ async function moveFileToFolder(fileId, folderId) {
 async function deleteFile(fileId, deleteFromSystem) {
   const qs = deleteFromSystem ? '?delete_from_system=true' : '?delete_from_system=false';
   const res = await fetch(
-    `${getPythonUrl()}/files/${encodeURIComponent(fileId)}${qs}`,
+    `${getPythonUrl()}/api/v1/files/${encodeURIComponent(fileId)}${qs}`,
     { method: 'DELETE' }
   );
   const data = await res.json();
@@ -271,20 +283,22 @@ async function listFiles(dataroomId, options = {}) {
 
   const qs = params.toString() ? `?${params.toString()}` : '';
   const res = await fetch(
-    `${getPythonUrl()}/datarooms/${encodeURIComponent(dataroomId)}/files${qs}`
+    `${getPythonUrl()}/api/v1/datarooms/${encodeURIComponent(dataroomId)}/files${qs}`
   );
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Failed to list files.');
   return data;
 }
 
-async function renameFile(fileId, newName) {
+async function renameFile(fileId, newName, newPath) {
+  const body = { new_name: newName };
+  if (newPath != null) body.new_path = newPath;
   const res = await fetch(
-    `${getPythonUrl()}/files/${encodeURIComponent(fileId)}/rename`,
+    `${getPythonUrl()}/api/v1/files/${encodeURIComponent(fileId)}/rename`,
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ new_name: newName }),
+      body: JSON.stringify(body),
     }
   );
   const data = await res.json();
@@ -293,32 +307,55 @@ async function renameFile(fileId, newName) {
 }
 
 // ---------------------------------------------------------------------------
-// AI operations
+// AI data preparation & result application
 // ---------------------------------------------------------------------------
 
-async function classifyFiles(dataroomId, fileIds) {
-  const res = await fetch(`${getPythonUrl()}/ai/classify`, {
+async function prepareClassify(dataroomId, fileIds) {
+  const res = await fetch(`${getPythonUrl()}/api/v1/ai/prepare-classify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ dataroom_id: dataroomId, file_ids: fileIds }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'AI classification failed.');
+  if (!res.ok) throw new Error(data.detail || 'Failed to prepare classification data.');
   return data;
 }
 
-async function generateDataroom(name, description, fileIds) {
-  const res = await fetch(`${getPythonUrl()}/ai/generate-dataroom`, {
+async function applyClassifyResults(dataroomId, results) {
+  const res = await fetch(`${getPythonUrl()}/api/v1/ai/apply-classify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataroom_id: dataroomId, results }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Failed to apply classification results.');
+  return data;
+}
+
+async function prepareGenerate(fileIds) {
+  const res = await fetch(`${getPythonUrl()}/api/v1/ai/prepare-generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_ids: fileIds }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Failed to prepare generation data.');
+  return data;
+}
+
+async function applyGenerateResults(name, description, geminiResult, fileIds) {
+  const res = await fetch(`${getPythonUrl()}/api/v1/ai/apply-generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      dataroom_name: name,
-      dataroom_description: description,
+      name,
+      description,
+      gemini_result: geminiResult,
       file_ids: fileIds,
     }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'AI DataRoom generation failed.');
+  if (!res.ok) throw new Error(data.detail || 'Failed to apply generation results.');
   return data;
 }
 
@@ -337,6 +374,7 @@ module.exports = {
   createFolder,
   listFolders,
   updateFolder,
+  deleteFolderPreview,
   deleteFolder,
   // File
   registerFiles,
@@ -347,7 +385,9 @@ module.exports = {
   deleteFile,
   listFiles,
   renameFile,
-  // AI
-  classifyFiles,
-  generateDataroom,
+  // AI — prepare data for Express, apply results from Express
+  prepareClassify,
+  applyClassifyResults,
+  prepareGenerate,
+  applyGenerateResults,
 };

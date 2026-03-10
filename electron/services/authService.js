@@ -23,7 +23,7 @@ function getExpressUrl() {
 // ── Registration ──────────────────────────────────────────
 
 async function register({ name, email, password }) {
-  const res = await fetch(`${getExpressUrl()}/api/auth/register`, {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, email, password }),
@@ -44,7 +44,7 @@ async function register({ name, email, password }) {
  *   refreshToken — plain JWT; caller must store it in tokenVault
  */
 async function login({ email, password }) {
-  const res = await fetch(`${getExpressUrl()}/api/auth/login`, {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -72,7 +72,7 @@ async function login({ email, password }) {
  * @throws {Error} On network failure or if the refresh token is rejected
  */
 async function refreshTokens(refreshToken) {
-  const res = await fetch(`${getExpressUrl()}/api/auth/refresh`, {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken }),
@@ -102,7 +102,7 @@ async function refreshTokens(refreshToken) {
  */
 async function revokeRefreshToken(refreshToken) {
   try {
-    await fetch(`${getExpressUrl()}/api/auth/logout`, {
+    await fetch(`${getExpressUrl()}/api/v1/auth/logout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
@@ -115,14 +115,14 @@ async function revokeRefreshToken(refreshToken) {
 // ── Session Restore ───────────────────────────────────────
 
 /**
- * Validates a stored access token against /api/auth/me.
+ * Validates a stored access token against /api/v1/auth/me.
  * Used as a guard check where the refresh flow is not applicable.
  *
  * @param {string} token - Access JWT
  * @returns {Promise<object>} Sanitized user object
  */
 async function validateToken(token) {
-  const res = await fetch(`${getExpressUrl()}/api/auth/me`, {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -146,7 +146,7 @@ function setSession(accessToken, user) {
 // ── Email Verification ────────────────────────────────────
 
 async function verifyEmail(email, code) {
-  const res = await fetch(`${getExpressUrl()}/api/auth/verify-email`, {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/verify-email`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, code }),
@@ -160,7 +160,7 @@ async function verifyEmail(email, code) {
 // ── Resend Verification ───────────────────────────────────
 
 async function resendVerification(email) {
-  const res = await fetch(`${getExpressUrl()}/api/auth/resend-verification`, {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/resend-verification`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
@@ -174,7 +174,7 @@ async function resendVerification(email) {
 // ── Forgot Password ───────────────────────────────────────
 
 async function forgotPassword(email) {
-  const res = await fetch(`${getExpressUrl()}/api/auth/forgot-password`, {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/forgot-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
@@ -188,7 +188,7 @@ async function forgotPassword(email) {
 // ── Reset Password ────────────────────────────────────────
 
 async function resetPassword({ token, newPassword }) {
-  const res = await fetch(`${getExpressUrl()}/api/auth/reset-password`, {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, newPassword }),
@@ -202,7 +202,7 @@ async function resetPassword({ token, newPassword }) {
 // ── Delete Account ────────────────────────────────────────
 
 async function deleteAccount({ password }) {
-  const res = await fetch(`${getExpressUrl()}/api/auth/delete-account`, {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/delete-account`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

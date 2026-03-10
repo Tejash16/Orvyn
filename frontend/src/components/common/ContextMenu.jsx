@@ -71,8 +71,10 @@ function ContextMenu({ x, y, items, onClose }) {
           return (
             <button
               key={item.label || i}
-              className={`${styles.item} ${item.danger ? styles.itemDanger : ''}`}
-              onClick={() => handleAction(item)}
+              className={`${styles.item} ${item.danger ? styles.itemDanger : ''} ${item.disabled ? styles.itemDisabled : ''}`}
+              onClick={() => !item.disabled && handleAction(item)}
+              disabled={item.disabled}
+              title={item.disabled ? item.disabledTooltip : undefined}
               type="button"
             >
               {item.icon && <span className={styles.itemIcon}>{item.icon}</span>}

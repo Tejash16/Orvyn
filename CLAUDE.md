@@ -34,7 +34,9 @@ Docrack/
 │   │   └── windowControls.js
 │   ├── services/           # Electron-side service modules
 │   │   ├── authService.js          # Auth orchestration
-│   │   ├── pythonProcess.js        # Python process lifecycle
+│   │   ├── expressService.js       # Express AI proxy communication
+│   │   ├── logger.js               # electron-log wrapper (file-based logging)
+│   │   ├── pythonProcess.js        # Python process lifecycle + dynamic port
 │   │   ├── pythonService.js        # Python API communication
 │   │   ├── tokenRefreshScheduler.js # Token refresh logic
 │   │   ├── tokenVault.js           # Secure token storage
@@ -61,8 +63,8 @@ Docrack/
 │   │   ├── controllers/    # Route handler logic
 │   │   ├── middleware/     # Express middleware (auth, rate limiting, errors)
 │   │   ├── models/         # Data models / DB schema definitions
-│   │   ├── routes/         # Route definitions (auth, health)
-│   │   └── services/       # Business logic services
+│   │   ├── routes/         # Route definitions (auth, health, ai)
+│   │   └── services/       # Business logic services (geminiService, logger)
 │   ├── .env                # Auth secrets (NOT committed)
 │   └── .env.example
 │
@@ -90,9 +92,11 @@ across layers without an explicit instruction from the user.
 - Owns the application lifecycle (startup, shutdown, window management).
 - Reads all runtime configuration from `electron/.env` via `dotenv`.
 - Exposes configuration to React via `preload.js` using Electron's `contextBridge`.
-- Spawns and manages the Python FastAPI process.
+- Spawns and manages the Python FastAPI process with **dynamic port allocation** —
+  finds a free port at startup, preventing conflicts when port 8000 is in use.
 - Handles all IPC (inter-process communication) between React and the system.
 - Is the **single source of truth** for runtime config at the desktop layer.
+- Uses `electron-log` for structured file-based logging (`%APPDATA%/DocRack/logs/`).
 
 ### React (`frontend/`)
 - Renders the UI only. No business logic, no file I/O, no direct API calls to Python.
@@ -101,14 +105,26 @@ across layers without an explicit instruction from the user.
 - Has no knowledge of local file paths, ports, or environment-specific values.
 
 ### Express (`express-backend/`)
-- Handles authentication and session management only (cloud-hosted).
+- Handles authentication, session management, and AI API proxying (cloud-hosted).
 - Issues and validates tokens used by other layers.
-- Must not contain any document processing, AI, or file system logic.
+- Owns the Gemini API key — all LLM calls are routed through Express so that the
+  API key never ships with the desktop application.
+- AI proxy endpoints (`/api/v1/ai/*`) require Bearer token authentication.
+- All routes are versioned under `/api/v1/`.
+- Uses `winston` for structured file-based logging (`express-backend/logs/`).
+- Must not contain any document processing or file system logic.
 
 ### Python FastAPI (`python-backend/`)
-- Runs locally, spawned by Electron at startup.
-- Owns all Smart DataRoom logic: document ingestion, AI processing, embeddings, search.
-- Reads its own config from `python-backend/.env`.
+- Runs locally, spawned by Electron at startup on a **dynamically allocated port**.
+- Owns all Smart DataRoom logic: document ingestion, text extraction, data preparation,
+  and database operations. Does NOT call LLM APIs directly.
+- Prepares data (fingerprints, folder trees) for AI classification and applies
+  results received from Express/Gemini back to the local database.
+- All business routes are versioned under `/api/v1/`. Infrastructure routes (`/health`,
+  `/init-db`) remain unversioned.
+- Reads its own config from `python-backend/.env`. Port is passed via `--port` CLI arg
+  by Electron (overrides env default).
+- Uses Python's `logging` with `RotatingFileHandler` for file-based logging.
 - Exposes a local HTTP API consumed by Electron via IPC (never directly by React).
 
 ### SQLite
@@ -179,9 +195,9 @@ const url = process.env.EXPRESS_URL;
 |-------------------------------|-----------|----------------------------------------------|
 | `electron/.env`               | No        | Runtime config: URLs, ports, API keys        |
 | `electron/.env.example`       | Yes       | Safe template showing required keys          |
-| `express-backend/.env`        | No        | Auth secrets, DB connection strings          |
+| `express-backend/.env`        | No        | Auth secrets, DB strings, GEMINI_API_KEY     |
 | `express-backend/.env.example`| Yes       | Safe template                                |
-| `python-backend/.env`         | No        | Python runtime config, model paths           |
+| `python-backend/.env`         | No        | Python runtime config (host, port only)      |
 | `python-backend/.env.example` | Yes       | Safe template                                |
 | `frontend/.env`               | No        | Vite dev-only (e.g., VITE_DEV_PORT). Never production config. |
 
@@ -197,6 +213,7 @@ Rules:
 
 - `.env` files in all subdirectories are gitignored and must never be committed.
 - If you use the any variable from the `.env` file and it does not exist in the `.env.example` add variable there.
+- if you think some variabe that is important should be put in the .env. put that there and use it from there.
 - `.gitignore` must not be modified without explicit user instruction.
 - `node_modules/`, `venv/`, `__pycache__/`, `dist/`, and `*.pyc` must remain gitignored.
 - No secrets, tokens, passwords, or private keys may appear in any committed file.
@@ -398,13 +415,36 @@ Claude must NOT:
 - Bypass preload and contextBridge protections.
 - Store secrets in memory accessible to the renderer.
 - Suggest insecure Electron configuration shortcuts.
+- Use `exec()` for shell commands — always use `execFile()` to prevent command injection.
+  Arguments must be passed as an array, never interpolated into a command string.
+- Place the Gemini API key (or any LLM API key) in `electron/.env`, `python-backend/.env`,
+  or any file that ships with the packaged desktop app. LLM keys live in `express-backend/.env` only.
+- Call Gemini or any external LLM API from the Python backend or Electron main process.
+  All LLM calls must go through Express (cloud) so the API key stays server-side.
 
 All privileged operations must follow this strict flow:
 React → preload (contextBridge) → Electron main → Python (if required).
 
+AI classification follows this secured flow:
+React → Electron IPC → Python (prepare data) → Express (Gemini call, holds API key) → Python (apply results).
+
+### Rate Limiting
+
+- All Express authentication endpoints must have rate limiters (`express-rate-limit`).
+- Rate limiter middleware lives in `express-backend/src/middleware/rateLimiter.js`.
+- Current rate limits (15-minute window):
+  - Register: 5 attempts
+  - Login: 5 attempts
+  - Forgot Password: 3 attempts
+  - Reset Password: 5 attempts
+  - Resend Verification: 3 attempts
+- Any new public-facing Express endpoint must include rate limiting.
+
 ---
 
 ## 13. Versioning Policy
+
+### Application Versioning
 
 - The application version must be defined in `electron/package.json`.
 - Follow Semantic Versioning: MAJOR.MINOR.PATCH.
@@ -414,8 +454,87 @@ React → preload (contextBridge) → Electron main → Python (if required).
 - Do not modify versioning strategy without explicit instruction.
 - Auto-updater implementation (future feature) depends on strict version discipline.
 
+### API Versioning
+
+All API routes are versioned to support future breaking changes without disrupting clients.
+
+**Express routes:**
+- All routes under `/api/v1/` (e.g., `/api/v1/auth/login`, `/api/v1/ai/classify`).
+- Backward-compat aliases exist at `/api/` — remove once all clients use `/api/v1/`.
+- Electron must always call `/api/v1/` endpoints.
+
+**Python routes:**
+- Infrastructure routes (`/health`, `/init-db`) are unversioned — internal only.
+- All business routes under `/api/v1/` (e.g., `/api/v1/datarooms`, `/api/v1/files/register`).
+- Electron must always call `/api/v1/` endpoints.
+
+**Rules:**
+- New endpoints MUST be created under `/api/v1/` (or `/api/v2/` for breaking changes).
+- When changing an existing endpoint's contract, create a new version — do not modify v1.
+- Update Electron service files when adding new API versions.
+
 Claude must re-read this file before performing structural or architectural changes.
 If a request conflicts with this file, Claude must ask for clarification.
+
+---
+
+## 13.5. Logging
+
+DocRack uses structured, file-based logging across all layers. Logs are essential
+for diagnosing issues in packaged builds where there is no console.
+
+### Log Locations
+
+| Layer | Library | Log Path | Rotation |
+|-------|---------|----------|----------|
+| Electron | `electron-log` | `%APPDATA%/DocRack/logs/electron.log` | 5 MB, archived with timestamp |
+| Python | `logging.handlers.RotatingFileHandler` | Same dir as Electron (via `DOCRACK_LOG_DIR` env) | 5 MB, 5 backup files |
+| Express | `winston` | `express-backend/logs/express.log` | 5 MB, 5 backup files |
+
+### Architecture
+
+- **Electron** (`electron/services/logger.js`): Wraps `electron-log`. All Electron code
+  must use `const log = require('./logger')` instead of `console.*`.
+- **Python**: Configured at startup in `app/main.py`. Log directory is passed from Electron
+  via `DOCRACK_LOG_DIR` env var at spawn time. Falls back to `python-backend/logs/` in dev.
+- **Express** (`src/services/logger.js`): Wraps `winston`. Morgan HTTP logs are piped
+  through winston via `logger.morganStream`. Active in all environments (not just dev).
+
+### IPC Channels for Logs
+
+| Channel | Preload Method | Purpose |
+|---------|---------------|---------|
+| `app:getLogsPath` | `window.api.logs.getPath()` | Get absolute path to logs directory |
+| `app:openLogsFolder` | `window.api.logs.openFolder()` | Open logs folder in Windows Explorer |
+
+### Rules
+
+- All new code in Electron MUST use the logger module, not `console.*`.
+- Express MUST use the winston logger, not `console.*`.
+- Python MUST use `logging.getLogger(__name__)`, not `print()`.
+- Logs must NEVER contain secrets, tokens, passwords, or API keys.
+- Log files are local to each machine — never committed or uploaded.
+
+---
+
+## 13.6. Dynamic Port Allocation
+
+The Python backend runs on a dynamically allocated port to prevent conflicts.
+
+### How It Works
+
+1. **Electron** (`services/pythonProcess.js`) calls `_findFreePort()` which binds a
+   `net.Server` to port 0, reads the OS-assigned port, then closes the server.
+2. The free port is passed to Python via `--port` CLI argument.
+3. `process.env.PYTHON_URL` is set to `http://127.0.0.1:<port>` so `pythonService.js`
+   picks it up automatically.
+4. On restart (crash recovery), a new free port is allocated each time.
+
+### Rules
+
+- `PYTHON_URL` in `electron/.env` is used as a fallback only if dynamic allocation fails.
+- Python's `run.py` accepts `--port` and `--host` CLI args (override env defaults).
+- Never hardcode port 8000 in Electron or Python code.
 
 ---
 
@@ -435,6 +554,11 @@ The UI must adapt fluidly without breaking layout.
 - Content areas must use `flex: 1` and avoid hardcoded pixel widths.
 - Sidebar must use fixed width with optional collapse behavior, but must not flex-grow.
 - Main content area must scroll internally (`overflow: auto`) instead of breaking layout.
+
+### Error/sucess showing Rules
+
+- All the errors/sucess which are shown to user should be shown through toast.
+- The error/sucess messages which are shown to the user should be in the human readible and understandable format.
 
 ### Window Constraints
 
@@ -508,7 +632,27 @@ Any file with an unsupported extension is rejected at registration time.
 
 ## 16. Classification Engine
 
-The classification engine lives in `python-backend/app/services/classification_service.py`.
+The classification engine is split across two layers for API key security:
+- **Data preparation & DB updates** — `python-backend/app/services/classification_service.py`
+- **LLM API calls** — `express-backend/src/services/geminiService.js`
+- **Orchestration** — `electron/ipc/aiHandlers.js`
+
+### Architecture: 3-Step AI Flow
+
+All AI classification follows this flow to keep the Gemini API key off the desktop:
+
+1. **Electron → Python** (`prepare-classify` / `prepare-generate`)
+   Python reads SQLite, builds file fingerprints and folder trees, returns data.
+
+2. **Electron → Express** (`/api/ai/classify` / `/api/ai/generate-dataroom`)
+   Express receives the prepared data, calls Gemini (API key lives server-side),
+   returns AI results. Requires Bearer token authentication.
+
+3. **Electron → Python** (`apply-classify` / `apply-generate`)
+   Python applies AI results to SQLite (folder assignments, Classification records).
+
+**The Gemini API key MUST only exist in `express-backend/.env`. It must NEVER be
+placed in `electron/.env`, `python-backend/.env`, or any file shipped with the desktop app.**
 
 ### Processing Pipeline
 
@@ -519,9 +663,9 @@ The classification engine lives in `python-backend/app/services/classification_s
 2. **Fingerprinting** — For classification, each file's fingerprint is built from:
    `filename + extension + first 1000 chars of extracted_text`.
 
-3. **Batched Parallel Processing** — Files are split into batches of **10 files per Gemini
-   API call**. Up to **5 batches run in parallel** using `asyncio.gather()`, processing
-   a maximum of 50 files efficiently.
+3. **Batched Parallel Processing** — Express splits files into batches of **10 files per
+   Gemini API call**. Up to **5 batches run in parallel** using `Promise.all()`,
+   processing a maximum of 50 files efficiently.
 
 4. **Folder Assignment** — The AI returns a `folder_id` and `confidence` score (0.0–1.0)
    for each file.
@@ -531,6 +675,7 @@ The classification engine lives in `python-backend/app/services/classification_s
 - **Model**: `gemini-2.0-flash` (Google Generative AI)
 - **Temperature**: `0.1` (low variance for consistent classification)
 - **Response format**: Structured JSON with `folder_id`, `confidence`, `reasoning`
+- **SDK**: `@google/generative-ai` (npm, Express backend only)
 
 ### Confidence Threshold
 
@@ -591,6 +736,9 @@ All IPC channels are defined in `electron/ipc/` handler files and exposed via
 
 ### `ai:*` — AI Classification
 
+These IPC channels trigger the 3-step orchestration flow (see Section 16).
+Internally, Electron calls Python (prepare) → Express (Gemini) → Python (apply).
+
 | Channel | Preload Method | Purpose |
 |---------|---------------|---------|
 | `ai:classify` | `window.api.ai.classify(dataroomId, fileIds)` | Classify files into existing DataRoom folders |
@@ -601,9 +749,9 @@ All IPC channels are defined in `electron/ipc/` handler files and exposed via
 ## 18. Python Backend Endpoints
 
 All endpoints are defined in `python-backend/app/main.py`. The FastAPI server runs locally,
-spawned by Electron. Electron communicates with it via HTTP — React never calls it directly.
+spawned by Electron on a dynamic port. Electron communicates via HTTP — React never calls it directly.
 
-### Infrastructure
+### Infrastructure (unversioned)
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -614,47 +762,84 @@ spawned by Electron. Electron communicates with it via HTTP — React never call
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `GET` | `/settings/theme` | Get current theme preference |
-| `POST` | `/settings/theme` | Set theme (`"light"` or `"dark"`) |
+| `GET` | `/api/v1/settings/theme` | Get current theme preference |
+| `POST` | `/api/v1/settings/theme` | Set theme (`"light"` or `"dark"`) |
 
 ### DataRoom CRUD
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/datarooms` | Create DataRoom (`name`, optional `description`) |
-| `GET` | `/datarooms` | List all DataRooms with `folder_count` and `file_count` |
-| `GET` | `/datarooms/{dataroom_id}` | Get DataRoom with nested `folders[]` and `files[]` |
-| `PUT` | `/datarooms/{dataroom_id}` | Update DataRoom name/description |
-| `DELETE` | `/datarooms/{dataroom_id}` | Delete DataRoom and all children |
+| `POST` | `/api/v1/datarooms` | Create DataRoom (`name`, optional `description`) |
+| `GET` | `/api/v1/datarooms` | List all DataRooms with `folder_count` and `file_count` |
+| `GET` | `/api/v1/datarooms/{dataroom_id}` | Get DataRoom with nested `folders[]` and `files[]` |
+| `PUT` | `/api/v1/datarooms/{dataroom_id}` | Update DataRoom name/description |
+| `DELETE` | `/api/v1/datarooms/{dataroom_id}` | Delete DataRoom and all children |
 
 ### Folder CRUD
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/datarooms/{dataroom_id}/folders` | Create folder (`name`, `context`, optional `parent_id`) |
-| `GET` | `/datarooms/{dataroom_id}/folders` | List all folders in DataRoom with `file_count` |
-| `PUT` | `/folders/{folder_id}` | Update folder (`name`, `context`, `parent_id`) |
-| `DELETE` | `/folders/{folder_id}` | Delete folder (files become unclassified) |
+| `POST` | `/api/v1/datarooms/{dataroom_id}/folders` | Create folder (`name`, `context`, optional `parent_id`) |
+| `GET` | `/api/v1/datarooms/{dataroom_id}/folders` | List all folders in DataRoom with `file_count` |
+| `PUT` | `/api/v1/folders/{folder_id}` | Update folder (`name`, `context`, `parent_id`) |
+| `DELETE` | `/api/v1/folders/{folder_id}` | Delete folder (files become unclassified) |
 
 ### File Management
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/files/register` | Register files (`dataroom_id`, `file_paths[]`, max 50) |
-| `GET` | `/files/{file_id}` | Get file details including `extracted_text` |
-| `GET` | `/datarooms/{dataroom_id}/files` | List files with optional `folder_id`, `include_subfolders`, `status` filters |
-| `POST` | `/files/{file_id}/check-exists` | Check if file exists at `original_path` |
-| `PUT` | `/files/{file_id}/relocate` | Update `original_path` to new location |
-| `PUT` | `/files/{file_id}/move-to-folder` | Move file to folder (`folder_id`, null = unclassified) |
-| `PUT` | `/files/{file_id}/rename` | Rename display name (`new_name`) |
-| `DELETE` | `/files/{file_id}` | Delete file record (query param `delete_from_system=true` also deletes from disk) |
+| `POST` | `/api/v1/files/register` | Register files (`dataroom_id`, `file_paths[]`, max 50) |
+| `GET` | `/api/v1/files/{file_id}` | Get file details including `extracted_text` |
+| `GET` | `/api/v1/datarooms/{dataroom_id}/files` | List files with optional `folder_id`, `include_subfolders`, `status` filters |
+| `POST` | `/api/v1/files/{file_id}/check-exists` | Check if file exists at `original_path` |
+| `PUT` | `/api/v1/files/{file_id}/relocate` | Update `original_path` to new location |
+| `PUT` | `/api/v1/files/{file_id}/move-to-folder` | Move file to folder (`folder_id`, null = unclassified) |
+| `PUT` | `/api/v1/files/{file_id}/rename` | Rename display name (`new_name`) |
+| `DELETE` | `/api/v1/files/{file_id}` | Delete file record (query param `delete_from_system=true` also deletes from disk) |
 
-### AI Classification
+### AI Data Preparation & Result Application
+
+These endpoints support the 3-step AI flow. They do NOT call Gemini directly —
+Electron orchestrates the full flow (see Section 16).
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/ai/classify` | Classify `file_ids[]` into existing DataRoom folders. Returns per-file `folder_id`, `confidence`, `reasoning` |
-| `POST` | `/ai/generate-dataroom` | Create new DataRoom with AI-generated folders, then classify `file_ids[]`. Returns `folders_created`, `files_assigned`, `files_unassigned` |
+| `POST` | `/api/v1/ai/prepare-classify` | Build fingerprints + folder tree for Gemini classification |
+| `POST` | `/api/v1/ai/apply-classify` | Apply Gemini classification results to the database |
+| `POST` | `/api/v1/ai/prepare-generate` | Build file fingerprints for Gemini DataRoom generation |
+| `POST` | `/api/v1/ai/apply-generate` | Create DataRoom + folders + assignments from Gemini results |
+
+---
+
+## 18.5. Express Endpoints
+
+All Express routes are versioned under `/api/v1/`. Backward-compat aliases at `/api/`
+exist temporarily — new code must always use `/api/v1/`.
+
+### Auth Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/v1/auth/register` | Register new account (rate limited: 5/15min) |
+| `POST` | `/api/v1/auth/verify-email` | Verify email with code |
+| `POST` | `/api/v1/auth/login` | Login (rate limited: 5/15min) |
+| `GET` | `/api/v1/auth/me` | Get current user (requires Bearer token) |
+| `POST` | `/api/v1/auth/refresh` | Refresh access token |
+| `POST` | `/api/v1/auth/logout` | Revoke refresh token |
+| `POST` | `/api/v1/auth/delete-account` | Delete account (requires Bearer token) |
+| `POST` | `/api/v1/auth/resend-verification` | Resend verification email (rate limited: 3/15min) |
+| `POST` | `/api/v1/auth/forgot-password` | Request password reset (rate limited: 3/15min) |
+| `POST` | `/api/v1/auth/reset-password` | Reset password with token (rate limited: 5/15min) |
+
+### AI Proxy Endpoints
+
+Express owns the Gemini API key and proxies all LLM calls. These endpoints require
+Bearer token authentication.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/v1/ai/classify` | Receive fingerprints + folder tree, call Gemini, return classification results |
+| `POST` | `/api/v1/ai/generate-dataroom` | Receive fingerprints + DataRoom info, call Gemini, return folder structure + assignments |
 
 ---
 

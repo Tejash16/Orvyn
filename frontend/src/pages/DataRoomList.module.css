@@ -80,6 +80,8 @@
 
 .dataroomList {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   padding: 0 8px;
   min-height: 0;
@@ -172,12 +174,27 @@
   box-sizing: border-box;
 }
 
+/* ── Action icons container (star + dots) ──────────────── */
+
+.itemActions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.dataroomItem:hover .itemActions,
+.itemActionsStarred {
+  opacity: 1;
+}
+
 /* ── Menu button & dropdown ──────────────────────────────── */
 
 .menuBtn {
-  position: absolute;
-  top: 8px;
-  right: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -189,13 +206,11 @@
   color: var(--text-tertiary);
   cursor: pointer;
   padding: 0;
-  opacity: 0;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
-.dataroomItem:hover .menuBtn,
 .menuBtnOpen {
-  opacity: 1;
+  background-color: var(--bg-active);
 }
 
 .menuBtn:hover {
@@ -249,25 +264,22 @@
 /* ── Star / favorite ─────────────────────────────────────── */
 
 .starBtn {
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: none;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-tertiary);
   cursor: pointer;
   padding: 0;
-  opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease;
-  margin-top: 4px;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
-.dataroomItem:hover .starBtn,
-.starBtnActive {
-  opacity: 1;
+.starBtn:hover {
+  background-color: var(--bg-active);
 }
 
 .starBtnActive {
@@ -310,10 +322,9 @@
 .mainPanel {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
   min-width: 0;
-  overflow: auto;
+  overflow: hidden;
   background-color: var(--bg-base);
 }
 
@@ -321,6 +332,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  flex: 1;
   gap: 12px;
   color: var(--text-secondary);
   text-align: center;

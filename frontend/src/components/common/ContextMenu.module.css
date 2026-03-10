@@ -49,6 +49,15 @@
   background-color: rgba(239, 68, 68, 0.08);
 }
 
+.itemDisabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.itemDisabled:hover {
+  background-color: transparent;
+}
+
 .separator {
   height: 1px;
   background-color: var(--border-light);

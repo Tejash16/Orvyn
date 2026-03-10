@@ -7,14 +7,16 @@ const helmet = require('helmet');
 
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
+const logger = require('./services/logger');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
+const aiRouter   = require('./routes/ai');
 
 // ── Fail fast on missing required environment variables ───
-const REQUIRED_ENV = ['JWT_SECRET', 'REFRESH_TOKEN_SECRET', 'MONGO_URI'];
+const REQUIRED_ENV = ['JWT_SECRET', 'REFRESH_TOKEN_SECRET', 'MONGO_URI', 'GEMINI_API_KEY'];
 const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
 if (missingEnv.length > 0) {
-  console.error(`[Server] Missing required environment variables: ${missingEnv.join(', ')}`);
+  logger.error(`Missing required environment variables: ${missingEnv.join(', ')}`);
   process.exit(1);
 }
 
@@ -29,13 +31,24 @@ app.use(cors({
 }));
 app.use(express.json());
 
-if (process.env.NODE_ENV !== 'production') {
-  app.use(morgan('dev'));
-}
+// HTTP request logging — piped through winston in all environments.
+// In dev: morgan 'dev' format to console + file. In prod: 'combined' to file only.
+const morganFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
+app.use(morgan(morganFormat, { stream: logger.morganStream }));
 
-// ── Routes ────────────────────────────────────────────────
+// ── Routes (v1) ──────────────────────────────────────────
+// All API routes are versioned under /api/v1/ to support future
+// breaking changes without disrupting existing clients.
+app.use('/api/v1', healthRouter);
+app.use('/api/v1/auth', authRouter);
+app.use('/api/v1/ai', aiRouter);
+
+// ── Backward-compat aliases (unversioned → v1) ───────────
+// Keeps existing Electron builds working until they update to /api/v1/.
+// Remove these once all clients are confirmed on v1.
 app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/ai', aiRouter);
 
 // ── 404 handler ───────────────────────────────────────────
 app.use((req, res) => {
@@ -48,6 +61,6 @@ app.use(errorHandler);
 // ── Start ─────────────────────────────────────────────────
 connectDB().then(() => {
   app.listen(PORT, () => {
-    console.log(`[Server] Express running on port ${PORT}`);
+    logger.info(`Express running on port ${PORT}`);
   });
 });

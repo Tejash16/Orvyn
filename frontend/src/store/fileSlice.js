@@ -84,8 +84,8 @@ export const generateNewDataroom = createAsyncThunk(
 
 export const moveFileToFolder = createAsyncThunk(
   'file/moveFileToFolder',
-  async ({ fileId, folderId }, { dispatch, rejectWithValue }) => {
-    const result = await window.api.file.moveToFolder(fileId, folderId);
+  async ({ fileId, folderId, dataroomId }, { dispatch, rejectWithValue }) => {
+    const result = await window.api.file.moveToFolder(fileId, folderId, dataroomId);
     if (!result.success) return rejectWithValue(result.error);
     dispatch(refreshCurrentView());
     return result.file;

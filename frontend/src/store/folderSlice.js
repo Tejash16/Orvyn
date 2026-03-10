@@ -1,34 +1,65 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { refreshCurrentView } from './fileExplorerSlice';
+import { fetchDatarooms } from './dataroomSlice';
 
 // ── Thunks ───────────────────────────────────────────────────
 
 export const createFolder = createAsyncThunk(
   'folder/createFolder',
-  async ({ dataroomId, parentFolderId, name, context }, { dispatch, rejectWithValue }) => {
-    const result = await window.api.folder.create(dataroomId, parentFolderId, name, context);
+  async ({ dataroomId, parentFolderId, name, context }, { getState, dispatch, rejectWithValue }) => {
+    const trimmed = name.trim();
+    const { fileExplorer } = getState();
+    const duplicate = fileExplorer.items.some(
+      (item) => item.type === 'folder' && item.name.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (duplicate) {
+      return rejectWithValue(`A folder named '${trimmed}' already exists here.`);
+    }
+
+    const result = await window.api.folder.create(dataroomId, parentFolderId, trimmed, context);
     if (!result.success) return rejectWithValue(result.error);
     dispatch(refreshCurrentView());
+    dispatch(fetchDatarooms());
     return result.folder;
   }
 );
 
 export const renameFolder = createAsyncThunk(
   'folder/renameFolder',
-  async ({ folderId, newName }, { dispatch, rejectWithValue }) => {
-    const result = await window.api.folder.rename(folderId, newName);
+  async ({ folderId, newName }, { getState, dispatch, rejectWithValue }) => {
+    const trimmed = newName.trim();
+    const { fileExplorer } = getState();
+    const duplicate = fileExplorer.items.some(
+      (item) => item.type === 'folder' && item.id !== folderId && item.name.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (duplicate) {
+      return rejectWithValue(`A folder named '${trimmed}' already exists here.`);
+    }
+
+    const result = await window.api.folder.rename(folderId, trimmed);
     if (!result.success) return rejectWithValue(result.error);
     dispatch(refreshCurrentView());
+    dispatch(fetchDatarooms());
     return result.folder;
+  }
+);
+
+export const fetchFolderDeletePreview = createAsyncThunk(
+  'folder/fetchFolderDeletePreview',
+  async (folderId, { rejectWithValue }) => {
+    const result = await window.api.folder.deletePreview(folderId);
+    if (!result.success) return rejectWithValue(result.error);
+    return result;
   }
 );
 
 export const deleteFolder = createAsyncThunk(
   'folder/deleteFolder',
-  async (folderId, { dispatch, rejectWithValue }) => {
-    const result = await window.api.folder.delete(folderId);
+  async ({ folderId, fileAction }, { dispatch, rejectWithValue }) => {
+    const result = await window.api.folder.delete(folderId, fileAction);
     if (!result.success) return rejectWithValue(result.error);
     dispatch(refreshCurrentView());
+    dispatch(fetchDatarooms());
     return result;
   }
 );

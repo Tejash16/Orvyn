@@ -66,9 +66,18 @@ function registerFolderHandlers(ipcMain) {
     }
   });
 
-  ipcMain.handle('folder:delete', async (_event, { folder_id }) => {
+  ipcMain.handle('folder:delete-preview', async (_event, { folder_id }) => {
     try {
-      const data = await pythonService.deleteFolder(folder_id);
+      const data = await pythonService.deleteFolderPreview(folder_id);
+      return { success: true, ...data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('folder:delete', async (_event, { folder_id, file_action }) => {
+    try {
+      const data = await pythonService.deleteFolder(folder_id, file_action || undefined);
       return { success: true, ...data };
     } catch (err) {
       return { success: false, error: err.message };

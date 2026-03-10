@@ -42,4 +42,14 @@ const resendVerificationLimiter = rateLimit({
   },
 });
 
-module.exports = { loginLimiter, forgotPasswordLimiter, resetPasswordLimiter, resendVerificationLimiter };
+const registerLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ success: false, error: 'Too many registration attempts. Try again in 15 minutes.' });
+  },
+});
+
+module.exports = { loginLimiter, forgotPasswordLimiter, resetPasswordLimiter, resendVerificationLimiter, registerLimiter };

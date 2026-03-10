@@ -22,8 +22,17 @@ export const fetchDataroom = createAsyncThunk(
 
 export const createDataroom = createAsyncThunk(
   'dataroom/createDataroom',
-  async ({ name, description }, { dispatch, rejectWithValue }) => {
-    const result = await window.api.dataroom.create({ name, description });
+  async ({ name, description }, { getState, dispatch, rejectWithValue }) => {
+    const trimmed = name.trim();
+    const { dataroom } = getState();
+    const duplicate = dataroom.datarooms.some(
+      (dr) => dr.name.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (duplicate) {
+      return rejectWithValue(`A DataRoom named '${trimmed}' already exists.`);
+    }
+
+    const result = await window.api.dataroom.create({ name: trimmed, description });
     if (!result.success) return rejectWithValue(result.error);
     // Refresh the list so it includes the new DataRoom
     dispatch(fetchDatarooms());
@@ -33,8 +42,33 @@ export const createDataroom = createAsyncThunk(
 
 export const updateDataroom = createAsyncThunk(
   'dataroom/updateDataroom',
-  async ({ id, updates }, { dispatch, rejectWithValue }) => {
+  async ({ id, updates }, { getState, dispatch, rejectWithValue }) => {
+    if (updates.name) {
+      const trimmed = updates.name.trim();
+      const { dataroom } = getState();
+      const duplicate = dataroom.datarooms.some(
+        (dr) => dr.id !== id && dr.name.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      if (duplicate) {
+        return rejectWithValue(`A DataRoom named '${trimmed}' already exists.`);
+      }
+    }
+
     const result = await window.api.dataroom.update(id, updates);
+    if (!result.success) return rejectWithValue(result.error);
+    dispatch(fetchDatarooms());
+    return result.dataroom;
+  }
+);
+
+export const toggleStarDataroom = createAsyncThunk(
+  'dataroom/toggleStarDataroom',
+  async (id, { getState, dispatch, rejectWithValue }) => {
+    const { dataroom } = getState();
+    const dr = dataroom.datarooms.find((d) => d.id === id);
+    if (!dr) return rejectWithValue('DataRoom not found');
+
+    const result = await window.api.dataroom.update(id, { is_starred: !dr.is_starred });
     if (!result.success) return rejectWithValue(result.error);
     dispatch(fetchDatarooms());
     return result.dataroom;

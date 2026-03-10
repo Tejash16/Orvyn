@@ -492,6 +492,17 @@
   text-align: center;
 }
 
+.emptyStateCentered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  flex: 1;
+  min-height: 0;
+}
+
 .emptyIcon {
   opacity: 0.3;
   color: var(--text-tertiary);
@@ -819,4 +830,27 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+/* ── Marked for move indicator ──────────────────────────── */
+
+.markedIcon {
+  opacity: 0.6;
+}
+
+.scissorsIndicator {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.listMarkedIndicator {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-left: 6px;
+  flex-shrink: 0;
 }

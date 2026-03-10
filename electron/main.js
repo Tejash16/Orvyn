@@ -1,6 +1,8 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+const log = require('./services/logger');
 
 const registerWindowControls    = require('./ipc/windowControls');
 const registerAuthHandlers     = require('./ipc/authHandlers');
@@ -74,18 +76,29 @@ ipcMain.handle('app:getConfig', () => ({
   pythonUrl:  process.env.PYTHON_URL  || '',
 }));
 
+// Logs path — lets the renderer offer a "Help > Open Logs" action
+ipcMain.handle('app:getLogsPath', () => log.getLogsPath());
+ipcMain.handle('app:openLogsFolder', async () => {
+  const logsPath = log.getLogsPath();
+  await shell.openPath(logsPath);
+  return { success: true };
+});
+
 // ── Startup ───────────────────────────────────────────────
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  log.info('DocRack starting up');
   // Spawn the local Python backend before the window opens.
+  // start() finds a free port dynamically, then spawns Python.
   // The renderer's session restore flow waits for Python health before proceeding.
-  pythonProcess.start();
+  await pythonProcess.start();
   createWindow();
 });
 
 // ── Shutdown ──────────────────────────────────────────────
 
 app.on('will-quit', () => {
+  log.info('DocRack shutting down');
   // Stop Python cleanly on every quit path (window close, system shutdown, etc.)
   pythonProcess.stop();
 });

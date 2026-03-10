@@ -3,6 +3,7 @@ const { execFile } = require('child_process');
 const path = require('path');
 const fs   = require('fs');
 const pythonService = require('../services/pythonService');
+const log = require('../services/logger');
 
 // Supported file extensions — must match Python's _ALLOWED_EXTENSIONS.
 const SUPPORTED_EXTENSIONS = new Set([
@@ -112,9 +113,9 @@ function registerFileHandlers(ipcMain, getMainWindow) {
     }
   });
 
-  ipcMain.handle('file:move-to-folder', async (_event, { file_id, folder_id }) => {
+  ipcMain.handle('file:move-to-folder', async (_event, { file_id, folder_id, dataroom_id }) => {
     try {
-      const data = await pythonService.moveFileToFolder(file_id, folder_id);
+      const data = await pythonService.moveFileToFolder(file_id, folder_id, dataroom_id);
       return { success: true, file: data };
     } catch (err) {
       return { success: false, error: err.message };
@@ -132,7 +133,7 @@ function registerFileHandlers(ipcMain, getMainWindow) {
 
   ipcMain.handle('file:delete-from-system', async (_event, { file_id }) => {
     try {
-      console.warn('[fileHandlers] DESTRUCTIVE: Deleting file from system, file_id:', file_id);
+      log.warn('[fileHandlers] DESTRUCTIVE: Deleting file from system, file_id:', file_id);
       const data = await pythonService.deleteFile(file_id, true);
       return { success: true, ...data };
     } catch (err) {
@@ -197,8 +198,25 @@ function registerFileHandlers(ipcMain, getMainWindow) {
 
   ipcMain.handle('file:rename', async (_event, { file_id, new_name }) => {
     try {
-      const data = await pythonService.renameFile(file_id, new_name);
-      return { success: true, file: data };
+      // Get current file details to find old path
+      const fileData = await pythonService.getFile(file_id);
+      const oldPath = fileData.original_path;
+      const dir = path.dirname(oldPath);
+      const newPath = path.join(dir, new_name);
+
+      // Rename on disk if the file exists
+      if (fs.existsSync(oldPath)) {
+        if (oldPath !== newPath && fs.existsSync(newPath)) {
+          return { success: false, error: `A file named '${new_name}' already exists there.` };
+        }
+        if (oldPath !== newPath) {
+          fs.renameSync(oldPath, newPath);
+        }
+        const data = await pythonService.renameFile(file_id, new_name, newPath);
+        return { success: true, file: data };
+      } else {
+        return { success: false, error: 'File not found at its original location.' };
+      }
     } catch (err) {
       return { success: false, error: err.message };
     }
@@ -266,9 +284,21 @@ function registerFileHandlers(ipcMain, getMainWindow) {
 
   ipcMain.handle('file:open-with', async (_event, { file_path }) => {
     try {
-      const resolved = path.resolve(file_path);
-      execFile('rundll32.exe', ['shell32.dll,OpenAs_RunDLL', resolved]);
-      return { success: true };
+      const resolved = path.resolve(file_path).replace(/\//g, '\\');
+      return new Promise((resolve) => {
+        execFile(
+          'rundll32.exe',
+          ['shell32.dll,OpenAs_RunDLL', resolved],
+          { windowsHide: false },
+          (err) => {
+            if (err) {
+              resolve({ success: false, error: err.message });
+            } else {
+              resolve({ success: true });
+            }
+          }
+        );
+      });
     } catch (err) {
       return { success: false, error: err.message };
     }
@@ -285,7 +315,7 @@ function registerFileHandlers(ipcMain, getMainWindow) {
 
   ipcMain.handle('file:copy-to-clipboard', async (_event, { file_path }) => {
     try {
-      const resolved = path.resolve(file_path);
+      const resolved = path.resolve(file_path).replace(/\//g, '\\');
       const ext = path.extname(resolved).toLowerCase();
 
       if (['.png', '.jpg', '.jpeg'].includes(ext)) {
@@ -295,12 +325,29 @@ function registerFileHandlers(ipcMain, getMainWindow) {
           return { success: false, error: 'Failed to read image file.' };
         }
         clipboard.writeImage(img);
-      } else {
-        // For non-image files, copy as file URI so it can be pasted in Explorer
-        // Windows Explorer expects a Buffer with a file drop list
-        clipboard.writeBuffer('FileNameW', Buffer.from(resolved + '\0', 'ucs2'));
+        return { success: true };
       }
-      return { success: true };
+
+      // For non-image files, use PowerShell Set-Clipboard -Path
+      // This places the file in Windows file drop format (pasteable in Explorer)
+      // Using execFile avoids shell interpolation — the path is passed as an
+      // argument array, preventing command-injection via crafted filenames.
+      return new Promise((resolve) => {
+        execFile(
+          'powershell.exe',
+          ['-NoProfile', '-Command', 'Set-Clipboard -Path $args[0]', '-args', resolved],
+          { windowsHide: true },
+          (err) => {
+            if (err) {
+              // Fallback: copy file path as text
+              clipboard.writeText(resolved);
+              resolve({ success: true, fallback: true });
+            } else {
+              resolve({ success: true });
+            }
+          }
+        );
+      });
     } catch (err) {
       return { success: false, error: err.message };
     }

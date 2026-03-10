@@ -12,7 +12,8 @@
   "description": "",
   "dependencies": {
     "dotenv": "^17.3.1",
-    "electron": "^40.6.0"
+    "electron": "^40.6.0",
+    "electron-log": "^5.4.3"
   },
   "devDependencies": {
     "electronmon": "^2.0.4"

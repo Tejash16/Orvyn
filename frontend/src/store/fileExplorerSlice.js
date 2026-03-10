@@ -206,6 +206,7 @@ const fileExplorerSlice = createSlice({
     searchQuery: '',
     isLoading: false,
     error: null,
+    pendingMoves: [],
   },
   reducers: {
     setViewMode(state, action) {
@@ -221,6 +222,9 @@ const fileExplorerSlice = createSlice({
     },
     setSearchQuery(state, action) {
       state.searchQuery = action.payload;
+    },
+    setSelectedItems(state, action) {
+      state.selectedItems = action.payload;
     },
     selectItem(state, action) {
       const { id, type } = action.payload;
@@ -248,6 +252,21 @@ const fileExplorerSlice = createSlice({
     },
     clearSelection(state) {
       state.selectedItems = [];
+    },
+    markFileForMove(state, action) {
+      const file = action.payload;
+      if (!state.pendingMoves.some((m) => m.id === file.id)) {
+        state.pendingMoves.push(file);
+      }
+    },
+    unmarkFileForMove(state, action) {
+      state.pendingMoves = state.pendingMoves.filter((m) => m.id !== action.payload);
+    },
+    clearPendingMoves(state) {
+      state.pendingMoves = [];
+    },
+    removePendingMoveById(state, action) {
+      state.pendingMoves = state.pendingMoves.filter((m) => m.id !== action.payload);
     },
     resetExplorer(state) {
       state.currentDataroomId = null;
@@ -365,9 +384,11 @@ const fileExplorerSlice = createSlice({
     // refreshCurrentView
     builder
       .addCase(refreshCurrentView.pending, (state) => {
+        state.isLoading = true;
         state.error = null;
       })
       .addCase(refreshCurrentView.fulfilled, (state, action) => {
+        state.isLoading = false;
         if (action.payload === null) return;
         state.items = sortItems(action.payload.items, state.sortBy, state.sortOrder);
         // Prune selection — keep only items that still exist
@@ -375,6 +396,7 @@ const fileExplorerSlice = createSlice({
         state.selectedItems = state.selectedItems.filter((s) => currentIds.has(s.id));
       })
       .addCase(refreshCurrentView.rejected, (state, action) => {
+        state.isLoading = false;
         state.error = action.payload;
       });
   },
@@ -385,11 +407,16 @@ export const {
   setSortBy,
   setSortOrder,
   setSearchQuery,
+  setSelectedItems,
   selectItem,
   deselectItem,
   toggleItemSelection,
   selectAll,
   clearSelection,
+  markFileForMove,
+  unmarkFileForMove,
+  clearPendingMoves,
+  removePendingMoveById,
   resetExplorer,
 } = fileExplorerSlice.actions;
 
