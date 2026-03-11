@@ -1058,3 +1058,115 @@
   color: var(--text-tertiary);
   text-align: center;
 }
+
+.sessionGroup {
+  margin-top: 4px;
+}
+
+.sessionGroup:first-child {
+  margin-top: 0;
+}
+
+.sessionGroupLabel {
+  padding: 6px 10px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+}
+
+/* ── Compare file picker ─────────────────────────────── */
+
+.comparePicker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: 260px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  padding: 8px;
+  margin-bottom: 4px;
+}
+
+.comparePickerTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 2px 4px 6px;
+}
+
+.comparePickerList {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+}
+
+.comparePickerList::-webkit-scrollbar {
+  width: 4px;
+}
+
+.comparePickerList::-webkit-scrollbar-thumb {
+  background-color: var(--border-medium);
+  border-radius: 2px;
+}
+
+.comparePickerItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+.comparePickerItem:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.comparePickerItemSelected {
+  background-color: var(--accent-soft);
+  color: var(--accent-primary);
+}
+
+.comparePickerCheck {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border-medium);
+  flex-shrink: 0;
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+.comparePickerItemSelected .comparePickerCheck {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+.comparePickerName {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
