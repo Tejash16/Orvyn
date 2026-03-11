@@ -140,4 +140,289 @@ async function generateTitle(req, res, next) {
   }
 }
 
-module.exports = { classify, generateDataroom, embed, extractEntities, summarizeFile, generateTitle };
+
+
+
+// ── Phase C2 — Copilot Chat, Audit, Simulate, Insights ──
+
+// Gemini function calling tool declarations
+const COPILOT_TOOL_DECLARATIONS = [
+  {
+    name: 'search_documents',
+    description: 'Search through indexed documents for relevant content using semantic and keyword matching.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: {
+          type: 'STRING',
+          description: 'The search query to find relevant document content',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_file_content',
+    description: 'Get the full extracted text content of a specific file.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        file_id: {
+          type: 'STRING',
+          description: 'The ID of the file to retrieve content from',
+        },
+      },
+      required: ['file_id'],
+    },
+  },
+  {
+    name: 'list_files',
+    description: 'List all files in the current scope with their names, types, sizes, and summaries.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {},
+    },
+  },
+  {
+    name: 'get_entities',
+    description: 'Get extracted entities (organizations, people, dates, monetary values, etc.) from document scope.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {},
+    },
+  },
+  {
+    name: 'find_similar',
+    description: 'Find documents that are similar to a specific file across all DataRooms.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        file_id: {
+          type: 'STRING',
+          description: 'The ID of the file to find similar documents for',
+        },
+      },
+      required: ['file_id'],
+    },
+  },
+  {
+    name: 'compare_documents',
+    description: 'Compare the contents of two or more files side by side.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        file_ids: {
+          type: 'ARRAY',
+          items: { type: 'STRING' },
+          description: 'Array of file IDs to compare',
+        },
+      },
+      required: ['file_ids'],
+    },
+  },
+  {
+    name: 'summarize_dataroom',
+    description: 'Generate a comprehensive summary of an entire DataRoom and its contents.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {},
+    },
+  },
+  {
+    name: 'extract_data_point',
+    description: 'Search for and extract a specific piece of data from the documents.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: {
+          type: 'STRING',
+          description: 'What data point to extract (e.g. "total revenue for Q3 2024")',
+        },
+      },
+      required: ['query'],
+    },
+  },
+];
+
+/**
+ * POST /api/v1/ai/chat/stream
+ * Streaming chat via SSE. Each tool round is a fresh request — max 3 rounds.
+ */
+async function chatStream(req, res, next) {
+  try {
+    const { system_prompt, messages, tools_enabled, tool_round } = req.body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ success: false, error: 'messages array is required.' });
+    }
+
+    // Enforce max 3 tool rounds
+    const currentRound = tool_round || 0;
+    if (currentRound >= 3) {
+      return res.status(400).json({ success: false, error: 'Maximum tool call rounds (3) exceeded.' });
+    }
+
+    // Set SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    // Pass tool declarations only if enabled
+    const tools = tools_enabled !== false ? COPILOT_TOOL_DECLARATIONS : null;
+
+    await geminiService.chatStream(
+      res,
+      system_prompt || null,
+      messages,
+      tools,
+      tools_enabled !== false ? { mode: 'AUTO' } : null,
+    );
+
+    res.end();
+  } catch (err) {
+    // If headers already sent, write error as SSE
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
+      res.end();
+    } else {
+      next(err);
+    }
+  }
+}
+
+/**
+ * POST /api/v1/ai/chat
+ * Non-streaming chat fallback.
+ */
+async function chat(req, res, next) {
+  try {
+    const { system_prompt, messages, tools_enabled } = req.body;
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ success: false, error: 'messages array is required.' });
+    }
+
+    const tools = tools_enabled !== false ? COPILOT_TOOL_DECLARATIONS : null;
+
+    const result = await geminiService.chatNonStreaming(
+      system_prompt || null,
+      messages,
+      tools,
+      tools_enabled !== false ? { mode: 'AUTO' } : null,
+    );
+
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/v1/ai/audit
+ * Run a DataRoom audit via Gemini.
+ */
+async function auditDataroom(req, res, next) {
+  try {
+    const { audit_data, audit_type, custom_prompt } = req.body;
+
+    if (!audit_data || typeof audit_data !== 'object') {
+      return res.status(400).json({ success: false, error: 'audit_data object is required.' });
+    }
+
+    const result = await geminiService.audit(
+      audit_data,
+      audit_type || 'general',
+      custom_prompt,
+    );
+
+    return res.status(200).json({ success: true, result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/v1/ai/simulate
+ * Run a role simulation via Gemini.
+ */
+async function simulateRole(req, res, next) {
+  try {
+    const { simulation_data, simulation_type, custom_role } = req.body;
+
+    if (!simulation_data || typeof simulation_data !== 'object') {
+      return res.status(400).json({ success: false, error: 'simulation_data object is required.' });
+    }
+
+    const result = await geminiService.simulate(
+      simulation_data,
+      simulation_type || 'critical_reviewer',
+      custom_role,
+    );
+
+    return res.status(200).json({ success: true, result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/v1/ai/generate-insights
+ * Generate DataRoom insights via Gemini.
+ */
+async function insightsGenerate(req, res, next) {
+  try {
+    const { insights_data } = req.body;
+
+    if (!insights_data || typeof insights_data !== 'object') {
+      return res.status(400).json({ success: false, error: 'insights_data object is required.' });
+    }
+
+    const result = await geminiService.generateInsights(insights_data);
+
+    return res.status(200).json({ success: true, insights: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/v1/ai/generate-suggestions
+ * Generate context-aware suggested questions via Gemini.
+ */
+async function suggestionsGenerate(req, res, next) {
+  try {
+    const { file_names, folder_names } = req.body;
+
+    if (!file_names || !Array.isArray(file_names)) {
+      return res.status(400).json({ success: false, error: 'file_names array is required.' });
+    }
+
+    const result = await geminiService.generateSuggestions(
+      file_names,
+      folder_names || [],
+    );
+
+    return res.status(200).json({ success: true, suggestions: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  classify,
+  generateDataroom,
+  embed,
+  extractEntities,
+  summarizeFile,
+  generateTitle,
+  // Phase C2
+  chatStream,
+  chat,
+  auditDataroom,
+  simulateRole,
+  insightsGenerate,
+  suggestionsGenerate,
+};

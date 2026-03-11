@@ -2080,6 +2080,311 @@ def delete_chat_session(session_id: str):
 
 
 # ---------------------------------------------------------------------------
+# Phase C2 — Copilot Tool Endpoints, Audit, Insights, Suggestions
+# ---------------------------------------------------------------------------
+
+# -- Pydantic request models for Phase C2 --
+
+class ToolSearchRequest(BaseModel):
+    query_vector: list
+    query_text: str
+    scope_type: Optional[str] = "global"
+    scope_ids: Optional[List[str]] = None
+    user_id: str
+    chroma_path: str
+
+class ToolGetFileContentRequest(BaseModel):
+    file_id: str
+
+class ToolListFilesRequest(BaseModel):
+    dataroom_id: str
+    folder_id: Optional[str] = None
+
+class ToolGetEntitiesRequest(BaseModel):
+    scope_type: str  # "file" | "dataroom"
+    scope_id: str
+
+class ToolFindSimilarRequest(BaseModel):
+    file_id: str
+    representative_chunk_vector: list
+    user_id: str
+    chroma_path: str
+    max_results: Optional[int] = 5
+
+class ToolPrepareCompareRequest(BaseModel):
+    file_ids: List[str]
+
+class ToolPrepareSummarizeRequest(BaseModel):
+    dataroom_id: str
+
+class ToolPrepareExtractRequest(BaseModel):
+    query: str
+    dataroom_id: str
+    query_vector: list
+    user_id: str
+    chroma_path: str
+
+class PrepareAuditRequest(BaseModel):
+    dataroom_id: str
+    audit_type: str = "general"
+
+class ApplyAuditRequest(BaseModel):
+    dataroom_id: str
+    audit_result: str
+    audit_type: str = "general"
+    session_id: Optional[str] = None
+
+class PrepareInsightsRequest(BaseModel):
+    dataroom_id: str
+
+class ApplyInsightsRequest(BaseModel):
+    dataroom_id: str
+    insights_data: dict
+
+class UpdateSessionTitleRequest(BaseModel):
+    session_id: str
+    title: str
+
+class PrepareChatContextRequest(BaseModel):
+    message: str
+    query_vector: list
+    session_id: Optional[str] = None
+    scope_type: str = "global"
+    scope_ids: Optional[List[str]] = None
+    scope_name: Optional[str] = None
+    user_id: str
+    chroma_path: str
+
+
+# -- Tool endpoints (called by Electron when Gemini requests a tool) --
+
+@app.post("/api/v1/copilot/tool/search")
+def copilot_tool_search(request: ToolSearchRequest):
+    """Tool: search_documents — hybrid search for document content."""
+    from app.services.copilot_tools import tool_search_documents
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return tool_search_documents(
+            query_vector=request.query_vector,
+            query_text=request.query_text,
+            scope_type=request.scope_type,
+            scope_ids=request.scope_ids,
+            user_id=request.user_id,
+            db_session=session,
+            chroma_path=request.chroma_path,
+        )
+
+
+@app.post("/api/v1/copilot/tool/get-file-content")
+def copilot_tool_get_file_content(request: ToolGetFileContentRequest):
+    """Tool: get_file_content — fetch extracted text of a specific file."""
+    from app.services.copilot_tools import tool_get_file_content
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return tool_get_file_content(request.file_id, session)
+
+
+@app.post("/api/v1/copilot/tool/list-files")
+def copilot_tool_list_files(request: ToolListFilesRequest):
+    """Tool: list_files_in_dataroom — list files with metadata."""
+    from app.services.copilot_tools import tool_list_files
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return tool_list_files(request.dataroom_id, request.folder_id, session)
+
+
+@app.post("/api/v1/copilot/tool/get-entities")
+def copilot_tool_get_entities(request: ToolGetEntitiesRequest):
+    """Tool: get_entities — query extracted entities grouped by type."""
+    from app.services.copilot_tools import tool_get_entities
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return tool_get_entities(request.scope_type, request.scope_id, session)
+
+
+@app.post("/api/v1/copilot/tool/find-similar")
+def copilot_tool_find_similar(request: ToolFindSimilarRequest):
+    """Tool: find_similar_documents — find similar docs across DataRooms."""
+    from app.services.copilot_tools import tool_find_similar
+
+    return tool_find_similar(
+        file_id=request.file_id,
+        representative_chunk_vector=request.representative_chunk_vector,
+        user_id=request.user_id,
+        chroma_path=request.chroma_path,
+        max_results=request.max_results or 5,
+    )
+
+
+@app.post("/api/v1/copilot/tool/prepare-compare")
+def copilot_tool_prepare_compare(request: ToolPrepareCompareRequest):
+    """Tool: compare_documents — prepare file data for Gemini comparison."""
+    from app.services.copilot_tools import prepare_compare_data
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return prepare_compare_data(request.file_ids, session)
+
+
+@app.post("/api/v1/copilot/tool/prepare-summarize")
+def copilot_tool_prepare_summarize(request: ToolPrepareSummarizeRequest):
+    """Tool: summarize_dataroom — prepare DataRoom data for Gemini summary."""
+    from app.services.copilot_tools import prepare_summarize_data
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return prepare_summarize_data(request.dataroom_id, session)
+
+
+@app.post("/api/v1/copilot/tool/prepare-extract")
+def copilot_tool_prepare_extract(request: ToolPrepareExtractRequest):
+    """Tool: extract_data_point — search for specific data for Gemini extraction."""
+    from app.services.copilot_tools import prepare_extract_data
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return prepare_extract_data(
+            query=request.query,
+            dataroom_id=request.dataroom_id,
+            query_vector=request.query_vector,
+            user_id=request.user_id,
+            chroma_path=request.chroma_path,
+            db_session=session,
+        )
+
+
+# -- Audit endpoints --
+
+@app.post("/api/v1/copilot/prepare-audit")
+def copilot_prepare_audit(request: PrepareAuditRequest):
+    """Prepare complete DataRoom data for Gemini audit."""
+    from app.services.copilot_tools import prepare_audit_data
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return prepare_audit_data(request.dataroom_id, request.audit_type, session)
+
+
+@app.post("/api/v1/copilot/apply-audit")
+def copilot_apply_audit(request: ApplyAuditRequest):
+    """Store audit result as a chat session."""
+    from app.services.copilot_tools import apply_audit_result
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return apply_audit_result(
+            dataroom_id=request.dataroom_id,
+            audit_result=request.audit_result,
+            audit_type=request.audit_type,
+            session_id=request.session_id,
+            db_session=session,
+        )
+
+
+# -- Insights endpoints --
+
+@app.post("/api/v1/copilot/prepare-insights")
+def copilot_prepare_insights(request: PrepareInsightsRequest):
+    """Prepare DataRoom data for Gemini insights generation."""
+    from app.services.copilot_tools import prepare_insights_data
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return prepare_insights_data(request.dataroom_id, session)
+
+
+@app.post("/api/v1/copilot/apply-insights")
+def copilot_apply_insights(request: ApplyInsightsRequest):
+    """Store generated insights in dataroom_insights table."""
+    from app.services.copilot_tools import apply_insights
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return apply_insights(request.dataroom_id, request.insights_data, session)
+
+
+# -- Chat suggestions and insights query endpoints --
+
+@app.get("/api/v1/chat/suggestions")
+def chat_suggestions(dataroom_id: str = Query(...)):
+    """Get suggested questions for a DataRoom (cached or data for generation)."""
+    from app.services.copilot_tools import get_suggestions
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return get_suggestions(dataroom_id, session)
+
+
+@app.get("/api/v1/chat/insights")
+def chat_insights(dataroom_id: str = Query(...)):
+    """Get DataRoom insights (all non-stale insights)."""
+    engine = _require_db()
+
+    with Session(engine) as session:
+        rows = session.execute(
+            text("""
+                SELECT id, insight_type, content, generated_at, stale
+                FROM dataroom_insights
+                WHERE dataroom_id = :did
+                ORDER BY generated_at DESC
+            """),
+            {"did": dataroom_id},
+        ).fetchall()
+
+        insights = []
+        for row in rows:
+            insights.append({
+                "id": row[0],
+                "insight_type": row[1],
+                "content": row[2],
+                "generated_at": row[3].isoformat() if row[3] else None,
+                "stale": bool(row[4]),
+            })
+
+        return {"dataroom_id": dataroom_id, "insights": insights}
+
+
+# -- Chat context preparation endpoint (Phase C2) --
+
+@app.post("/api/v1/copilot/prepare-chat")
+def copilot_prepare_chat(request: PrepareChatContextRequest):
+    """Prepare chat context: session, hybrid search, history, formatted chunks."""
+    from app.services.chat_service import prepare_chat_context
+
+    engine = _require_db()
+    with Session(engine) as session:
+        try:
+            return prepare_chat_context(
+                message=request.message,
+                query_vector=request.query_vector,
+                session_id=request.session_id,
+                scope_type=request.scope_type,
+                scope_ids=request.scope_ids,
+                scope_name=request.scope_name,
+                user_id=request.user_id,
+                db_session=session,
+                chroma_path=request.chroma_path,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/v1/copilot/update-session-title")
+def copilot_update_session_title(request: UpdateSessionTitleRequest):
+    """Update the title of a chat session."""
+    from app.services.chat_service import update_session_title
+
+    engine = _require_db()
+    with Session(engine) as session:
+        update_session_title(request.session_id, request.title, session)
+        return {"success": True, "session_id": request.session_id}
+
+
+# ---------------------------------------------------------------------------
 # Subfolder traversal helper
 # ---------------------------------------------------------------------------
 
