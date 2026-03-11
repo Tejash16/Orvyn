@@ -104,6 +104,33 @@ contextBridge.exposeInMainWorld('api', {
     generateDataroom: (name, description, fileIds)         => ipcRenderer.invoke('ai:generate-dataroom', { dataroom_name: name, dataroom_description: description, file_ids: fileIds }),
   },
 
+  // Copilot — chat, indexing, audit, insights
+  copilot: {
+    sendMessage:      (data)  => ipcRenderer.invoke('copilot:send-message', data),
+    cancelStream:     ()      => ipcRenderer.invoke('copilot:cancel-stream'),
+    onStreamChunk:    (cb)    => ipcRenderer.on('copilot:stream-chunk', cb),
+    offStreamChunk:   (cb)    => ipcRenderer.removeListener('copilot:stream-chunk', cb),
+    onStreamEnd:      (cb)    => ipcRenderer.on('copilot:stream-end', cb),
+    offStreamEnd:     (cb)    => ipcRenderer.removeListener('copilot:stream-end', cb),
+    onStreamError:    (cb)    => ipcRenderer.on('copilot:stream-error', cb),
+    offStreamError:   (cb)    => ipcRenderer.removeListener('copilot:stream-error', cb),
+    onStreamReasoning:(cb)    => ipcRenderer.on('copilot:stream-reasoning', cb),
+    offStreamReasoning:(cb)   => ipcRenderer.removeListener('copilot:stream-reasoning', cb),
+    onIndexProgress:  (cb)    => ipcRenderer.on('copilot:index-progress', cb),
+    offIndexProgress: (cb)    => ipcRenderer.removeListener('copilot:index-progress', cb),
+    getSessions:      (data)  => ipcRenderer.invoke('copilot:get-sessions', data),
+    getMessages:      (data)  => ipcRenderer.invoke('copilot:get-messages', data),
+    deleteSession:    (data)  => ipcRenderer.invoke('copilot:delete-session', data),
+    auditDataroom:    (data)  => ipcRenderer.invoke('copilot:audit-dataroom', data),
+    simulateReview:   (data)  => ipcRenderer.invoke('copilot:simulate-review', data),
+    getSuggestions:   (data)  => ipcRenderer.invoke('copilot:get-suggestions', data),
+    getInsights:      (data)  => ipcRenderer.invoke('copilot:get-insights', data),
+    generateInsights: (data)  => ipcRenderer.invoke('copilot:generate-insights', data),
+    indexFiles:       (data)  => ipcRenderer.invoke('copilot:index-files', data),
+    getIndexStatus:   (data)  => ipcRenderer.invoke('copilot:get-index-status', data),
+    retryIndexing:    (data)  => ipcRenderer.invoke('copilot:retry-indexing', data),
+  },
+
   // Logs — lets the UI offer a "Help > Open Logs" action
   logs: {
     getPath:    () => ipcRenderer.invoke('app:getLogsPath'),

@@ -5,6 +5,7 @@ import dataroomReducer from './dataroomSlice';
 import fileExplorerReducer from './fileExplorerSlice';
 import fileReducer from './fileSlice';
 import folderReducer from './folderSlice';
+import copilotReducer from './copilotSlice';
 
 const store = configureStore({
   reducer: {
@@ -14,6 +15,7 @@ const store = configureStore({
     fileExplorer: fileExplorerReducer,
     file: fileReducer,
     folder: folderReducer,
+    copilot: copilotReducer,
   },
 });
 
