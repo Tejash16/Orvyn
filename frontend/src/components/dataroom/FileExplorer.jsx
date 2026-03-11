@@ -17,6 +17,8 @@ import {
   clearSelection,
   markFileForMove,
   unmarkFileForMove,
+  markFileContentChanged,
+  clearFileContentChanged,
 } from '../../store/fileExplorerSlice';
 import {
   createFolder,
@@ -36,6 +38,7 @@ import {
   deleteFromSystem,
 } from '../../store/fileSlice';
 import { addToast } from '../../store/uiSlice';
+import { openCopilot, sendMessage, startStreaming, indexFiles } from '../../store/copilotSlice';
 import ContextMenu from '../common/ContextMenu';
 import MoveMarkedFilesModal from './MoveMarkedFilesModal';
 import styles from './FileExplorer.module.css';
@@ -255,6 +258,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
     isLoading,
     error,
     pendingMoves,
+    contentChangedIds,
   } = useSelector((s) => s.fileExplorer);
 
   // Back / forward history — local state
@@ -359,6 +363,32 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
   useEffect(() => {
     if (editDescDialog && editDescRef.current) editDescRef.current.focus();
   }, [editDescDialog]);
+
+  // ── Proactive stale content detection ──
+  // Runs when the file list changes; checks each indexed file without blocking rendering.
+  const checkedFileIdsRef = useRef(new Set());
+  useEffect(() => {
+    if (!window.api?.copilot?.checkFileChanged) return;
+    const fileItems = items.filter((it) => it.type === 'file');
+    fileItems.forEach((file) => {
+      // Skip files already checked in this session
+      if (checkedFileIdsRef.current.has(file.id)) return;
+      checkedFileIdsRef.current.add(file.id);
+      // Fire and forget — do not block rendering
+      window.api.copilot.checkFileChanged({ file_id: file.id }).then((res) => {
+        if (res?.changed === true) {
+          dispatch(markFileContentChanged(file.id));
+        }
+      }).catch(() => {
+        // Network error or missing backend — ignore silently
+      });
+    });
+  }, [items, dispatch]);
+
+  // Reset checked set when navigating to a different folder/dataroom
+  useEffect(() => {
+    checkedFileIdsRef.current = new Set();
+  }, [currentDataroomId, currentFolderId]);
 
   // ── Filtered items ──
   const filtered = searchQuery
@@ -977,12 +1007,46 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
 
   function renderSelectionBar() {
     if (selectedItems.length === 0) return null;
+
+    const selectedFiles = selectedItems.filter((s) => s.type === 'file');
+    const selectedFileNames = selectedFiles
+      .map((s) => items.find((it) => it.id === s.id)?.name || s.id)
+      .filter(Boolean);
+
+    const handleCompare = () => {
+      dispatch(openCopilot());
+      dispatch(startStreaming());
+      // Use structured compare pipeline (Python fetches content → Express AI stream)
+      if (window.api?.copilot?.compareDocuments) {
+        window.api.copilot.compareDocuments({
+          file_ids: selectedFiles.map((s) => s.id),
+          scope_ids: [currentDataroomId],
+          scope_name: selectedFileNames.join(', '),
+        });
+      } else {
+        // Fallback: plain chat prompt
+        dispatch(sendMessage({
+          message: `Compare these documents:\n${selectedFileNames.join('\n')}`,
+        }));
+      }
+    };
+
     return (
       <div className={styles.selectionBar}>
         <span className={styles.selectionCount}>{selectedItems.length} selected</span>
         <button className={styles.selectionBtn} onClick={() => dispatch(selectAll())} type="button">Select All</button>
         <button className={styles.selectionBtn} onClick={() => dispatch(clearSelection())} type="button">Clear</button>
         <div className={styles.selectionActions}>
+          {selectedFiles.length >= 2 && (
+            <button
+              className={`${styles.selectionBtn} ${styles.selectionBtnPrimary}`}
+              onClick={handleCompare}
+              type="button"
+              title="Open Copilot and compare selected files"
+            >
+              Compare with Copilot
+            </button>
+          )}
           <button
             className={`${styles.selectionBtn} ${styles.selectionBtnDanger}`}
             onClick={() => {
@@ -1052,6 +1116,9 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
               </div>
               {renamingId === item.id ? renderInlineRename(item) : (
                 <span className={styles.gridCardName} title={item.name}>{item.name}</span>
+              )}
+              {item.type === 'file' && contentChangedIds.includes(item.id) && (
+                <span className={styles.staleBadge}>Content changed</span>
               )}
               {item.type === 'file' && (
                 <span className={styles.gridCardMeta}>{formatFileSize(item.size_bytes)}</span>
@@ -1128,6 +1195,23 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
                         style={{ backgroundColor: confColor, position: 'static', marginLeft: 6 }}
                         title={`Confidence: ${Math.round((item.classification_score || 0) * 100)}%`}
                       />
+                    )}
+                    {item.type === 'file' && contentChangedIds.includes(item.id) && (
+                      <>
+                        <span className={styles.staleBadge}>Content changed</span>
+                        <button
+                          className={styles.reindexBtn}
+                          title="Re-index this file"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            dispatch(indexFiles({ fileId: item.id, dataroomId: currentDataroomId }));
+                            dispatch(clearFileContentChanged(item.id));
+                          }}
+                          type="button"
+                        >
+                          Re-index
+                        </button>
+                      </>
                     )}
                   </div>
                 </td>

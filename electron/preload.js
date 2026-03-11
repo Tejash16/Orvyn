@@ -129,6 +129,8 @@ contextBridge.exposeInMainWorld('api', {
     indexFiles:       (data)  => ipcRenderer.invoke('copilot:index-files', data),
     getIndexStatus:   (data)  => ipcRenderer.invoke('copilot:get-index-status', data),
     retryIndexing:    (data)  => ipcRenderer.invoke('copilot:retry-indexing', data),
+    checkFileChanged: (data)  => ipcRenderer.invoke('copilot:check-file-changed', data),
+    compareDocuments: (data)  => ipcRenderer.invoke('copilot:compare-documents', data),
   },
 
   // Logs — lets the UI offer a "Help > Open Logs" action

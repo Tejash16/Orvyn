@@ -804,6 +804,94 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
       return { success: false, error: err.message };
     }
   });
+
+  // ── copilot:compare-documents ─────────────────────────────
+
+  ipcMain.handle('copilot:compare-documents', async (event, { file_ids, scope_ids, scope_name }) => {
+    try {
+      activeStreamController = new AbortController();
+      const ctx = getUserContext();
+
+      // Step 1: Python fetches structured file content (3000 chars per file)
+      const compareData = await pythonPost('/api/v1/copilot/prepare-compare', {
+        file_ids,
+        ...ctx,
+      });
+
+      if (!compareData.files || compareData.files.length === 0) {
+        event.sender.send('copilot:stream-error', { message: 'No file content available for comparison.' });
+        return { success: false };
+      }
+
+      // Step 2: Build compare message for Gemini
+      const fileBlocks = compareData.files.map((f) =>
+        `### ${f.file_name}\n\n${f.content || '[No extractable text]'}`
+      ).join('\n\n---\n\n');
+
+      const comparePrompt = `Compare the following documents and highlight:\n- Key similarities\n- Key differences\n- Any conflicts or inconsistencies\n\n${fileBlocks}`;
+
+      const systemPrompt = `You are DocRack Copilot, an expert document analyst. The user has selected specific documents for comparison. Your task is to provide a structured, actionable comparison that highlights similarities, differences, and any conflicts or inconsistencies between the documents. Be specific and cite the documents by name.`;
+
+      const messages = [
+        {
+          role: 'user',
+          parts: [{ text: comparePrompt }],
+        },
+      ];
+
+      // Step 3: Stream the comparison result
+      let fullText = '';
+      const streamResult = await streamFromExpress(event, {
+        system_prompt: systemPrompt,
+        messages,
+      });
+
+      fullText = streamResult.text;
+
+      // Build source entries from compareData
+      const sources = compareData.files.map((f) => ({
+        file_id: f.file_id,
+        file_name: f.file_name,
+        dataroom_name: null,
+        page: null,
+      }));
+
+      event.sender.send('copilot:stream-end', {
+        sources,
+        session_id: null,
+        session_title: `Compare: ${compareData.files.map((f) => f.file_name).join(', ')}`,
+      });
+
+      return { success: true };
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        log.info('copilot: compare-documents stream cancelled');
+        return { success: false, cancelled: true };
+      }
+      log.error('copilot:compare-documents failed:', err.message);
+      event.sender.send('copilot:stream-error', { message: err.message });
+      return { success: false, error: err.message };
+    } finally {
+      activeStreamController = null;
+    }
+  });
+
+  // ── copilot:check-file-changed ────────────────────────────
+
+  ipcMain.handle('copilot:check-file-changed', async (_event, { file_id }) => {
+
+    try {
+      const ctx = getUserContext();
+      const result = await pythonPost('/api/v1/copilot/check-file-changed', {
+        file_id,
+        ...ctx,
+      });
+      return { success: true, changed: result.changed === true };
+    } catch (err) {
+      log.error('copilot:check-file-changed failed:', err.message);
+      return { success: false, changed: false, error: err.message };
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -2285,6 +2285,50 @@ def copilot_apply_audit(request: ApplyAuditRequest):
         )
 
 
+# -- Document comparison --
+
+class PrepareCompareRequest(BaseModel):
+    file_ids: List[str]
+
+
+@app.post("/api/v1/copilot/prepare-compare")
+def copilot_prepare_compare(request: PrepareCompareRequest):
+    """
+    Prepare structured document content for Gemini comparison.
+    Returns { files: [{ file_id, file_name, file_type, content }], file_count }
+    where content is capped at 3000 chars per file.
+    """
+    from app.services.copilot_tools import prepare_compare_data
+
+    engine = _require_db()
+    with Session(engine) as session:
+        return prepare_compare_data(request.file_ids, session)
+
+
+# -- Stale content detection --
+
+class CheckFileChangedRequest(BaseModel):
+    file_id: str
+
+
+@app.post("/api/v1/copilot/check-file-changed")
+def copilot_check_file_changed(request: CheckFileChangedRequest):
+    """
+    Check whether a file's on-disk content has changed since it was last indexed.
+    Returns { "changed": true/false }.
+    """
+    from app.services.embedding_service import has_file_changed
+
+    engine = _require_db()
+    with Session(engine) as session:
+        file_record = session.query(File).filter_by(id=request.file_id).first()
+        if not file_record:
+            raise HTTPException(status_code=404, detail="File not found.")
+
+        changed = has_file_changed(file_record, file_record.original_path)
+        return {"changed": changed}
+
+
 # -- Insights endpoints --
 
 @app.post("/api/v1/copilot/prepare-insights")

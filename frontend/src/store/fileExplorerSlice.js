@@ -207,6 +207,7 @@ const fileExplorerSlice = createSlice({
     isLoading: false,
     error: null,
     pendingMoves: [],
+    contentChangedIds: [],
   },
   reducers: {
     setViewMode(state, action) {
@@ -264,6 +265,17 @@ const fileExplorerSlice = createSlice({
     },
     clearPendingMoves(state) {
       state.pendingMoves = [];
+    },
+    markFileContentChanged(state, action) {
+      const fileId = action.payload;
+      if (!state.contentChangedIds.includes(fileId)) {
+        state.contentChangedIds.push(fileId);
+      }
+    },
+    clearFileContentChanged(state, action) {
+      state.contentChangedIds = state.contentChangedIds.filter(
+        (id) => id !== action.payload
+      );
     },
     removePendingMoveById(state, action) {
       state.pendingMoves = state.pendingMoves.filter((m) => m.id !== action.payload);
@@ -418,6 +430,8 @@ export const {
   clearPendingMoves,
   removePendingMoveById,
   resetExplorer,
+  markFileContentChanged,
+  clearFileContentChanged,
 } = fileExplorerSlice.actions;
 
 export default fileExplorerSlice.reducer;

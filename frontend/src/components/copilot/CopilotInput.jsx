@@ -16,7 +16,7 @@ const IconSend = () => (
 
 /* ── CopilotInput ────────────────────────────────────────── */
 
-function CopilotInput() {
+function CopilotInput({ onSend }) {
   const dispatch = useDispatch();
   const isStreaming = useSelector((s) => s.copilot.isStreaming);
   const isLoading = useSelector((s) => s.copilot.isLoading);
@@ -29,16 +29,21 @@ function CopilotInput() {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
 
-    // Add user message to local messages immediately
-    dispatch(startStreaming());
-    dispatch(sendMessage({ message: trimmed }));
+    if (onSend) {
+      // Let the parent intercept (e.g. multi-DR detection)
+      onSend(trimmed);
+    } else {
+      // Default: dispatch directly
+      dispatch(startStreaming());
+      dispatch(sendMessage({ message: trimmed }));
+    }
     setText('');
 
     // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [text, disabled, dispatch]);
+  }, [text, disabled, dispatch, onSend]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {

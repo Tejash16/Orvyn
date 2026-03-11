@@ -70,17 +70,28 @@ function CopilotHeader() {
   // Index status display
   const complete = indexStatus?.complete ?? 0;
   const total = indexStatus?.total ?? 0;
+  const pending = indexStatus?.pending ?? 0;
   const pct = total > 0 ? Math.round((complete / total) * 100) : 0;
+
+  // Scope label
+  let scopeLabel = scopeName || 'DocRack Copilot';
+  if (scopeType === 'global') {
+    scopeLabel = 'All DataRooms';
+  } else if (scopeType === 'multi_dataroom') {
+    scopeLabel = `Comparing: ${scopeName || 'Multiple DataRooms'}`;
+  }
 
   return (
     <div className={styles.header}>
       <div className={styles.headerLeft}>
         <span className={styles.scopeLabel}>
-          {scopeName || 'DocRack Copilot'}
+          {scopeLabel}
         </span>
         {total > 0 && (
           <div className={styles.indexStatus}>
-            <span>{complete}/{total} indexed</span>
+            <span>
+              {complete}/{total} indexed{pending > 0 ? ` • ${pending} pending` : ''}
+            </span>
             <div className={styles.indexBar}>
               <div
                 className={styles.indexBarFill}

@@ -36,6 +36,7 @@ function CopilotChat() {
   const streamingMessage = useSelector((s) => s.copilot.streamingMessage);
   const suggestions = useSelector((s) => s.copilot.suggestions);
   const scopeIds = useSelector((s) => s.copilot.scopeIds);
+  const indexStatus = useSelector((s) => s.copilot.indexStatus);
   const chatEndRef = useRef(null);
 
   // Fetch suggestions when scope changes
@@ -57,6 +58,12 @@ function CopilotChat() {
 
   const isEmpty = messages.length === 0 && !isStreaming;
 
+  // Index-based empty states
+  const totalFiles = indexStatus?.total ?? 0;
+  const completeFiles = indexStatus?.complete ?? 0;
+  const hasNoFiles = totalFiles === 0 && isEmpty;
+  const isIndexingOnly = totalFiles > 0 && completeFiles === 0 && isEmpty;
+
   return (
     <div className={styles.chatArea}>
       {isEmpty ? (
@@ -66,31 +73,44 @@ function CopilotChat() {
             <IconSparkle />
           </div>
           <h2 className={styles.emptyTitle}>DocRack Copilot</h2>
-          <p className={styles.emptySubtitle}>
-            Ask anything about your documents.
-          </p>
+          
+          {hasNoFiles ? (
+            <p className={styles.emptySubtitle}>
+              Add files to your DataRoom to get started with Copilot.
+            </p>
+          ) : isIndexingOnly ? (
+            <p className={styles.emptySubtitle}>
+              Files are being indexed… Copilot will be ready shortly.
+            </p>
+          ) : (
+            <>
+              <p className={styles.emptySubtitle}>
+                Ask anything about your documents.
+              </p>
 
-          {/* Suggested questions */}
-          <div className={styles.suggestions}>
-            {(suggestions.length > 0
-              ? suggestions.slice(0, 4)
-              : [
-                  'Summarize the key points across all documents',
-                  'What are the main financial figures mentioned?',
-                  'List all entities and people referenced',
-                  'Are there any missing or incomplete documents?',
-                ]
-            ).map((q, idx) => (
-              <button
-                key={idx}
-                className={styles.suggestionChip}
-                onClick={() => handleSuggestionClick(q)}
-              >
-                <IconArrowRight />
-                {q}
-              </button>
-            ))}
-          </div>
+              {/* Suggested questions */}
+              <div className={styles.suggestions}>
+                {(suggestions.length > 0
+                  ? suggestions.slice(0, 4)
+                  : [
+                      'Summarize the key points across all documents',
+                      'What are the main financial figures mentioned?',
+                      'List all entities and people referenced',
+                      'Are there any missing or incomplete documents?',
+                    ]
+                ).map((q, idx) => (
+                  <button
+                    key={idx}
+                    className={styles.suggestionChip}
+                    onClick={() => handleSuggestionClick(q)}
+                  >
+                    <IconArrowRight />
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       ) : (
         /* ── Messages list ──────────────────────────────── */

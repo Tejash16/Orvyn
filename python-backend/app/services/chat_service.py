@@ -149,23 +149,37 @@ def prepare_chat_context(
     elif scope_type == "dataroom" and scope_ids:
         dataroom_id = scope_ids[0] if scope_ids else None
     elif scope_type == "multi_dataroom" and scope_ids:
-        # For multi-dataroom, we do a broad search per dataroom
-        # hybrid_search currently supports single dataroom_id, so use first
-        # In a full implementation, we'd search each and merge
-        dataroom_id = scope_ids[0] if scope_ids else None
+        pass  # handled below: search each DR and merge
     # global scope: no filters
 
     # 3. Run hybrid search
-    search_results = hybrid_search(
-        query_vector=query_vector,
-        query_text=message,
-        user_id=user_id,
-        chroma_path=chroma_path,
-        db_session=db_session,
-        dataroom_id=dataroom_id,
-        file_ids=file_ids,
-        folder_id=folder_id,
-    )
+    if scope_type == "multi_dataroom" and scope_ids and len(scope_ids) > 1:
+        # Search each DataRoom separately, then merge by score
+        all_results = []
+        for dr_id in scope_ids:
+            dr_results = hybrid_search(
+                query_vector=query_vector,
+                query_text=message,
+                user_id=user_id,
+                chroma_path=chroma_path,
+                db_session=db_session,
+                dataroom_id=dr_id,
+            )
+            all_results.extend(dr_results)
+        # Sort merged results by score descending and cap
+        all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+        search_results = all_results[:int(os.getenv("RAG_MAX_CHUNKS_PER_QUERY", "8"))]
+    else:
+        search_results = hybrid_search(
+            query_vector=query_vector,
+            query_text=message,
+            user_id=user_id,
+            chroma_path=chroma_path,
+            db_session=db_session,
+            dataroom_id=dataroom_id,
+            file_ids=file_ids,
+            folder_id=folder_id,
+        )
 
     # 3b. Deduplicate: hybrid search can return the same chunk from both vector + keyword
     seen = set()
@@ -180,7 +194,21 @@ def prepare_chat_context(
     # 4. Trim to token limit
     trimmed_chunks = trim_chunks_to_token_limit(search_results)
 
-    # 5. Format chunks as labeled document excerpts
+    # 5. Resolve DataRoom names for cross-DR source display
+    dr_name_cache = {}
+    dr_ids_in_results = set(c.get("dataroom_id") for c in trimmed_chunks if c.get("dataroom_id"))
+    if dr_ids_in_results:
+        placeholders = ", ".join(f":dr_{i}" for i in range(len(dr_ids_in_results)))
+        params = {f"dr_{i}": dr_id for i, dr_id in enumerate(dr_ids_in_results)}
+        rows = db_session.execute(
+            text(f"SELECT id, name FROM datarooms WHERE id IN ({placeholders})"),
+            params,
+        ).fetchall()
+        dr_name_cache = {row[0]: row[1] for row in rows}
+
+    is_cross_dr = scope_type in ("global", "multi_dataroom") or len(dr_ids_in_results) > 1
+
+    # 6. Format chunks as labeled document excerpts
     formatted_parts = []
     sources = []
 
@@ -190,9 +218,14 @@ def prepare_chat_context(
         section_number = chunk.get("section_number")
         section_name = chunk.get("section_name")
         chunk_text = chunk.get("text", "")
+        chunk_dr_id = chunk.get("dataroom_id")
+        chunk_dr_name = dr_name_cache.get(chunk_dr_id, "")
 
-        # Build source label
-        source_label = f"Source: {file_name}"
+        # Build source label — include DataRoom name for cross-DR searches
+        if is_cross_dr and chunk_dr_name:
+            source_label = f"Source: 📁 {chunk_dr_name} > {file_name}"
+        else:
+            source_label = f"Source: {file_name}"
         if page_number:
             source_label += f", Page {page_number}"
         elif section_number:
@@ -208,6 +241,8 @@ def prepare_chat_context(
         sources.append({
             "file_id": chunk.get("file_id"),
             "file_name": file_name,
+            "dataroom_id": chunk_dr_id,
+            "dataroom_name": chunk_dr_name,
             "chunk_text_preview": chunk_text[:200],
             "relevance": chunk.get("score", 0),
             "page_number": page_number,

@@ -524,6 +524,25 @@
   color: var(--text-primary);
 }
 
+/* Show more / less toggle for long responses */
+.showMoreBtn {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 200ms ease;
+}
+
+.showMoreBtn:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
 /* ── Sources ─────────────────────────────────────────── */
 
 .sources {

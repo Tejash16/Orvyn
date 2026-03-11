@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import CopilotSources from './CopilotSources';
 import styles from './CopilotPanel.module.css';
 
-/* ── Copy icon ───────────────────────────────────────────── */
+/* ── Icons ───────────────────────────────────────────────── */
 
 const IconCopy = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
@@ -23,10 +23,16 @@ const IconCheck = () => (
   </svg>
 );
 
+/* ── Constants ───────────────────────────────────────────── */
+
+const TRUNCATE_THRESHOLD = 3000;
+const TRUNCATE_SHOW = 2000;
+
 /* ── CopilotMessage ──────────────────────────────────────── */
 
 function CopilotMessage({ message }) {
   const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -39,16 +45,33 @@ function CopilotMessage({ message }) {
   }, [message.content]);
 
   const isUser = message.role === 'user';
+  const content = message.content || '';
+
+  // Truncate long assistant responses
+  const isLong = !isUser && content.length > TRUNCATE_THRESHOLD;
+  const displayContent = isLong && !expanded
+    ? content.slice(0, TRUNCATE_SHOW) + '…'
+    : content;
 
   return (
     <div className={`${styles.messageRow} ${isUser ? styles.messageRowUser : styles.messageRowAssistant}`}>
       <div className={`${styles.messageBubble} ${isUser ? styles.userBubble : styles.assistantBubble}`}>
         {isUser ? (
-          message.content
+          content
         ) : (
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {message.content}
+            {displayContent}
           </ReactMarkdown>
+        )}
+
+        {/* Show more / Show less toggle for long responses */}
+        {isLong && (
+          <button
+            className={styles.showMoreBtn}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? 'Show less' : 'Show more'}
+          </button>
         )}
 
         {/* Copy button — shows on hover */}

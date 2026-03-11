@@ -565,7 +565,8 @@ def _build_chroma_where(dataroom_id=None, file_ids=None, folder_id=None) -> dict
 
 
 def keyword_search(query: str, db_session, dataroom_id: str = None,
-                   file_ids: list = None, limit: int = None) -> list:
+                   file_ids: list = None, folder_id: str = None,
+                   limit: int = None) -> list:
     """
     Search FTS5 for keyword matches.
     Only queries files with embedding_status='complete'.
@@ -591,6 +592,14 @@ def keyword_search(query: str, db_session, dataroom_id: str = None,
         scope_clause = f"AND fc.file_id IN ({placeholders})"
         for i, fid in enumerate(file_ids):
             params[f"fid_{i}"] = fid
+    elif folder_id:
+        # Resolve folder + all nested subfolders via recursive CTE
+        folder_ids = _resolve_folder_tree(folder_id, db_session)
+        if folder_ids:
+            placeholders = ", ".join(f":fold_{i}" for i in range(len(folder_ids)))
+            scope_clause = f"AND f.folder_id IN ({placeholders})"
+            for i, fid in enumerate(folder_ids):
+                params[f"fold_{i}"] = fid
     elif dataroom_id:
         scope_clause = "AND fc.dataroom_id = :did"
         params["did"] = dataroom_id
@@ -631,6 +640,29 @@ def keyword_search(query: str, db_session, dataroom_id: str = None,
     return output
 
 
+def _resolve_folder_tree(folder_id: str, db_session) -> list:
+    """Resolve a folder and all its nested subfolders via recursive CTE."""
+    try:
+        rows = db_session.execute(
+            text("""
+                WITH RECURSIVE folder_tree(id) AS (
+                    SELECT id FROM folders WHERE id = :fid
+                    UNION ALL
+                    SELECT f.id FROM folders f
+                    JOIN folder_tree ft ON f.parent_folder_id = ft.id
+                )
+                SELECT id FROM folder_tree
+            """),
+            {"fid": folder_id},
+        ).fetchall()
+        return [row[0] for row in rows]
+    except Exception as e:
+        logger.warning(f"_resolve_folder_tree error: {e}")
+        return [folder_id]  # Fallback to just the requested folder
+
+
+
+
 def _sanitize_fts_query(query: str) -> str:
     """Sanitize a user query for FTS5 MATCH syntax."""
     # Remove FTS5 special characters
@@ -664,7 +696,7 @@ def hybrid_search(query_vector: list, query_text: str, user_id: str,
     keyword_results = keyword_search(
         query_text, db_session,
         dataroom_id=dataroom_id, file_ids=file_ids,
-        limit=_MAX_RETRIEVAL_RESULTS,
+        folder_id=folder_id, limit=_MAX_RETRIEVAL_RESULTS,
     )
 
     # Merge by (file_id, chunk_index) key
