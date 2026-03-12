@@ -983,7 +983,7 @@ def folder_delete_preview(folder_id: str):
 @app.delete("/api/v1/folders/{folder_id}")
 def delete_folder(
     folder_id: str,
-    file_action: str = Query(default="unassign", regex="^(unassign|remove|delete_system)$"),
+    file_action: str = Query(default="unassign", pattern="^(unassign|remove|delete_system)$"),
 ):
     """
     Delete a folder and all nested subfolders.

@@ -840,7 +840,7 @@ INDEX_MAX_RETRY_ATTEMPTS=3
 # ... auth secrets, MongoDB, GEMINI_API_KEY ...
 
 # === Chat model (NEW for V1-new feature) ===
-GEMINI_CHAT_MODEL=gemini-2.0-flash
+GEMINI_CHAT_MODEL=gemini-2.5-flash
 GEMINI_CHAT_TEMPERATURE=0.3
 GEMINI_CHAT_MAX_OUTPUT_TOKENS=4096
 

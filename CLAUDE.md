@@ -530,7 +530,7 @@ placed in `electron/.env`, `python-backend/.env`, or any file shipped with the d
 
 ### AI Model Configuration
 
-- **Model**: `gemini-2.0-flash` (Google Generative AI)
+- **Model**: `gemini-2.5-flash` (Google Generative AI)
 - **Temperature**: `0.1` (low variance for consistent classification)
 - **Response format**: Structured JSON with `folder_id`, `confidence`, `reasoning`
 - **SDK**: `@google/generative-ai` (npm, Express backend only)
@@ -1163,7 +1163,7 @@ FTS5 (`file_chunks_fts`) uses `content='file_chunks'` mode with three SQLite tri
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `GEMINI_CHAT_MODEL` | `gemini-2.0-flash` | Gemini model used for chat and audit |
+| `GEMINI_CHAT_MODEL` | `gemini-2.5-flash` | Gemini model used for chat and audit |
 | `GEMINI_CHAT_TEMPERATURE` | `0.3` | Temperature for chat responses |
 | `GEMINI_CHAT_MAX_OUTPUT_TOKENS` | `4096` | Max tokens in a single Gemini response |
 | `GEMINI_EMBEDDING_MODEL` | `gemini-embedding-001` | Gemini model for text embeddings |

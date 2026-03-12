@@ -7,7 +7,7 @@
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const MODEL_NAME = 'gemini-2.0-flash';
+const MODEL_NAME = 'gemini-2.5-flash';
 const TEMPERATURE = 0.1;
 const MAX_RETRIES = 3;
 const BATCH_SIZE = 10;
