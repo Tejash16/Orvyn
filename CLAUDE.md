@@ -858,3 +858,321 @@ Skills are in `.agent/skills/`. Invoke when relevant:
 - `@ui-ux-pro-max` — UI design decisions and reviews
 - `@cc-skill-security-review` — Pre-release security checks
 - `@performance-profiling` — Performance debugging
+
+---
+
+## 25. Copilot Architecture
+
+The Copilot feature (V1-new feature) adds document intelligence via hybrid RAG search, streaming
+chat, background indexing, audit, simulation, and DataRoom insights. It extends the existing
+3-step orchestration established in the Classification Engine (Section 16).
+
+### 3-Step Chat Orchestration
+
+```
+React → window.api.copilot.sendMessage()
+  │ (IPC: copilot:send-message)
+  ▼
+Electron (copilotHandlers.js)
+  Step 1: Express POST /api/v1/ai/embed → embed user query → queryVector
+  Step 2: Python POST /api/v1/copilot/search → hybrid search (ChromaDB + FTS5)
+           Returns: { formatted_chunks, history, sources, session_id }
+  Step 3: Express POST /api/v1/ai/chat/stream → Gemini SSE stream
+           Electron reads stream:
+             'chunk'          → IPC 'copilot:stream-chunk' to React
+             'tool_call'      → Electron executes tool via Python, then loops (max 3 rounds)
+             'tool_call_stop' → round complete, continue loop
+             'error'          → IPC 'copilot:stream-error' to React
+             'end'            → IPC 'copilot:stream-end' to React
+  Step 4: Python POST /api/v1/copilot/save-message → persist to SQLite
+  Step 5: Express POST /api/v1/ai/generate-title (first message only) → Python updates title
+```
+
+**Tool call loop:** Express closes the stream after each `tool_call_stop`. Electron makes a
+**new** POST to `/api/v1/ai/chat/stream` with the updated message history appended.
+Maximum 3 rounds. On round 3, tools are disabled to force a text response.
+
+### 3-Step Indexing Orchestration
+
+```
+Electron (copilotHandlers.js — copilot:index-files)
+  For each file_id:
+    Step 1: Python POST /api/v1/copilot/prepare-index → { chunks, checksum, is_duplicate }
+             If is_duplicate → skip embedding (cost saving)
+    Step 2: Express POST /api/v1/ai/embed → { vectors }
+    Step 3: Python POST /api/v1/copilot/apply-index → store in ChromaDB + FTS5
+    Step 4: Express POST /api/v1/ai/extract-entities → { entities } (best-effort)
+    Step 5: Python POST /api/v1/copilot/apply-entities → store in file_entities
+    Step 6: Express POST /api/v1/ai/summarize-file → { summary } (best-effort)
+    Step 7: Python POST /api/v1/copilot/apply-summary → update files.ai_summary
+  IPC 'copilot:index-progress' { completed, total, current_file, status } after each file
+```
+
+### Five Architectural Safeguards
+
+| # | Safeguard | Mechanism |
+|---|-----------|-----------|
+| 1 | **Triple-check file integrity** | `file_size_bytes` + `file_mtime` + `content_checksum` stored per file AND per ChromaDB chunk. Fast stat checks first; expensive SHA-256 last. Catches binary-only changes checksum alone misses. |
+| 2 | **Background indexing queue** | SQLite `indexing_jobs` table. Status: `none→pending→processing→complete→failed`. Decoupled from upload. Up to 3 retries. |
+| 3 | **Embedding status protection** | `embedding_status` on every `files` row and every ChromaDB chunk metadata. Search ONLY queries chunks where `embedding_status='complete'`. |
+| 4 | **Embedding model versioning** | `embedding_model` stored per file and per chunk. Old-model chunks can be found and deleted selectively on migration. |
+| 5 | **Duplicate document detection** | Before embedding, SHA-256 of `extracted_text` is checked. Identical hash = skip embedding, saving API cost and storage. |
+
+### Worker Crash Recovery
+
+On app startup, after `/init-db` completes:
+1. Python's `recover_stale_indexing_jobs()` resets any job stuck in `processing` for >10 minutes
+   back to `pending`. (`attempts` is NOT incremented — the crash was not the job's fault.)
+2. Electron calls `resumePendingIndexing()` (exported from `copilotHandlers.js`), which reads
+   pending jobs from Python and triggers `copilot:index-files` in the background automatically.
+
+---
+
+## 26. Copilot IPC Channels (`copilot:*`)
+
+All channels defined in `electron/ipc/copilotHandlers.js` and exposed via `electron/preload.js`.
+React accesses them via `window.api.copilot.*`.
+
+### Invoke Channels (`ipcMain.handle`)
+
+| Channel | Preload Method | Purpose |
+|---------|---------------|---------|
+| `copilot:send-message` | `window.api.copilot.sendMessage(data)` | Full 3-step chat + streaming loop |
+| `copilot:cancel-stream` | `window.api.copilot.cancelStream()` | Abort active AbortController |
+| `copilot:index-files` | `window.api.copilot.indexFiles({ file_ids, dataroom_id })` | 7-step background indexing pipeline |
+| `copilot:audit-dataroom` | `window.api.copilot.auditDataroom({ dataroom_id, audit_type })` | 3-step audit flow |
+| `copilot:simulate-review` | `window.api.copilot.simulateReview({ dataroom_id, simulation_type, custom_role })` | 3-step role simulation |
+| `copilot:generate-insights` | `window.api.copilot.generateInsights({ dataroom_id })` | 3-step insights generation |
+| `copilot:get-sessions` | `window.api.copilot.getSessions({ scope_type, scope_id })` | List chat sessions |
+| `copilot:get-messages` | `window.api.copilot.getMessages({ session_id })` | Get messages for session |
+| `copilot:delete-session` | `window.api.copilot.deleteSession({ session_id })` | Delete session + messages |
+| `copilot:get-suggestions` | `window.api.copilot.getSuggestions({ dataroom_id })` | Get (or regenerate) suggested questions |
+| `copilot:get-insights` | `window.api.copilot.getInsights({ dataroom_id })` | Get cached DataRoom insights |
+| `copilot:get-index-status` | `window.api.copilot.getIndexStatus({ dataroom_id })` | Indexing job status |
+| `copilot:retry-indexing` | `window.api.copilot.retryIndexing({ dataroom_id })` | Reset failed jobs to pending |
+| `copilot:compare-documents` | `window.api.copilot.compareDocuments({ file_ids })` | Structured document comparison |
+| `copilot:check-file-changed` | `window.api.copilot.checkFileChanged({ file_id })` | Triple-check for stale content |
+
+### Push Events (Electron → React, one-way)
+
+| Channel | Preload Listener | Payload | Purpose |
+|---------|-----------------|---------|---------|
+| `copilot:stream-chunk` | `onStreamChunk` / `offStreamChunk` | `{ text }` | Streaming token from Gemini |
+| `copilot:stream-end` | `onStreamEnd` / `offStreamEnd` | `{ sources, session_id }` | Stream complete |
+| `copilot:stream-error` | `onStreamError` / `offStreamError` | `{ message }` | Stream or tool error |
+| `copilot:stream-reasoning` | — | `{ step }` | Tool call reasoning step display |
+| `copilot:index-progress` | `onIndexProgress` / `offIndexProgress` | `{ completed, total, current_file, status }` | Real-time indexing progress |
+
+---
+
+## 27. New Python Endpoints (Copilot)
+
+All under `/api/v1/`. Python NEVER calls Gemini directly.
+
+### Indexing Pipeline
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/v1/copilot/prepare-index` | Chunk file text, compute checksums, detect duplicates |
+| `POST` | `/api/v1/copilot/apply-index` | Store chunk vectors in ChromaDB + chunks in FTS5 |
+| `POST` | `/api/v1/copilot/apply-entities` | Store entities in `file_entities` |
+| `POST` | `/api/v1/copilot/apply-summary` | Store `ai_summary` on file record |
+| `POST` | `/api/v1/indexing/trigger` | Create `indexing_jobs` for specified files |
+| `GET`  | `/api/v1/indexing/status` | Job counts: pending / processing / complete / failed |
+| `GET`  | `/api/v1/indexing/pending-files` | List file_ids with pending/processing jobs |
+| `POST` | `/api/v1/indexing/retry-failed` | Reset failed jobs to pending |
+
+### Search & Chat
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/v1/copilot/search` | Hybrid search: ChromaDB (vector) + FTS5 (keyword), returns top 8 chunks |
+| `POST` | `/api/v1/copilot/save-message` | Persist user + assistant messages to SQLite |
+| `POST` | `/api/v1/copilot/update-session-title` | Update session title after title generation |
+| `POST` | `/api/v1/copilot/check-file-changed` | Run triple-check (size + mtime + checksum) |
+| `POST` | `/api/v1/chat/sessions` | Create chat session |
+| `GET`  | `/api/v1/chat/sessions` | List sessions (optional scope filter) |
+| `GET`  | `/api/v1/chat/sessions/{id}/messages` | Get messages for session |
+| `DELETE` | `/api/v1/chat/sessions/{id}` | Delete session + messages |
+| `GET`  | `/api/v1/chat/suggestions` | Get suggested questions (returns stale flag + data if needs regen) |
+| `GET`  | `/api/v1/chat/insights` | Get DataRoom insights |
+
+### Tool Endpoints (Gemini Function Calling)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/v1/copilot/tool/search` | Tool: `search_documents` |
+| `POST` | `/api/v1/copilot/tool/get-file-content` | Tool: `get_file_content` |
+| `POST` | `/api/v1/copilot/tool/list-files` | Tool: `list_files` |
+| `POST` | `/api/v1/copilot/tool/get-entities` | Tool: `get_entities` |
+| `POST` | `/api/v1/copilot/tool/find-similar` | Tool: `find_similar` |
+| `POST` | `/api/v1/copilot/prepare-compare` | Prepare file content for comparison tool |
+| `POST` | `/api/v1/copilot/tool/prepare-summarize` | Prepare DataRoom data for summarize tool |
+| `POST` | `/api/v1/copilot/tool/prepare-extract` | Prepare chunks for data extraction tool |
+
+### Audit & Insights
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/v1/copilot/prepare-audit` | Build full DataRoom data for Gemini audit/simulation |
+| `POST` | `/api/v1/copilot/apply-audit` | Save audit/simulation result as chat session |
+| `POST` | `/api/v1/copilot/prepare-insights` | Build dataroom metadata for Gemini insights |
+| `POST` | `/api/v1/copilot/apply-insights` | Store insights in `dataroom_insights` |
+
+---
+
+## 28. New Express Endpoints (Copilot)
+
+All require Bearer token authentication. Added to `express-backend/src/routes/ai.js`.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/v1/ai/embed` | Batch embed texts via Gemini (`gemini-embedding-001`) |
+| `POST` | `/api/v1/ai/chat/stream` | Streaming Gemini chat via SSE — stateless, one round per call |
+| `POST` | `/api/v1/ai/chat` | Non-streaming chat fallback |
+| `POST` | `/api/v1/ai/extract-entities` | Entity extraction prompt → Gemini → JSON |
+| `POST` | `/api/v1/ai/summarize-file` | File summary (2000-char input) → Gemini |
+| `POST` | `/api/v1/ai/generate-title` | Session title from first user message |
+| `POST` | `/api/v1/ai/audit` | Audit prompt + audit_data → Gemini → structured result |
+| `POST` | `/api/v1/ai/simulate` | Role simulation prompt → Gemini → result |
+| `POST` | `/api/v1/ai/generate-insights` | DataRoom summary, suggestions, missing-doc detection |
+| `POST` | `/api/v1/ai/generate-suggestions` | 4 context-aware suggested questions (domain-agnostic) |
+
+**Streaming protocol:** `text/event-stream` with `data: {JSON}\n\n` lines.
+Type values: `chunk`, `tool_call`, `tool_call_stop`, `end`, `error`.
+
+---
+
+## 29. `copilotSlice.js` — Copilot Redux State
+
+Defined in `frontend/src/store/copilotSlice.js`.
+
+```
+State shape:
+  isOpen: false              — Panel open/closed
+  panelWidth: 380            — Current panel width in px
+
+  sessions: []               — Array of { id, title, scope_type, scope_name, updated_at }
+  activeSessionId: null      — ID of the currently loaded session
+  messages: []               — Array of { role, content, sources } for active session
+
+  scopeType: 'dataroom'      — 'file' | 'files' | 'folder' | 'dataroom' | 'multi_dataroom' | 'global'
+  scopeIds: []               — IDs matching the scope type
+  scopeName: ''              — Human-readable scope label for the header
+  selectedFileIds: []        — File IDs currently selected in the explorer
+
+  isLoading: false           — Generic loading (sessions fetch, session load, insights, generateInsights)
+  isStreaming: false         — Chat stream in progress
+  streamingMessage: ''       — Accumulated text during streaming (rendered word-by-word)
+  isAuditing: false          — Audit in progress
+  isSimulating: false        — Simulation in progress
+  isIndexing: false          — Index-files pipeline in progress
+  indexStatus: null          — { total, pending, processing, complete, failed } from Python
+  indexProgress: null        — { completed, total, current_file, status } — last progress event
+
+  suggestions: []            — Array of suggested question strings
+  insights: null             — DataRoom insights object from Python
+  auditResult: null          — Latest audit result string/object
+  simulationResult: null     — Latest simulation result string/object
+  error: null                — Last error message (string)
+
+Reducers:
+  toggleCopilot, openCopilot, closeCopilot
+  clearMessages, clearAudit, clearSimulation, clearError
+  setCopilotScope({ scopeType, scopeIds, scopeName })
+  setSelectedFiles(fileIds[])
+  startStreaming           — resets streamingMessage, sets isStreaming=true
+  appendStreamChunk(text)  — appends to streamingMessage
+  finalizeStreamMessage({ sources, session_id, session_title }) — pushes assistant message, clears streaming state
+  updateIndexProgress(progressObj)
+  startNewSession({ scopeType, scopeIds, scopeName }) — clears messages + session ID
+
+Thunks: sendMessage, fetchSessions, loadSession, deleteSession,
+        auditDataroom, simulateReview, fetchSuggestions, fetchInsights,
+        generateInsights, indexFiles, getIndexStatus, retryIndexing
+```
+
+---
+
+## 30. Sync Function Rules
+
+Vector DB (ChromaDB), FTS5 (`file_chunks`), and SQLite must ALWAYS agree.
+Every file or folder mutation that changes state MUST call its corresponding sync function.
+These functions live in `python-backend/app/services/embedding_service.py`.
+
+### Endpoint → Sync Function Mapping
+
+| Endpoint | Sync Function Called |
+|----------|---------------------|
+| `PUT /api/v1/files/{id}/rename` | `sync_file_renamed(file_id, new_name, ...)` |
+| `DELETE /api/v1/files/{id}` | `sync_file_removed(file_id, ...)` |
+| `PUT /api/v1/files/{id}/move-to-folder` | `sync_file_moved_folder(file_id, new_folder_id, ...)` |
+| `PUT /api/v1/files/{id}/relocate` | `has_file_changed()` → if True: `sync_file_content_changed()` |
+| `DELETE /api/v1/folders/{id}` | `sync_folder_deleted(folder_id, all_nested_file_ids, ...)` |
+| `DELETE /api/v1/datarooms/{id}` | `sync_dataroom_deleted(dataroom_id, ...)` |
+
+### What Each Sync Function Touches
+
+| Function | ChromaDB | file_chunks (FTS5) | file_entities | indexing_jobs | dataroom_insights |
+|----------|---------|--------------------|---------------|---------------|-------------------|
+| `sync_file_renamed` | Update `file_name` in all chunk metadata | — | — | — | — |
+| `sync_file_removed` | Delete all chunks | DELETE | DELETE | DELETE | Mark stale |
+| `sync_file_moved_folder` | Update `folder_id` in chunk metadata | — | — | — | Mark stale |
+| `sync_file_moved_dataroom` | Update `dataroom_id` + `folder_id` | UPDATE `dataroom_id` | UPDATE `dataroom_id` | — | Mark both stale |
+| `sync_folder_deleted` | Delete all chunks for all nested files | DELETE | DELETE | DELETE | Mark stale |
+| `sync_dataroom_deleted` | Delete ALL chunks for DataRoom | DELETE | DELETE | DELETE | DELETE + chat sessions |
+| `sync_file_content_changed` | Calls `sync_file_removed` then creates new indexing job | via sync_file_removed | via sync_file_removed | New job created | — |
+
+### Principle
+
+> **Vector DB and SQLite must ALWAYS agree.**
+> Never delete a file record without calling the appropriate sync function first.
+> Never skip the sync functions to "save time" — stale embeddings corrupt search results permanently.
+
+### FTS5 Sync Rule
+
+FTS5 (`file_chunks_fts`) uses `content='file_chunks'` mode with three SQLite triggers
+(`file_chunks_ai`, `file_chunks_ad`, `file_chunks_au`). The triggers auto-sync the FTS5 index.
+**Never manually INSERT into `file_chunks_fts`** — INSERT/DELETE on `file_chunks` only.
+
+---
+
+## 31. New Environment Variables (Copilot)
+
+### `python-backend/.env`
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RAG_CHUNK_SIZE_CHARS` | `3750` | Target size of each text chunk in characters |
+| `RAG_CHUNK_OVERLAP_CHARS` | `750` | Overlap between consecutive chunks |
+| `RAG_MAX_CHUNKS_PER_QUERY` | `8` | Max chunks returned by hybrid search |
+| `RAG_CONFIDENCE_THRESHOLD` | `0.3` | Minimum combined score to include a chunk |
+| `RAG_MAX_RETRIEVAL_RESULTS` | `200` | Max raw results fetched before re-ranking |
+| `COPILOT_MAX_CHAT_HISTORY` | `10` | Max past messages sent to Gemini per request |
+| `COPILOT_MAX_TOOL_ROUNDS` | `3` | Max Gemini function-calling rounds per query |
+| `COPILOT_EMBEDDING_BATCH_SIZE` | `50` | Max texts per embed call to Express |
+| `COPILOT_SUMMARY_MAX_CHARS` | `2000` | Chars of extracted_text sent for summarization |
+| `COPILOT_MAX_CONTEXT_TOKENS` | `8000` | Token budget for document context (approx × 4 chars) |
+| `COPILOT_MAX_MESSAGE_LENGTH` | `10000` | Max user message length in characters |
+| `INDEX_AUTO_ON_CLASSIFY` | `true` | Auto-create indexing jobs after classification |
+| `INDEX_EXTRACT_ENTITIES` | `true` | Run entity extraction during indexing |
+| `INDEX_GENERATE_SUMMARY` | `true` | Generate AI file summary during indexing |
+| `INDEX_MAX_RETRY_ATTEMPTS` | `3` | Max indexing_job retry attempts before `failed` |
+
+### `express-backend/.env` (additions)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `GEMINI_CHAT_MODEL` | `gemini-2.0-flash` | Gemini model used for chat and audit |
+| `GEMINI_CHAT_TEMPERATURE` | `0.3` | Temperature for chat responses |
+| `GEMINI_CHAT_MAX_OUTPUT_TOKENS` | `4096` | Max tokens in a single Gemini response |
+| `GEMINI_EMBEDDING_MODEL` | `gemini-embedding-001` | Gemini model for text embeddings |
+| `GEMINI_EMBEDDING_DIMENSIONS` | `3072` | Output vector dimensions |
+
+### `electron/.env` (additions)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `COPILOT_PANEL_DEFAULT_WIDTH` | `380` | Default panel width in pixels |
+| `COPILOT_PANEL_MIN_WIDTH` | `320` | Minimum resizable panel width |
+| `COPILOT_PANEL_MAX_WIDTH` | `600` | Maximum resizable panel width |
