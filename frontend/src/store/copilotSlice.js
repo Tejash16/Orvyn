@@ -196,7 +196,9 @@ const copilotSlice = createSlice({
       state.error = null;
     },
     appendStreamChunk(state, action) {
-      state.streamingMessage += action.payload;
+      const chunk = action.payload;
+      const text = typeof chunk === 'string' ? chunk : (chunk?.text || chunk?.content || '');
+      state.streamingMessage += text;
     },
     finalizeStreamMessage(state, action) {
       const { sources, session_id, session_title } = action.payload;

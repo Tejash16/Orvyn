@@ -41,14 +41,8 @@ function CopilotPanel() {
   // DataRoom list — for deleted-DR detection AND multi-DR auto-detection
   const datarooms = useSelector((s) => s.dataroom.datarooms);
 
-  // Build a name→id lookup map for multi-DR detection (case-insensitive)
-  const dataroomNameMap = useSelector((s) => {
-    const map = {};
-    (s.dataroom.datarooms || []).forEach((dr) => {
-      if (dr.name) map[dr.name.toLowerCase()] = dr;
-    });
-    return map;
-  });
+  // dataroomNameMap is computed inline from the stable `datarooms` array reference
+  // to avoid returning a new object on every render (which triggers unnecessary re-renders).
 
   /* ── IPC stream listeners ────────────────────────────── */
 
@@ -220,24 +214,22 @@ function CopilotPanel() {
   // Does NOT override a manually set multi_dataroom scope.
 
   const handleSendWithMultiDRDetection = useCallback((messageText) => {
-    if (dataroomNameMap && Object.keys(dataroomNameMap).length >= 2) {
+    if (datarooms && datarooms.length >= 2) {
       const lowerText = messageText.toLowerCase();
-      const matched = Object.entries(dataroomNameMap).filter(([name]) =>
-        lowerText.includes(name)
+      const matched = datarooms.filter(
+        (dr) => dr.name && lowerText.includes(dr.name.toLowerCase())
       );
       if (matched.length >= 2) {
-        const matchedIds = matched.map(([, dr]) => dr.id);
-        const matchedNames = matched.map(([, dr]) => dr.name);
         dispatch(setCopilotScope({
           scopeType: 'multi_dataroom',
-          scopeIds: matchedIds,
-          scopeName: matchedNames.join(', '),
+          scopeIds: matched.map((dr) => dr.id),
+          scopeName: matched.map((dr) => dr.name).join(', '),
         }));
       }
     }
     dispatch(startStreaming());
     dispatch(sendMessage({ message: messageText }));
-  }, [dataroomNameMap, dispatch]);
+  }, [datarooms, dispatch]);
 
   /* ── Deleted DataRoom check ──────────────────────────── */
 

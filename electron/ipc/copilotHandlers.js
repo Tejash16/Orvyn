@@ -1,7 +1,6 @@
 const path = require('path');
 const { app } = require('electron');
 
-const pythonService      = require('../services/pythonService');
 const authService        = require('../services/authService');
 const userContextService = require('../services/userContextService');
 const log                = require('../services/logger');
@@ -327,7 +326,7 @@ async function streamFromExpress(event, body) {
 // Helper — execute a tool via Python
 // ---------------------------------------------------------------------------
 
-async function executeTool(name, args) {
+async function executeTool(name, args, scopeType, scopeIds) {
   // Whitelist check
   if (!ALLOWED_TOOLS.has(name)) {
     log.warn(`copilot: rejected disallowed tool call: ${name}`);
@@ -361,9 +360,26 @@ async function executeTool(name, args) {
     }
   }
 
+  // list_files requires dataroom_id which the LLM never provides (system identifier).
+  // Electron injects it from the current session scope.
+  if (name === 'list_files') {
+    const dataroomId = args.dataroom_id
+      || ((scopeType === 'dataroom' || scopeType === 'multi_dataroom') && scopeIds?.[0])
+      || null;
+    try {
+      return await pythonPost('/api/v1/copilot/tool/list-files', {
+        dataroom_id: dataroomId,
+        folder_id: args.folder_id || null,
+        ...ctx,
+      });
+    } catch (err) {
+      log.error('copilot: tool list_files failed:', err.message);
+      return { error: err.message };
+    }
+  }
+
   const toolEndpoints = {
     get_file_content:  '/api/v1/copilot/tool/get-file-content',
-    list_files:        '/api/v1/copilot/tool/list-files',
     get_entities:      '/api/v1/copilot/tool/get-entities',
     find_similar:      '/api/v1/copilot/tool/find-similar',
   };
@@ -371,8 +387,12 @@ async function executeTool(name, args) {
   const endpoint = toolEndpoints[name];
   if (!endpoint) return { error: `Unknown tool: ${name}` };
 
+  // Strip any LLM-provided keys that match system context fields to prevent shadowing.
+  const CTX_KEYS = new Set(['db_path', 'chroma_path', 'user_id']);
+  const safeArgs = Object.fromEntries(Object.entries(args).filter(([k]) => !CTX_KEYS.has(k)));
+
   try {
-    return await pythonPost(endpoint, { ...args, ...ctx });
+    return await pythonPost(endpoint, { ...safeArgs, ...ctx });
   } catch (err) {
     log.error(`copilot: tool ${name} failed:`, err.message);
     return { error: err.message };
@@ -459,7 +479,7 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
             step: `Using ${tc.name}...`,
           });
 
-          const toolResult = await executeTool(tc.name, tc.args);
+          const toolResult = await executeTool(tc.name, tc.args, data.scope_type, data.scope_ids);
 
           // Append tool call + result to message history for next round
           messages.push({
@@ -492,7 +512,7 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
           });
           await pythonPost('/api/v1/copilot/update-session-title', {
             session_id: searchResults.session_id,
-            title: titleResult.title,
+            title: titleResult.title || 'New Chat',
             ...ctx,
           });
         } catch (err) {
@@ -527,7 +547,7 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
 
   // ── copilot:index-files (background indexing pipeline) ───
 
-  ipcMain.handle('copilot:index-files', async (event, { file_ids, dataroom_id }) => {
+  ipcMain.handle('copilot:index-files', async (_event, { file_ids, dataroom_id }) => {
     if (!file_ids || !Array.isArray(file_ids) || file_ids.length === 0) {
       log.warn('copilot:index-files: no valid file_ids provided, skipping');
       return { success: true, completed: 0, total: 0 };
@@ -887,7 +907,7 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
 
   // ── copilot:compare-documents ─────────────────────────────
 
-  ipcMain.handle('copilot:compare-documents', async (event, { file_ids, scope_ids, scope_name }) => {
+  ipcMain.handle('copilot:compare-documents', async (event, { file_ids }) => {
     try {
       activeStreamController = new AbortController();
       const ctx = getUserContext();
@@ -920,13 +940,10 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
       ];
 
       // Step 3: Stream the comparison result
-      let fullText = '';
-      const streamResult = await streamFromExpress(event, {
+      await streamFromExpress(event, {
         system_prompt: systemPrompt,
         messages,
       });
-
-      fullText = streamResult.text;
 
       // Build source entries from compareData
       const sources = compareData.files.map((f) => ({
