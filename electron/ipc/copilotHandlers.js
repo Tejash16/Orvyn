@@ -48,15 +48,30 @@ function getUserContext() {
 // ---------------------------------------------------------------------------
 
 async function expressPost(endpoint, body) {
-  const res = await fetch(`${getExpressUrl()}${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${getToken()}`,
-    },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
+  let res;
+  try {
+    res = await fetch(`${getExpressUrl()}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch (err) {
+    if (err.name === 'TimeoutError') {
+      throw new Error(`Express ${endpoint} timed out after 30s.`);
+    }
+    throw new Error(`Express server unavailable: ${err.message}`);
+  }
+  const rawText = await res.text();
+  let data;
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    data = { error: rawText };
+  }
   if (!res.ok) throw new Error(data.error || data.detail || `Express ${endpoint} failed.`);
   return data;
 }
@@ -72,7 +87,17 @@ async function pythonPost(endpoint, body) {
     body: JSON.stringify(body),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || `Python ${endpoint} failed.`);
+  if (!res.ok) {
+    // FastAPI 422 returns detail as an array of validation error objects.
+    // Stringify it so logs show readable field names instead of [object Object].
+    let detail = data.detail;
+    if (Array.isArray(detail)) {
+      detail = detail.map(e => `${(e.loc || []).join('.')}: ${e.msg}`).join('; ');
+    } else if (typeof detail === 'object' && detail !== null) {
+      detail = JSON.stringify(detail);
+    }
+    throw new Error(detail || `Python ${endpoint} failed (${res.status}).`);
+  }
   return data;
 }
 
@@ -311,8 +336,32 @@ async function executeTool(name, args) {
 
   const ctx = getUserContext();
 
+  // search_documents requires special handling:
+  //   1. Gemini sends 'query' but Python expects 'query_text'
+  //   2. Python requires 'query_vector' which Gemini never provides —
+  //      we must embed the query via Express before calling Python.
+  if (name === 'search_documents') {
+    try {
+      const queryText = args.query || args.query_text || '';
+      if (!queryText) return { error: 'search_documents: query is empty' };
+
+      const embedResult = await expressPost('/api/v1/ai/embed', { texts: [queryText] });
+      const queryVector = embedResult.vectors[0];
+
+      return await pythonPost('/api/v1/copilot/tool/search', {
+        query_text: queryText,
+        query_vector: queryVector,
+        scope_type: args.scope_type || 'global',
+        scope_ids: args.scope_ids || null,
+        ...ctx,
+      });
+    } catch (err) {
+      log.error('copilot: tool search_documents failed:', err.message);
+      return { error: err.message };
+    }
+  }
+
   const toolEndpoints = {
-    search_documents:  '/api/v1/copilot/tool/search',
     get_file_content:  '/api/v1/copilot/tool/get-file-content',
     list_files:        '/api/v1/copilot/tool/list-files',
     get_entities:      '/api/v1/copilot/tool/get-entities',
@@ -426,13 +475,13 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
       }
 
       // Step 4: Save to SQLite via Python
+      // NOTE: SaveMessageRequest only accepts these 5 fields — do NOT spread ctx here
       await pythonPost('/api/v1/copilot/save-message', {
         session_id: searchResults.session_id,
         user_message: data.message,
         assistant_response: fullText,
         sources: JSON.stringify(searchResults.sources || []),
         tool_calls: JSON.stringify(allToolCalls),
-        ...ctx,
       });
 
       // Generate title if first message in session
@@ -479,6 +528,11 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
   // ── copilot:index-files (background indexing pipeline) ───
 
   ipcMain.handle('copilot:index-files', async (event, { file_ids, dataroom_id }) => {
+    if (!file_ids || !Array.isArray(file_ids) || file_ids.length === 0) {
+      log.warn('copilot:index-files: no valid file_ids provided, skipping');
+      return { success: true, completed: 0, total: 0 };
+    }
+
     const ctx = getUserContext();
     const total = file_ids.length;
     let completed = 0;
@@ -513,6 +567,30 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
           continue;
         }
 
+        // If skipped (no text / image-only): already marked complete by Python
+        if (fileData.skipped) {
+          log.info(`copilot: file ${fileId} skipped (no extractable text), marked complete`);
+          completed++;
+          if (win && !win.isDestroyed()) {
+            win.webContents.send('copilot:index-progress', {
+              completed, total, current_file: fileId, status: 'skipped',
+            });
+          }
+          continue;
+        }
+
+        // If job was claimed by another concurrent worker: treat as done
+        if (fileData.already_claimed) {
+          log.info(`copilot: file ${fileId} job already claimed by another worker, skipping`);
+          completed++;
+          if (win && !win.isDestroyed()) {
+            win.webContents.send('copilot:index-progress', {
+              completed, total, current_file: fileId, status: 'duplicate',
+            });
+          }
+          continue;
+        }
+
         // 2. Embed chunk texts via Express
         const chunkTexts = fileData.chunks.map(c => c.text);
         const embedResult = await expressPost('/api/v1/ai/embed', {
@@ -528,6 +606,7 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
           embedding_model: embedResult.model || 'gemini-embedding-001',
           file_size_bytes: fileData.file_size_bytes,
           file_mtime: fileData.file_mtime,
+          content_checksum: fileData.checksum,
           ...ctx,
         });
 
@@ -612,11 +691,11 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
       // Step 3: Python applies audit result
       const applied = await pythonPost('/api/v1/copilot/apply-audit', {
         dataroom_id,
-        audit_result: auditResult,
+        audit_result: auditResult.result,
         ...ctx,
       });
 
-      return { success: true, audit_result: auditResult, session_id: applied.session_id };
+      return { success: true, audit_result: auditResult.result, session_id: applied.session_id };
     } catch (err) {
       log.error('copilot:audit-dataroom failed:', err.message);
       return { success: false, error: err.message };
@@ -645,11 +724,11 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
       // Step 3: Python applies result as chat session
       const applied = await pythonPost('/api/v1/copilot/apply-audit', {
         dataroom_id,
-        audit_result: simResult,
+        audit_result: simResult.result,
         ...ctx,
       });
 
-      return { success: true, simulation_result: simResult, session_id: applied.session_id };
+      return { success: true, simulation_result: simResult.result, session_id: applied.session_id };
     } catch (err) {
       log.error('copilot:simulate-review failed:', err.message);
       return { success: false, error: err.message };
@@ -674,10 +753,11 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
       });
 
       // Step 3: Python applies insights
+      // NOTE: ApplyInsightsRequest expects { dataroom_id, insights_data: dict }
       const applied = await pythonPost('/api/v1/copilot/apply-insights', {
         dataroom_id,
-        ...insightsResult,
-        ...ctx,
+        insights_data: insightsResult.insights,
+        content_hash: insightsData.content_hash,
       });
 
       return { success: true, insights: applied };
@@ -746,10 +826,10 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
             folder_names: result.data_for_generation.folder_names,
           });
           // Apply generated suggestions via Python
+          // NOTE: ApplyInsightsRequest expects { dataroom_id, insights_data: dict }
           await pythonPost('/api/v1/copilot/apply-insights', {
             dataroom_id: data.dataroom_id,
-            suggestions: generated.suggestions,
-            ...ctx,
+            insights_data: { suggestions: generated.suggestions },
           });
           return { success: true, suggestions: generated.suggestions };
         } catch (err) {
@@ -944,6 +1024,11 @@ async function resumePendingIndexing(getMainWindow) {
 
 // Expose the index-files logic for startup recovery reuse
 registerCopilotHandlers._indexFilesInternal = async function (event, { file_ids, dataroom_id }) {
+  if (!file_ids || !Array.isArray(file_ids) || file_ids.length === 0) {
+    log.warn('copilot:_indexFilesInternal: no valid file_ids provided, skipping');
+    return;
+  }
+
   const ctx = getUserContext();
   const total = file_ids.length;
   let completed = 0;
@@ -960,6 +1045,16 @@ registerCopilotHandlers._indexFilesInternal = async function (event, { file_ids,
         completed++;
         continue;
       }
+      if (fileData.skipped) {
+        log.info(`copilot: recovery - file ${fileId} skipped (no text), already marked complete`);
+        completed++;
+        continue;
+      }
+      if (fileData.already_claimed) {
+        log.info(`copilot: recovery - file ${fileId} job already claimed by another worker`);
+        completed++;
+        continue;
+      }
 
       const chunkTexts = fileData.chunks.map(c => c.text);
       const embedResult = await expressPost('/api/v1/ai/embed', { texts: chunkTexts });
@@ -967,7 +1062,8 @@ registerCopilotHandlers._indexFilesInternal = async function (event, { file_ids,
       await pythonPost('/api/v1/copilot/apply-index', {
         file_id: fileId, dataroom_id, chunks: fileData.chunks,
         vectors: embedResult.vectors, embedding_model: embedResult.model || 'gemini-embedding-001',
-        file_size_bytes: fileData.file_size_bytes, file_mtime: fileData.file_mtime, ...ctx,
+        file_size_bytes: fileData.file_size_bytes, file_mtime: fileData.file_mtime,
+        content_checksum: fileData.checksum, ...ctx,
       });
 
       // Entity extraction (best-effort)

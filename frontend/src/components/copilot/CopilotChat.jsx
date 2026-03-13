@@ -36,15 +36,20 @@ function CopilotChat() {
   const streamingMessage = useSelector((s) => s.copilot.streamingMessage);
   const suggestions = useSelector((s) => s.copilot.suggestions);
   const scopeIds = useSelector((s) => s.copilot.scopeIds);
+  const scopeType = useSelector((s) => s.copilot.scopeType);
   const indexStatus = useSelector((s) => s.copilot.indexStatus);
   const chatEndRef = useRef(null);
 
-  // Fetch suggestions when scope changes
+  // Fetch suggestions only when scope resolves to a real DataRoom.
+  // scopeIds[0] is a dataroom_id only when scopeType is 'dataroom' or 'multi_dataroom'.
+  // For file/folder scopes scopeIds[0] is a file_id or folder_id — passing those to
+  // the suggestions endpoint would cause apply_insights to fail FK validation.
   useEffect(() => {
-    if (scopeIds?.length > 0) {
+    const isDataroomScope = scopeType === 'dataroom' || scopeType === 'multi_dataroom';
+    if (isDataroomScope && scopeIds?.length > 0) {
       dispatch(fetchSuggestions(scopeIds[0]));
     }
-  }, [scopeIds, dispatch]);
+  }, [scopeIds, scopeType, dispatch]);
 
   // Auto-scroll to bottom
   useEffect(() => {

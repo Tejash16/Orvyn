@@ -6,7 +6,7 @@ const User = require('../models/User');
 
 // ── Constants ─────────────────────────────────────────────
 
-const ACCESS_TOKEN_TTL  = '15m';
+const ACCESS_TOKEN_TTL = '15m';
 const REFRESH_TOKEN_TTL = '7d';
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -177,10 +177,17 @@ async function login(req, res, next) {
     user.failedLoginAttempts = 0;
     user.lockUntil = undefined;
 
-    const accessToken  = issueAccessToken(user._id);
+    const accessToken = issueAccessToken(user._id);
     const refreshToken = issueRefreshToken(user._id);
 
-    user.refreshToken        = hashToken(refreshToken);
+    // 🔹 TEMP DEV DEBUG
+    console.log("\n========== LOGIN TOKENS ==========");
+    console.log("User:", user.email);
+    console.log("Bearer Token:");
+    console.log(`Bearer ${accessToken}`);
+    console.log("=================================\n");
+
+    user.refreshToken = hashToken(refreshToken);
     user.refreshTokenExpires = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
     await user.save();
 
@@ -224,16 +231,16 @@ async function refreshTokens(req, res, next) {
       return res.status(401).json({ success: false, error: 'Refresh token not recognised or already used.' });
     }
 
-    const newAccessToken  = issueAccessToken(user._id);
+    const newAccessToken = issueAccessToken(user._id);
     const newRefreshToken = issueRefreshToken(user._id);
 
-    user.refreshToken        = hashToken(newRefreshToken);
+    user.refreshToken = hashToken(newRefreshToken);
     user.refreshTokenExpires = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
     await user.save();
 
     return res.status(200).json({
       success: true,
-      accessToken:  newAccessToken,
+      accessToken: newAccessToken,
       refreshToken: newRefreshToken,
       user: user.toJSON(),
     });
@@ -268,7 +275,7 @@ async function logoutHandler(req, res, next) {
     if (refreshToken) {
       try {
         const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-        const hashed  = hashToken(refreshToken);
+        const hashed = hashToken(refreshToken);
         await User.findOneAndUpdate(
           { _id: decoded.userId, refreshToken: hashed },
           { $unset: { refreshToken: '', refreshTokenExpires: '' } }
@@ -304,10 +311,10 @@ async function deleteAccount(req, res, next) {
       return res.status(403).json({ success: false, error: 'Incorrect password.' });
     }
 
-    user.isDeleted            = true;
-    user.deletedAt            = new Date();
-    user.refreshToken         = undefined;
-    user.refreshTokenExpires  = undefined;
+    user.isDeleted = true;
+    user.deletedAt = new Date();
+    user.refreshToken = undefined;
+    user.refreshTokenExpires = undefined;
     await user.save();
 
     return res.status(200).json({ success: true });
@@ -332,7 +339,7 @@ async function forgotPassword(req, res, next) {
 
     if (user && !user.isDeleted) {
       const plainToken = crypto.randomBytes(32).toString('hex');
-      user.passwordResetToken   = hashToken(plainToken);
+      user.passwordResetToken = hashToken(plainToken);
       user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000);
       await user.save();
       console.log(`[Auth] Password reset token for ${user.email}: ${plainToken}`);
@@ -360,7 +367,7 @@ async function resetPassword(req, res, next) {
 
     const hashed = hashToken(token);
     const user = await User.findOne({
-      passwordResetToken:   hashed,
+      passwordResetToken: hashed,
       passwordResetExpires: { $gt: Date.now() },
     }).select('+passwordResetToken +passwordResetExpires');
 
@@ -368,11 +375,11 @@ async function resetPassword(req, res, next) {
       return res.status(400).json({ success: false, error: 'Reset link is invalid or has expired.' });
     }
 
-    user.password             = await bcrypt.hash(newPassword, 12);
-    user.passwordResetToken   = undefined;
+    user.password = await bcrypt.hash(newPassword, 12);
+    user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
-    user.refreshToken         = undefined;
-    user.refreshTokenExpires  = undefined;
+    user.refreshToken = undefined;
+    user.refreshTokenExpires = undefined;
     await user.save();
 
     return res.status(200).json({ success: true, message: 'Password reset successfully.' });
@@ -396,7 +403,7 @@ async function resendVerification(req, res, next) {
 
     if (user && !user.isEmailVerified && !user.isDeleted) {
       const code = String(crypto.randomInt(100000, 999999));
-      user.emailVerificationCode    = hashToken(code);
+      user.emailVerificationCode = hashToken(code);
       user.emailVerificationExpires = new Date(Date.now() + 10 * 60 * 1000);
       await user.save();
       console.log(`[DEV] Resend verification code for ${user.email}: ${code}`);

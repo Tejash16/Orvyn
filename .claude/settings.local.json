@@ -5,7 +5,8 @@
       "mcp__ide__getDiagnostics",
       "Bash(node:*)",
       "Bash(./venv/Scripts/python.exe:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(find c:UserstejusOneDriveDesktopDocrackelectronipc -type f -name *.js)"
     ]
   }
 }

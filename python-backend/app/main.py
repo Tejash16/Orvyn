@@ -225,6 +225,7 @@ class DataroomInsight(Base):
     content = Column(Text, nullable=False)
     generated_at = Column(DateTime, default=datetime.datetime.utcnow)
     stale = Column(Boolean, default=False)
+    content_hash = Column(String, nullable=True)
 
 
 class FileEntity(Base):
@@ -492,6 +493,19 @@ def init_db(request: InitDbRequest):
                     conn.execute(text(f"ALTER TABLE files ADD COLUMN {col_name} {col_type}"))
             conn.commit()
 
+    # Schema migration: add content_hash column to dataroom_insights if missing
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='dataroom_insights'"
+        ))
+        if result.fetchone():
+            columns = [
+                row[1] for row in conn.execute(text("PRAGMA table_info(dataroom_insights)"))
+            ]
+            if "content_hash" not in columns:
+                conn.execute(text("ALTER TABLE dataroom_insights ADD COLUMN content_hash TEXT"))
+                conn.commit()
+
     Base.metadata.create_all(engine)
 
     # Create FTS5 virtual table and sync triggers (content= mode)
@@ -533,6 +547,11 @@ def init_db(request: InitDbRequest):
                 VALUES (new.rowid, new.chunk_text, new.file_id, new.dataroom_id, new.chunk_index);
             END
         """))
+
+        # Performance index for recursive folder-tree CTE (Bug 7 perf fix)
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id)"
+        ))
 
         conn.commit()
 
@@ -1680,9 +1699,8 @@ class CopilotSearchRequest(BaseModel):
     query_text: str
     scope_type: Optional[str] = "global"
     scope_ids: Optional[List[str]] = None
-    dataroom_id: Optional[str] = None
-    file_ids: Optional[List[str]] = None
-    folder_id: Optional[str] = None
+    session_id: Optional[str] = None
+    scope_name: Optional[str] = None
     user_id: str
     chroma_path: str
 
@@ -1696,6 +1714,9 @@ class SaveMessageRequest(BaseModel):
 class TriggerIndexingRequest(BaseModel):
     file_ids: List[str]
     dataroom_id: str
+
+class RetryFailedRequest(BaseModel):
+    dataroom_id: Optional[str] = None
 
 class CreateChatSessionRequest(BaseModel):
     scope_type: str
@@ -1809,23 +1830,30 @@ def copilot_apply_summary(request: ApplySummaryRequest):
 
 @app.post("/api/v1/copilot/search")
 def copilot_search(request: CopilotSearchRequest):
-    """Hybrid search: vector (ChromaDB) + keyword (FTS5)."""
-    from app.services.embedding_service import hybrid_search
+    """Hybrid search with session management: delegates to prepare_chat_context.
+
+    Returns { formatted_chunks, history, sources, session_id, session_title }
+    as expected by the Electron orchestration layer.
+    """
+    from app.services.chat_service import prepare_chat_context
 
     engine = _require_db()
 
     with Session(engine) as session:
-        results = hybrid_search(
-            query_vector=request.query_vector,
-            query_text=request.query_text,
-            user_id=request.user_id,
-            chroma_path=request.chroma_path,
-            db_session=session,
-            dataroom_id=request.dataroom_id,
-            file_ids=request.file_ids,
-            folder_id=request.folder_id,
-        )
-        return {"results": results}
+        try:
+            return prepare_chat_context(
+                message=request.query_text,
+                query_vector=request.query_vector,
+                session_id=request.session_id,
+                scope_type=request.scope_type or "global",
+                scope_ids=request.scope_ids,
+                scope_name=request.scope_name,
+                user_id=request.user_id,
+                db_session=session,
+                chroma_path=request.chroma_path,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/v1/copilot/save-message")
@@ -1926,9 +1954,10 @@ def indexing_status(dataroom_id: str = Query(default=None)):
 
 
 @app.post("/api/v1/indexing/retry-failed")
-def indexing_retry_failed(dataroom_id: str = Query(default=None)):
+def indexing_retry_failed(request: RetryFailedRequest):
     """Reset failed jobs to pending for retry."""
     engine = _require_db()
+    dataroom_id = request.dataroom_id
 
     with Session(engine) as session:
         scope_clause = ""
@@ -1960,6 +1989,35 @@ def indexing_retry_failed(dataroom_id: str = Query(default=None)):
         )
         session.commit()
         return {"success": True, "jobs_reset": result.rowcount}
+
+
+@app.get("/api/v1/indexing/pending-files")
+def indexing_pending_files(dataroom_id: str = Query(default=None)):
+    """List file_ids with pending or processing indexing jobs.
+    Called by Electron on startup for crash-recovery auto-resume."""
+    engine = _require_db()
+
+    with Session(engine) as session:
+        scope_clause = ""
+        params = {}
+        if dataroom_id:
+            scope_clause = "AND dataroom_id = :did"
+            params["did"] = dataroom_id
+
+        rows = session.execute(
+            text(f"""
+                SELECT file_id, dataroom_id
+                FROM indexing_jobs
+                WHERE status IN ('pending', 'processing')
+                {scope_clause}
+                ORDER BY created_at ASC
+            """),
+            params,
+        ).fetchall()
+
+        return {
+            "files": [{"file_id": row[0], "dataroom_id": row[1]} for row in rows]
+        }
 
 
 # -- Chat session endpoints --
@@ -2140,6 +2198,7 @@ class PrepareInsightsRequest(BaseModel):
 class ApplyInsightsRequest(BaseModel):
     dataroom_id: str
     insights_data: dict
+    content_hash: Optional[str] = None
 
 class UpdateSessionTitleRequest(BaseModel):
     session_id: str
@@ -2348,7 +2407,7 @@ def copilot_apply_insights(request: ApplyInsightsRequest):
 
     engine = _require_db()
     with Session(engine) as session:
-        return apply_insights(request.dataroom_id, request.insights_data, session)
+        return apply_insights(request.dataroom_id, request.insights_data, session, request.content_hash)
 
 
 # -- Chat suggestions and insights query endpoints --

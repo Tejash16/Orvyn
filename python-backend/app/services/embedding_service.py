@@ -275,11 +275,29 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
 
         # Skip empty or image-only files
         if not extracted_text.strip() or extracted_text.startswith("[Image:"):
-            logger.info(f"prepare_index: file {file_id} has no extractable text, skipping")
+            logger.info(f"prepare_index: file {file_id} has no extractable text, marking complete")
+            # Compute checksum even for skipped files (for future change detection)
+            skip_checksum = compute_content_hash(extracted_text) if extracted_text else compute_content_hash("")
+            # Mark both file and job as complete immediately — no text to index
+            db_session.execute(
+                text("""
+                    UPDATE files SET embedding_status = 'complete', content_checksum = :checksum
+                    WHERE id = :fid
+                """),
+                {"checksum": skip_checksum, "fid": file_id},
+            )
+            db_session.execute(
+                text("""
+                    UPDATE indexing_jobs SET status = 'complete', updated_at = CURRENT_TIMESTAMP
+                    WHERE file_id = :fid AND status IN ('pending', 'processing')
+                """),
+                {"fid": file_id},
+            )
+            db_session.commit()
             files_data.append({
                 "file_id": file_id,
                 "chunks": [],
-                "checksum": None,
+                "checksum": skip_checksum,
                 "file_size_bytes": None,
                 "file_mtime": None,
                 "is_duplicate": False,
@@ -367,6 +385,31 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
                 "metadata": meta,
             })
 
+        # Atomic job claim: update indexing_jobs pending → processing.
+        # If another worker already claimed it (rowcount == 0), skip this file.
+        claim_result = db_session.execute(
+            text("""
+                UPDATE indexing_jobs SET status = 'processing', updated_at = CURRENT_TIMESTAMP
+                WHERE file_id = :fid AND status = 'pending'
+            """),
+            {"fid": file_id},
+        )
+        if claim_result.rowcount == 0:
+            logger.info(f"prepare_index: job for file {file_id} already claimed by another worker, skipping")
+            db_session.commit()
+            files_data.append({
+                "file_id": file_id,
+                "chunks": [],
+                "checksum": content_checksum,
+                "file_size_bytes": file_size_bytes,
+                "file_mtime": file_mtime,
+                "is_duplicate": False,
+                "duplicate_of": None,
+                "skipped": False,
+                "already_claimed": True,
+            })
+            continue
+
         # Update embedding_status to processing
         db_session.execute(
             text("UPDATE files SET embedding_status = 'processing' WHERE id = :fid"),
@@ -382,6 +425,8 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
             "is_duplicate": False,
             "duplicate_of": None,
             "skipped": False,
+            "already_claimed": False,
+            "first_2000_chars": extracted_text[:2000],
         })
 
     db_session.commit()
@@ -649,7 +694,7 @@ def _resolve_folder_tree(folder_id: str, db_session) -> list:
                     SELECT id FROM folders WHERE id = :fid
                     UNION ALL
                     SELECT f.id FROM folders f
-                    JOIN folder_tree ft ON f.parent_folder_id = ft.id
+                    JOIN folder_tree ft ON f.parent_id = ft.id
                 )
                 SELECT id FROM folder_tree
             """),
@@ -961,20 +1006,37 @@ def create_indexing_job(file_id: str, dataroom_id: str, db_session):
 
 def recover_stale_indexing_jobs(db_session):
     """
-    Reset processing jobs older than threshold back to pending.
+    Handle jobs stuck in 'processing' for longer than the stale threshold.
+
+    Jobs under the retry cap are reset to 'pending' with attempts incremented.
+    Jobs at or over the cap are set to 'failed' with an explanatory message.
+
     Called once at Python startup inside /init-db.
-    Does NOT increment attempts — crash was not the job's fault.
     """
+    # Jobs under the cap: reset to pending and increment attempts
     result = db_session.execute(text("""
         UPDATE indexing_jobs
-        SET status = 'pending', updated_at = CURRENT_TIMESTAMP
+        SET status = 'pending', attempts = attempts + 1, updated_at = CURRENT_TIMESTAMP
         WHERE status = 'processing'
         AND updated_at < datetime('now', '-' || :threshold || ' minutes')
-    """), {"threshold": _STALE_JOB_THRESHOLD_MINUTES})
+        AND attempts < :max_attempts
+    """), {"threshold": _STALE_JOB_THRESHOLD_MINUTES, "max_attempts": _MAX_RETRY_ATTEMPTS})
 
     recovered_count = result.rowcount
 
-    # Also reset embedding_status for files whose jobs were recovered
+    # Jobs at or over the cap: mark as failed permanently
+    failed_result = db_session.execute(text("""
+        UPDATE indexing_jobs
+        SET status = 'failed', updated_at = CURRENT_TIMESTAMP,
+            error_message = 'Max retries exceeded'
+        WHERE status = 'processing'
+        AND updated_at < datetime('now', '-' || :threshold || ' minutes')
+        AND attempts >= :max_attempts
+    """), {"threshold": _STALE_JOB_THRESHOLD_MINUTES, "max_attempts": _MAX_RETRY_ATTEMPTS})
+
+    failed_count = failed_result.rowcount
+
+    # Reset embedding_status for files whose jobs were reset to pending
     if recovered_count > 0:
         db_session.execute(text("""
             UPDATE files SET embedding_status = 'pending'
@@ -984,8 +1046,20 @@ def recover_stale_indexing_jobs(db_session):
             ) AND embedding_status = 'processing'
         """))
 
+    # Mark embedding_status as failed for files whose jobs exceeded the cap
+    if failed_count > 0:
+        db_session.execute(text("""
+            UPDATE files SET embedding_status = 'failed'
+            WHERE id IN (
+                SELECT file_id FROM indexing_jobs WHERE status = 'failed'
+                AND error_message = 'Max retries exceeded'
+            ) AND embedding_status = 'processing'
+        """))
+
     db_session.commit()
 
     if recovered_count > 0:
-        logger.info(f"recover_stale_indexing_jobs: recovered {recovered_count} stale jobs")
+        logger.info(f"recover_stale_indexing_jobs: reset {recovered_count} stale jobs to pending")
+    if failed_count > 0:
+        logger.info(f"recover_stale_indexing_jobs: permanently failed {failed_count} jobs (max retries exceeded)")
     return recovered_count

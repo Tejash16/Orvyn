@@ -13,6 +13,7 @@ Python NEVER calls Gemini directly. For tools that need LLM reasoning
 sends it to Express which holds the API key.
 """
 
+import hashlib
 import os
 import uuid
 import json
@@ -44,6 +45,7 @@ def tool_search_documents(
     Called by Electron when Gemini requests a document search.
     Runs hybrid_search and returns formatted results with source labels.
     """
+    import os
     from app.services.embedding_service import hybrid_search
 
     # Resolve scope filters
@@ -55,8 +57,29 @@ def tool_search_documents(
         file_ids = scope_ids
     elif scope_type == "folder" and scope_ids:
         folder_id = scope_ids[0]
-    elif scope_type in ("dataroom", "multi_dataroom") and scope_ids:
+    elif scope_type == "dataroom" and scope_ids:
         dataroom_id = scope_ids[0]
+    elif scope_type == "multi_dataroom" and scope_ids:
+        if len(scope_ids) == 1:
+            dataroom_id = scope_ids[0]
+        else:
+            # Search each DataRoom separately, then merge and re-rank by score
+            all_results = []
+            for dr_id in scope_ids:
+                dr_results = hybrid_search(
+                    query_vector=query_vector,
+                    query_text=query_text,
+                    user_id=user_id,
+                    chroma_path=chroma_path,
+                    db_session=db_session,
+                    dataroom_id=dr_id,
+                )
+                all_results.extend(dr_results)
+            all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+            max_chunks = int(os.getenv("RAG_MAX_CHUNKS_PER_QUERY", "8"))
+            results = all_results[:max_chunks]
+            # Skip the single hybrid_search call below and format directly
+            return _format_tool_search_results(results)
     # global: no filter
 
     results = hybrid_search(
@@ -70,7 +93,11 @@ def tool_search_documents(
         folder_id=folder_id,
     )
 
-    # Format for Gemini consumption
+    return _format_tool_search_results(results)
+
+
+def _format_tool_search_results(results: list) -> dict:
+    """Format hybrid search results for Gemini tool consumption."""
     formatted_parts = []
     for chunk in results:
         file_name = chunk.get("file_name", "Unknown")
@@ -622,6 +649,19 @@ def prepare_insights_data(dataroom_id: str, db_session: Session) -> dict:
         if row[1] not in entities[entity_type]:
             entities[entity_type].append(row[1])
 
+    # Compute content_hash for insight version caching.
+    # Incorporates file count, folder count, and full virtual paths so any
+    # structural change (rename, move, add, remove) invalidates the cache.
+    file_paths = sorted(
+        f"{f['folder']}/{f['name']}" for f in files
+    )
+    hash_input = (
+        str(len(files)) + "|" +
+        str(len(folders)) + "|" +
+        "|".join(file_paths)
+    )
+    content_hash = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
+
     return {
         "dataroom_name": dr_row[0],
         "dataroom_description": dr_row[1],
@@ -631,6 +671,7 @@ def prepare_insights_data(dataroom_id: str, db_session: Session) -> dict:
         "file_type_breakdown": file_type_breakdown,
         "file_count": len(files),
         "folder_count": len(folders),
+        "content_hash": content_hash,
     }
 
 
@@ -638,6 +679,7 @@ def apply_insights(
     dataroom_id: str,
     insights_data: dict,
     db_session: Session,
+    content_hash: Optional[str] = None,
 ) -> dict:
     """
     Store insights in dataroom_insights table.
@@ -650,6 +692,18 @@ def apply_insights(
         "missing_docs": "..."
     }
     """
+    # Validate that dataroom_id actually exists — prevents FK violations when
+    # a caller accidentally passes a file_id or other ID instead of a dataroom_id.
+    dr_exists = db_session.execute(
+        text("SELECT id FROM datarooms WHERE id = :did"),
+        {"did": dataroom_id},
+    ).fetchone()
+    if not dr_exists:
+        raise ValueError(
+            f"apply_insights: dataroom_id '{dataroom_id}' does not exist in datarooms table. "
+            "A file_id or scope_id may have been passed instead of a dataroom_id."
+        )
+
     # Mark old insights as stale
     db_session.execute(
         text("UPDATE dataroom_insights SET stale = 1 WHERE dataroom_id = :did"),
@@ -662,10 +716,10 @@ def apply_insights(
     if insights_data.get("summary"):
         db_session.execute(
             text("""
-                INSERT INTO dataroom_insights (id, dataroom_id, insight_type, content)
-                VALUES (:id, :did, 'summary', :content)
+                INSERT INTO dataroom_insights (id, dataroom_id, insight_type, content, content_hash)
+                VALUES (:id, :did, 'summary', :content, :hash)
             """),
-            {"id": str(uuid.uuid4()), "did": dataroom_id, "content": insights_data["summary"]},
+            {"id": str(uuid.uuid4()), "did": dataroom_id, "content": insights_data["summary"], "hash": content_hash},
         )
         count += 1
 
@@ -676,10 +730,10 @@ def apply_insights(
         ) else insights_data["suggestions"]
         db_session.execute(
             text("""
-                INSERT INTO dataroom_insights (id, dataroom_id, insight_type, content)
-                VALUES (:id, :did, 'suggestions', :content)
+                INSERT INTO dataroom_insights (id, dataroom_id, insight_type, content, content_hash)
+                VALUES (:id, :did, 'suggestions', :content, :hash)
             """),
-            {"id": str(uuid.uuid4()), "did": dataroom_id, "content": suggestions_json},
+            {"id": str(uuid.uuid4()), "did": dataroom_id, "content": suggestions_json, "hash": content_hash},
         )
         count += 1
 
@@ -687,10 +741,10 @@ def apply_insights(
     if insights_data.get("missing_docs"):
         db_session.execute(
             text("""
-                INSERT INTO dataroom_insights (id, dataroom_id, insight_type, content)
-                VALUES (:id, :did, 'missing_docs', :content)
+                INSERT INTO dataroom_insights (id, dataroom_id, insight_type, content, content_hash)
+                VALUES (:id, :did, 'missing_docs', :content, :hash)
             """),
-            {"id": str(uuid.uuid4()), "did": dataroom_id, "content": insights_data["missing_docs"]},
+            {"id": str(uuid.uuid4()), "did": dataroom_id, "content": insights_data["missing_docs"], "hash": content_hash},
         )
         count += 1
 
@@ -730,12 +784,14 @@ def get_suggestions(dataroom_id: str, db_session: Session) -> dict:
         except (json.JSONDecodeError, TypeError):
             return {"stale": False, "suggestions": [row[0]]}
 
-    # Stale or missing — return data for generation
+    # Stale or missing — collect data for generation
     file_rows = db_session.execute(
         text("""
-            SELECT original_name FROM files
-            WHERE dataroom_id = :did
-            ORDER BY original_name
+            SELECT f.original_name, COALESCE(fo.name, 'Unclassified') AS folder_name
+            FROM files f
+            LEFT JOIN folders fo ON f.folder_id = fo.id
+            WHERE f.dataroom_id = :did
+            ORDER BY f.original_name
             LIMIT 20
         """),
         {"did": dataroom_id},
@@ -751,6 +807,54 @@ def get_suggestions(dataroom_id: str, db_session: Session) -> dict:
         {"did": dataroom_id},
     ).fetchall()
     folder_names = [r[0] for r in folder_rows]
+
+    # Compute current content_hash to check if insights are actually out of date
+    all_file_rows = db_session.execute(
+        text("""
+            SELECT f.original_name, COALESCE(fo.name, 'Unclassified') AS folder_name
+            FROM files f
+            LEFT JOIN folders fo ON f.folder_id = fo.id
+            WHERE f.dataroom_id = :did
+            ORDER BY f.original_name
+        """),
+        {"did": dataroom_id},
+    ).fetchall()
+    all_folder_count = len(folder_rows)
+    file_paths = sorted(f"{r[1]}/{r[0]}" for r in all_file_rows)
+    hash_input = (
+        str(len(all_file_rows)) + "|" +
+        str(all_folder_count) + "|" +
+        "|".join(file_paths)
+    )
+    current_hash = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
+
+    # Check if stale suggestions exist with matching content_hash
+    stale_row = db_session.execute(
+        text("""
+            SELECT id, content, content_hash FROM dataroom_insights
+            WHERE dataroom_id = :did AND insight_type = 'suggestions' AND stale = 1
+            ORDER BY generated_at DESC
+            LIMIT 1
+        """),
+        {"did": dataroom_id},
+    ).fetchone()
+
+    if stale_row and stale_row[2] == current_hash:
+        # DataRoom content hasn't changed — un-stale and return cached suggestions
+        db_session.execute(
+            text("""
+                UPDATE dataroom_insights SET stale = 0
+                WHERE dataroom_id = :did AND insight_type = 'suggestions'
+                AND content_hash = :hash
+            """),
+            {"did": dataroom_id, "hash": current_hash},
+        )
+        db_session.commit()
+        try:
+            suggestions = json.loads(stale_row[1])
+            return {"stale": False, "suggestions": suggestions}
+        except (json.JSONDecodeError, TypeError):
+            return {"stale": False, "suggestions": [stale_row[1]]}
 
     return {
         "stale": True,

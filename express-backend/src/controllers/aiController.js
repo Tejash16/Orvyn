@@ -146,6 +146,9 @@ async function generateTitle(req, res, next) {
 // ── Phase C2 — Copilot Chat, Audit, Simulate, Insights ──
 
 // Gemini function calling tool declarations
+// IMPORTANT: Only include tools that Electron can execute via executeTool() in a single
+// Python call. Multi-step tools (compare_documents, summarize_dataroom, extract_data_point,
+// audit_dataroom) have their own dedicated IPC handlers and should NOT be offered here.
 const COPILOT_TOOL_DECLARATIONS = [
   {
     name: 'search_documents',
@@ -205,44 +208,8 @@ const COPILOT_TOOL_DECLARATIONS = [
       required: ['file_id'],
     },
   },
-  {
-    name: 'compare_documents',
-    description: 'Compare the contents of two or more files side by side.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        file_ids: {
-          type: 'ARRAY',
-          items: { type: 'STRING' },
-          description: 'Array of file IDs to compare',
-        },
-      },
-      required: ['file_ids'],
-    },
-  },
-  {
-    name: 'summarize_dataroom',
-    description: 'Generate a comprehensive summary of an entire DataRoom and its contents.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {},
-    },
-  },
-  {
-    name: 'extract_data_point',
-    description: 'Search for and extract a specific piece of data from the documents.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        query: {
-          type: 'STRING',
-          description: 'What data point to extract (e.g. "total revenue for Q3 2024")',
-        },
-      },
-      required: ['query'],
-    },
-  },
 ];
+
 
 /**
  * POST /api/v1/ai/chat/stream
