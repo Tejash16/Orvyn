@@ -153,7 +153,12 @@ async function verifyEmail(email, code) {
   });
 
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Email verification failed.');
+  if (!res.ok) {
+    const err = new Error(data.error || 'Email verification failed.');
+    err.retryAfterSeconds = data.retryAfterSeconds;
+    err.attemptsLeft      = data.attemptsLeft;
+    throw err;
+  }
   return data;
 }
 
@@ -185,17 +190,54 @@ async function forgotPassword(email) {
   return data;
 }
 
-// ── Reset Password ────────────────────────────────────────
+// ── Verify Reset Code ─────────────────────────────────────
 
-async function resetPassword({ token, newPassword }) {
-  const res = await fetch(`${getExpressUrl()}/api/v1/auth/reset-password`, {
+async function verifyResetCode(email, code) {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/verify-reset-code`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, newPassword }),
+    body: JSON.stringify({ email, code }),
   });
 
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Password reset failed.');
+  if (!res.ok) {
+    const err = new Error(data.error || 'Reset code verification failed.');
+    err.retryAfterSeconds = data.retryAfterSeconds;
+    err.attemptsLeft      = data.attemptsLeft;
+    throw err;
+  }
+  return data;
+}
+
+// ── Reset Password (code-based) ───────────────────────────
+
+async function resetPassword({ email, code, newPassword }) {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code, newPassword }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    const err = new Error(data.error || 'Password reset failed.');
+    err.retryAfterSeconds = data.retryAfterSeconds;
+    throw err;
+  }
+  return data;
+}
+
+// ── Resend Reset Code ─────────────────────────────────────
+
+async function resendResetCode(email) {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/resend-reset-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Resend failed.');
   return data;
 }
 
@@ -241,7 +283,9 @@ module.exports = {
   verifyEmail,
   resendVerification,
   forgotPassword,
+  verifyResetCode,
   resetPassword,
+  resendResetCode,
   deleteAccount,
   logout,
   getCurrentUser,

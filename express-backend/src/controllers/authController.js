@@ -1,76 +1,26 @@
-const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const validator = require('validator');
-const User = require('../models/User');
+'use strict';
 
-// ── Constants ─────────────────────────────────────────────
+const jwt        = require('jsonwebtoken');
+const bcrypt     = require('bcryptjs');
+const validator  = require('validator');
 
-const ACCESS_TOKEN_TTL = '15m';
-const REFRESH_TOKEN_TTL = '7d';
-const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-// ── Helpers ───────────────────────────────────────────────
-
-function hashToken(plain) {
-  return crypto.createHash('sha256').update(plain).digest('hex');
-}
-
-function issueAccessToken(userId) {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL });
-}
-
-function issueRefreshToken(userId) {
-  return jwt.sign({ userId }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_TTL });
-}
+const User        = require('../models/User');
+const authService = require('../services/authService');
 
 // ── Register ──────────────────────────────────────────────
 
 async function register(req, res, next) {
   try {
     const { name, email, password } = req.body;
-
-    if (!name || !email || !password) {
-      return res.status(400).json({ success: false, error: 'Name, email, and password are required.' });
-    }
-
-    if (!validator.isEmail(email)) {
-      return res.status(400).json({ success: false, error: 'Invalid email address.' });
-    }
-
-    if (password.length < 8) {
-      return res.status(400).json({ success: false, error: 'Password must be at least 8 characters.' });
-    }
-
-    const existing = await User.findOne({ email: email.toLowerCase() });
-    if (existing) {
-      return res.status(409).json({ success: false, error: 'An account with this email already exists.' });
-    }
-
-    const hashed = await bcrypt.hash(password, 12);
-
-    const user = await User.create({
-      name: name.trim(),
-      email: email.toLowerCase(),
-      password: hashed,
-      provider: 'local',
-      isEmailVerified: false,
-    });
-
-    const code = String(crypto.randomInt(100000, 999999));
-    user.emailVerificationCode = hashToken(code);
-    user.emailVerificationExpires = new Date(Date.now() + 10 * 60 * 1000);
-    await user.save();
-
-    console.log(`[DEV] Verification code for ${user.email}: ${code}`);
-
+    const { cooldownSeconds } = await authService.registerUser({ name, email, password });
     return res.status(201).json({
       success: true,
-      message: 'Registration successful. Please verify your email.',
+      message: 'Registration successful. Please check your email for your verification code.',
+      cooldownSeconds,
     });
   } catch (err) {
-    if (err.code === 11000) {
-      return res.status(409).json({ success: false, error: 'An account with this email already exists.' });
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ success: false, error: err.message });
     }
     next(err);
   }
@@ -81,42 +31,15 @@ async function register(req, res, next) {
 async function verifyEmail(req, res, next) {
   try {
     const { email, code } = req.body;
-
-    if (!email || !code) {
-      return res.status(400).json({ success: false, error: 'Email and verification code are required.' });
-    }
-
-    const user = await User.findOne({ email: email.toLowerCase() })
-      .select('+emailVerificationCode +emailVerificationExpires');
-
-    if (!user) {
-      return res.status(400).json({ success: false, error: 'No pending verification for this email.' });
-    }
-
-    if (user.isEmailVerified) {
-      return res.status(400).json({ success: false, error: 'Email is already verified.' });
-    }
-
-    if (!user.emailVerificationCode || !user.emailVerificationExpires) {
-      return res.status(400).json({ success: false, error: 'No pending verification for this email.' });
-    }
-
-    if (user.emailVerificationExpires < Date.now()) {
-      return res.status(400).json({ success: false, error: 'Verification code has expired. Please request a new one.' });
-    }
-
-    const hashed = hashToken(code);
-    if (hashed !== user.emailVerificationCode) {
-      return res.status(400).json({ success: false, error: 'Invalid verification code.' });
-    }
-
-    user.isEmailVerified = true;
-    user.emailVerificationCode = undefined;
-    user.emailVerificationExpires = undefined;
-    await user.save();
-
+    await authService.verifyEmail(email, code);
     return res.status(200).json({ success: true, message: 'Email verified successfully.' });
   } catch (err) {
+    if (err.statusCode) {
+      const body = { success: false, error: err.message };
+      if (err.retryAfterSeconds != null) body.retryAfterSeconds = err.retryAfterSeconds;
+      if (err.attemptsLeft     != null) body.attemptsLeft     = err.attemptsLeft;
+      return res.status(err.statusCode).json(body);
+    }
     next(err);
   }
 }
@@ -126,78 +49,12 @@ async function verifyEmail(req, res, next) {
 async function login(req, res, next) {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ success: false, error: 'Email and password are required.' });
-    }
-
-    if (!validator.isEmail(email)) {
-      return res.status(400).json({ success: false, error: 'Invalid email address.' });
-    }
-
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
-    if (!user) {
-      return res.status(401).json({ success: false, error: 'Invalid credentials.' });
-    }
-
-    if (user.isDeleted) {
-      return res.status(403).json({ success: false, error: 'Account deleted.' });
-    }
-
-    if (user.provider !== 'local') {
-      return res.status(401).json({ success: false, error: 'This account uses a different sign-in method.' });
-    }
-
-    // ── Account lock check ─────────────────────────────────
-    const nowMs = Date.now();
-    if (user.lockUntil) {
-      if (user.lockUntil > nowMs) {
-        return res.status(423).json({ success: false, error: 'Account is temporarily locked. Try again later.' });
-      }
-      // Lock has expired — reset counter and continue
-      user.failedLoginAttempts = 0;
-      user.lockUntil = undefined;
-    }
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
-      if (user.failedLoginAttempts >= 5) {
-        user.lockUntil = new Date(nowMs + 15 * 60 * 1000);
-      }
-      await user.save();
-      return res.status(401).json({ success: false, error: 'Invalid credentials.' });
-    }
-
-    if (!user.isEmailVerified) {
-      return res.status(403).json({ success: false, error: 'Email not verified.' });
-    }
-
-    // Successful auth — reset lock counters
-    user.failedLoginAttempts = 0;
-    user.lockUntil = undefined;
-
-    const accessToken = issueAccessToken(user._id);
-    const refreshToken = issueRefreshToken(user._id);
-
-    // 🔹 TEMP DEV DEBUG
-    console.log("\n========== LOGIN TOKENS ==========");
-    console.log("User:", user.email);
-    console.log("Bearer Token:");
-    console.log(`Bearer ${accessToken}`);
-    console.log("=================================\n");
-
-    user.refreshToken = hashToken(refreshToken);
-    user.refreshTokenExpires = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
-    await user.save();
-
-    return res.status(200).json({
-      success: true,
-      accessToken,
-      refreshToken,
-      user: user.toJSON(),
-    });
+    const result = await authService.loginUser(email, password);
+    return res.status(200).json({ success: true, ...result });
   } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ success: false, error: err.message });
+    }
     next(err);
   }
 }
@@ -219,7 +76,7 @@ async function refreshTokens(req, res, next) {
       return res.status(401).json({ success: false, error: 'Invalid or expired refresh token.' });
     }
 
-    const hashed = hashToken(refreshToken);
+    const hashed = authService.hashToken(refreshToken);
     const user = await User.findOne({
       _id: decoded.userId,
       refreshToken: hashed,
@@ -231,18 +88,18 @@ async function refreshTokens(req, res, next) {
       return res.status(401).json({ success: false, error: 'Refresh token not recognised or already used.' });
     }
 
-    const newAccessToken = issueAccessToken(user._id);
-    const newRefreshToken = issueRefreshToken(user._id);
+    const newAccessToken  = authService.issueAccessToken(user._id);
+    const newRefreshToken = authService.issueRefreshToken(user._id);
 
-    user.refreshToken = hashToken(newRefreshToken);
-    user.refreshTokenExpires = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+    user.refreshToken        = authService.hashToken(newRefreshToken);
+    user.refreshTokenExpires = new Date(Date.now() + authService.REFRESH_TOKEN_TTL_MS);
     await user.save();
 
     return res.status(200).json({
-      success: true,
-      accessToken: newAccessToken,
+      success:      true,
+      accessToken:  newAccessToken,
       refreshToken: newRefreshToken,
-      user: user.toJSON(),
+      user:         user.toJSON(),
     });
   } catch (err) {
     next(err);
@@ -254,28 +111,23 @@ async function refreshTokens(req, res, next) {
 async function getMe(req, res, next) {
   try {
     const user = await User.findById(req.user.userId);
-    if (!user) {
-      return res.status(401).json({ success: false, error: 'User not found.' });
-    }
-    if (user.isDeleted) {
-      return res.status(403).json({ success: false, error: 'Account deleted.' });
-    }
+    if (!user)          return res.status(401).json({ success: false, error: 'User not found.' });
+    if (user.isDeleted) return res.status(403).json({ success: false, error: 'Account deleted.' });
     return res.status(200).json({ success: true, user: user.toJSON() });
   } catch (err) {
     next(err);
   }
 }
 
-// ── Logout (server-side token revocation) ─────────────────
+// ── Logout ────────────────────────────────────────────────
 
 async function logoutHandler(req, res, next) {
   try {
     const { refreshToken } = req.body;
-
     if (refreshToken) {
       try {
         const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-        const hashed = hashToken(refreshToken);
+        const hashed  = authService.hashToken(refreshToken);
         await User.findOneAndUpdate(
           { _id: decoded.userId, refreshToken: hashed },
           { $unset: { refreshToken: '', refreshTokenExpires: '' } }
@@ -284,7 +136,6 @@ async function logoutHandler(req, res, next) {
         // Token already invalid — no action needed
       }
     }
-
     return res.status(200).json({ success: true, message: 'Logged out.' });
   } catch (err) {
     next(err);
@@ -311,9 +162,9 @@ async function deleteAccount(req, res, next) {
       return res.status(403).json({ success: false, error: 'Incorrect password.' });
     }
 
-    user.isDeleted = true;
-    user.deletedAt = new Date();
-    user.refreshToken = undefined;
+    user.isDeleted           = true;
+    user.deletedAt           = new Date();
+    user.refreshToken        = undefined;
     user.refreshTokenExpires = undefined;
     await user.save();
 
@@ -329,24 +180,43 @@ async function forgotPassword(req, res, next) {
   try {
     const { email } = req.body;
 
-    const GENERIC = { success: true, message: 'If that email is registered, a reset link has been sent.' };
+    // Always return a generic response — never reveal if an email is registered
+    const GENERIC_COOLDOWN = 60;
 
     if (!email || !validator.isEmail(email)) {
-      return res.status(200).json(GENERIC);
+      return res.status(200).json({
+        success:         true,
+        message:         'If that email is registered, a reset code has been sent.',
+        cooldownSeconds: GENERIC_COOLDOWN,
+      });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const { cooldownSeconds } = await authService.requestPasswordReset(email.toLowerCase());
 
-    if (user && !user.isDeleted) {
-      const plainToken = crypto.randomBytes(32).toString('hex');
-      user.passwordResetToken = hashToken(plainToken);
-      user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000);
-      await user.save();
-      console.log(`[Auth] Password reset token for ${user.email}: ${plainToken}`);
-    }
-
-    return res.status(200).json(GENERIC);
+    return res.status(200).json({
+      success:         true,
+      message:         'If that email is registered, a reset code has been sent.',
+      cooldownSeconds: cooldownSeconds || GENERIC_COOLDOWN,
+    });
   } catch (err) {
+    next(err);
+  }
+}
+
+// ── Verify Reset Code ─────────────────────────────────────
+
+async function verifyResetCode(req, res, next) {
+  try {
+    const { email, code } = req.body;
+    await authService.verifyResetCode(email, code);
+    return res.status(200).json({ success: true, message: 'Reset code verified.' });
+  } catch (err) {
+    if (err.statusCode) {
+      const body = { success: false, error: err.message };
+      if (err.retryAfterSeconds != null) body.retryAfterSeconds = err.retryAfterSeconds;
+      if (err.attemptsLeft     != null) body.attemptsLeft     = err.attemptsLeft;
+      return res.status(err.statusCode).json(body);
+    }
     next(err);
   }
 }
@@ -355,35 +225,15 @@ async function forgotPassword(req, res, next) {
 
 async function resetPassword(req, res, next) {
   try {
-    const { token, newPassword } = req.body;
-
-    if (!token || !newPassword) {
-      return res.status(400).json({ success: false, error: 'Token and new password are required.' });
-    }
-
-    if (newPassword.length < 8) {
-      return res.status(400).json({ success: false, error: 'Password must be at least 8 characters.' });
-    }
-
-    const hashed = hashToken(token);
-    const user = await User.findOne({
-      passwordResetToken: hashed,
-      passwordResetExpires: { $gt: Date.now() },
-    }).select('+passwordResetToken +passwordResetExpires');
-
-    if (!user || user.isDeleted) {
-      return res.status(400).json({ success: false, error: 'Reset link is invalid or has expired.' });
-    }
-
-    user.password = await bcrypt.hash(newPassword, 12);
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
-    user.refreshToken = undefined;
-    user.refreshTokenExpires = undefined;
-    await user.save();
-
+    const { email, code, newPassword } = req.body;
+    await authService.resetPassword(email, code, newPassword);
     return res.status(200).json({ success: true, message: 'Password reset successfully.' });
   } catch (err) {
+    if (err.statusCode) {
+      const body = { success: false, error: err.message };
+      if (err.retryAfterSeconds != null) body.retryAfterSeconds = err.retryAfterSeconds;
+      return res.status(err.statusCode).json(body);
+    }
     next(err);
   }
 }
@@ -394,25 +244,73 @@ async function resendVerification(req, res, next) {
   try {
     const { email } = req.body;
 
+    const GENERIC = {
+      success: true,
+      message: 'If that email is registered and unverified, a new code has been sent.',
+    };
+
     if (!email || !validator.isEmail(email)) {
-      return res.status(200).json({ success: true, message: 'If that email is registered and unverified, a new code has been sent.' });
+      return res.status(200).json({ ...GENERIC, cooldownSeconds: 60 });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() })
-      .select('+emailVerificationCode +emailVerificationExpires');
+    const result = await authService.resendVerificationCode(email.toLowerCase());
 
-    if (user && !user.isEmailVerified && !user.isDeleted) {
-      const code = String(crypto.randomInt(100000, 999999));
-      user.emailVerificationCode = hashToken(code);
-      user.emailVerificationExpires = new Date(Date.now() + 10 * 60 * 1000);
-      await user.save();
-      console.log(`[DEV] Resend verification code for ${user.email}: ${code}`);
+    if (result.retryAfterSeconds) {
+      return res.status(429).json({
+        success:           false,
+        error:             'Please wait before requesting another code.',
+        retryAfterSeconds: result.retryAfterSeconds,
+      });
     }
 
-    return res.status(200).json({ success: true, message: 'If that email is registered and unverified, a new code has been sent.' });
+    return res.status(200).json({ ...GENERIC, cooldownSeconds: result.cooldownSeconds });
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { register, verifyEmail, login, getMe, refreshTokens, logoutHandler, deleteAccount, resendVerification, forgotPassword, resetPassword };
+// ── Resend Reset Code ─────────────────────────────────────
+
+async function resendResetCode(req, res, next) {
+  try {
+    const { email } = req.body;
+
+    const GENERIC = {
+      success: true,
+      message: 'If that email is registered, a new reset code has been sent.',
+    };
+
+    if (!email || !validator.isEmail(email)) {
+      return res.status(200).json({ ...GENERIC, cooldownSeconds: 60 });
+    }
+
+    const result = await authService.resendResetCode(email.toLowerCase());
+
+    if (result.retryAfterSeconds) {
+      return res.status(429).json({
+        success:           false,
+        error:             'Please wait before requesting another code.',
+        retryAfterSeconds: result.retryAfterSeconds,
+      });
+    }
+
+    return res.status(200).json({ ...GENERIC, cooldownSeconds: result.cooldownSeconds });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  register,
+  verifyEmail,
+  login,
+  getMe,
+  refreshTokens,
+  logoutHandler,
+  deleteAccount,
+  forgotPassword,
+  verifyResetCode,
+  resetPassword,
+  resendVerification,
+  resendResetCode,
+};

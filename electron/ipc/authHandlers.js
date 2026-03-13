@@ -54,7 +54,11 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
   ipcMain.handle('auth:register', async (_event, { name, email, password }) => {
     try {
       const result = await authService.register({ name, email, password });
-      return { success: true, message: result.message };
+      return {
+        success:         true,
+        message:         result.message,
+        cooldownSeconds: result.cooldownSeconds,
+      };
     } catch (err) {
       return { success: false, error: err.message };
     }
@@ -265,17 +269,52 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
   ipcMain.handle('auth:forgotPassword', async (_event, { email }) => {
     try {
-      await authService.forgotPassword(email);
-      return { success: true };
+      const result = await authService.forgotPassword(email);
+      return {
+        success:         true,
+        message:         result.message,
+        cooldownSeconds: result.cooldownSeconds,
+      };
     } catch (err) {
       return { success: false, error: err.message };
     }
   });
 
-  ipcMain.handle('auth:resetPassword', async (_event, { token, newPassword }) => {
+  ipcMain.handle('auth:verifyResetCode', async (_event, { email, code }) => {
     try {
-      const result = await authService.resetPassword({ token, newPassword });
-      return { success: true, message: result.message };
+      await authService.verifyResetCode(email, code);
+      return { success: true };
+    } catch (err) {
+      return {
+        success:           false,
+        error:             err.message,
+        retryAfterSeconds: err.retryAfterSeconds,
+        attemptsLeft:      err.attemptsLeft,
+      };
+    }
+  });
+
+  ipcMain.handle('auth:resetPassword', async (_event, { email, code, newPassword }) => {
+    try {
+      await authService.resetPassword({ email, code, newPassword });
+      return { success: true };
+    } catch (err) {
+      return {
+        success:           false,
+        error:             err.message,
+        retryAfterSeconds: err.retryAfterSeconds,
+      };
+    }
+  });
+
+  ipcMain.handle('auth:resendResetCode', async (_event, { email }) => {
+    try {
+      const result = await authService.resendResetCode(email);
+      return {
+        success:           true,
+        cooldownSeconds:   result.cooldownSeconds,
+        retryAfterSeconds: result.retryAfterSeconds,
+      };
     } catch (err) {
       return { success: false, error: err.message };
     }
@@ -288,14 +327,23 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
       const result = await authService.verifyEmail(email, code);
       return { success: true, message: result.message };
     } catch (err) {
-      return { success: false, error: err.message };
+      return {
+        success:           false,
+        error:             err.message,
+        retryAfterSeconds: err.retryAfterSeconds,
+        attemptsLeft:      err.attemptsLeft,
+      };
     }
   });
 
   ipcMain.handle('auth:resendVerification', async (_event, { email }) => {
     try {
-      await authService.resendVerification(email);
-      return { success: true };
+      const result = await authService.resendVerification(email);
+      return {
+        success:           true,
+        cooldownSeconds:   result.cooldownSeconds,
+        retryAfterSeconds: result.retryAfterSeconds,
+      };
     } catch (err) {
       return { success: false, error: err.message };
     }

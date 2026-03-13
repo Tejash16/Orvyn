@@ -4,7 +4,6 @@ import styles from './auth.module.css';
 function ForgotPassword({ onSwitchView }) {
   const [email,   setEmail]   = useState('');
   const [loading, setLoading] = useState(false);
-  const [sent,    setSent]    = useState(false);
   const [error,   setError]   = useState('');
 
   async function handleSubmit(e) {
@@ -19,33 +18,18 @@ function ForgotPassword({ onSwitchView }) {
     setError('');
 
     try {
-      await window.api.auth.forgotPassword(email);
-      setSent(true);
+      const result = await window.api.auth.forgotPassword(email);
+      // Backend always returns success (no email enumeration).
+      // Switch to the in-app code-entry step.
+      onSwitchView('reset', {
+        email,
+        cooldownSeconds: result.cooldownSeconds ?? 60,
+      });
     } catch {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
-  }
-
-  if (sent) {
-    return (
-      <>
-        <h1 className={styles.cardTitle}>Check your email</h1>
-        <p className={styles.successBox}>
-          If that email is registered, a reset link has been sent. Check the server console (dev mode).
-        </p>
-        <div className={styles.footer}>
-          <button
-            type="button"
-            className={styles.switchLink}
-            onClick={() => onSwitchView('login')}
-          >
-            Back to sign in
-          </button>
-        </div>
-      </>
-    );
   }
 
   return (
@@ -69,7 +53,8 @@ function ForgotPassword({ onSwitchView }) {
         {error && <p className={styles.error}>{error}</p>}
 
         <button type="submit" className={styles.submit} disabled={loading}>
-          {loading ? 'Sending…' : 'Send reset link'}
+          {loading && <span className={styles.spinner} />}
+          {loading ? 'Sending…' : 'Send reset code'}
         </button>
       </form>
 

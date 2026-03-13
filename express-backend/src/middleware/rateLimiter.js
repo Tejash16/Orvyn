@@ -52,4 +52,32 @@ const registerLimiter = rateLimit({
   },
 });
 
-module.exports = { loginLimiter, forgotPasswordLimiter, resetPasswordLimiter, resendVerificationLimiter, registerLimiter };
+const verifyResetCodeLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ success: false, error: 'Too many attempts. Try again in 15 minutes.' });
+  },
+});
+
+const resendResetCodeLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ success: false, error: 'Too many requests. Try again in 15 minutes.' });
+  },
+});
+
+module.exports = {
+  loginLimiter,
+  forgotPasswordLimiter,
+  resetPasswordLimiter,
+  resendVerificationLimiter,
+  registerLimiter,
+  verifyResetCodeLimiter,
+  resendResetCodeLimiter,
+};

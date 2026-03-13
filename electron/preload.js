@@ -28,8 +28,10 @@ contextBridge.exposeInMainWorld('api', {
     deleteAccount:         (password) => ipcRenderer.invoke('auth:deleteAccount', { password }),
     verifyEmail:           (email, code)               => ipcRenderer.invoke('auth:verifyEmail', { email, code }),
     resendVerification:    (email)                    => ipcRenderer.invoke('auth:resendVerification', { email }),
-    forgotPassword:        (email)                    => ipcRenderer.invoke('auth:forgotPassword', { email }),
-    resetPassword:         (token, newPassword)       => ipcRenderer.invoke('auth:resetPassword', { token, newPassword }),
+    forgotPassword:        (email)                        => ipcRenderer.invoke('auth:forgotPassword', { email }),
+    verifyResetCode:       (email, code)                  => ipcRenderer.invoke('auth:verifyResetCode', { email, code }),
+    resetPassword:         ({ email, code, newPassword }) => ipcRenderer.invoke('auth:resetPassword', { email, code, newPassword }),
+    resendResetCode:       (email)                        => ipcRenderer.invoke('auth:resendResetCode', { email }),
     getCurrentUser: ()        => ipcRenderer.invoke('auth:getCurrentUser'),
     getLocalDbPath: ()        => ipcRenderer.invoke('auth:getLocalDbPath'),
     // Called once on app mount — Electron performs the entire restore sequence.

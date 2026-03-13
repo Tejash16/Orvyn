@@ -3,14 +3,31 @@ import styles from './auth.module.css';
 
 const CODE_LENGTH = 6;
 
-function VerifyCode({ email, onSwitchView }) {
-  const [digits, setDigits]       = useState(Array(CODE_LENGTH).fill(''));
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState('');
-  const [cooldown, setCooldown]   = useState(0);
+/**
+ * VerifyCode — email verification step.
+ *
+ * @prop {string}   email           — email being verified (read-only display)
+ * @prop {number}   initialCooldown — backend-driven resend cooldown in seconds
+ * @prop {function} onSwitchView    — navigate to another view
+ * @prop {function} onVerifySuccess — called after successful verification
+ */
+function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess }) {
+  const [digits,   setDigits]   = useState(Array(CODE_LENGTH).fill(''));
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
+  const [cooldown, setCooldown] = useState(initialCooldown);
   const inputRefs = useRef([]);
 
-  // Cooldown timer
+  // Sync cooldown when parent updates initialCooldown (e.g. after resend)
+  useEffect(() => { setCooldown(initialCooldown); }, [initialCooldown]);
+
+  // Clear inputs and error when email changes (view re-entered)
+  useEffect(() => {
+    setDigits(Array(CODE_LENGTH).fill(''));
+    setError('');
+  }, [email]);
+
+  // Countdown ticker
   useEffect(() => {
     if (cooldown <= 0) return;
     const id = setInterval(() => setCooldown((c) => c - 1), 1000);
@@ -18,14 +35,11 @@ function VerifyCode({ email, onSwitchView }) {
   }, [cooldown]);
 
   function handleChange(index, value) {
-    // Only allow single digit
     const digit = value.replace(/\D/g, '').slice(-1);
-    const next = [...digits];
+    const next  = [...digits];
     next[index] = digit;
     setDigits(next);
     setError('');
-
-    // Auto-advance to next input
     if (digit && index < CODE_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -41,17 +55,11 @@ function VerifyCode({ email, onSwitchView }) {
     e.preventDefault();
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, CODE_LENGTH);
     if (!pasted) return;
-
-    const next = [...digits];
-    for (let i = 0; i < CODE_LENGTH; i++) {
-      next[i] = pasted[i] || '';
-    }
+    const next = Array(CODE_LENGTH).fill('');
+    for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
     setDigits(next);
     setError('');
-
-    // Focus last filled input or the next empty one
-    const focusIndex = Math.min(pasted.length, CODE_LENGTH - 1);
-    inputRefs.current[focusIndex]?.focus();
+    inputRefs.current[Math.min(pasted.length, CODE_LENGTH - 1)]?.focus();
   }
 
   async function handleVerify() {
@@ -68,8 +76,13 @@ function VerifyCode({ email, onSwitchView }) {
       const result = await window.api.auth.verifyEmail(email, code);
 
       if (result.success) {
-        onSwitchView('login');
+        setDigits(Array(CODE_LENGTH).fill(''));
+        onVerifySuccess();
       } else {
+        setDigits(Array(CODE_LENGTH).fill(''));
+        if (result.retryAfterSeconds) {
+          setCooldown(result.retryAfterSeconds);
+        }
         setError(result.error || 'Verification failed.');
       }
     } catch {
@@ -83,8 +96,12 @@ function VerifyCode({ email, onSwitchView }) {
     if (cooldown > 0) return;
 
     try {
-      await window.api.auth.resendVerification(email);
-      setCooldown(60);
+      const result = await window.api.auth.resendVerification(email);
+      if (result.retryAfterSeconds) {
+        setCooldown(result.retryAfterSeconds);
+      } else {
+        setCooldown(result.cooldownSeconds ?? 60);
+      }
       setError('');
     } catch {
       setError('Failed to resend code. Please try again.');
@@ -124,7 +141,8 @@ function VerifyCode({ email, onSwitchView }) {
         onClick={handleVerify}
         disabled={loading}
       >
-        {loading ? 'Verifying...' : 'Verify'}
+        {loading && <span className={styles.spinner} />}
+        {loading ? 'Verifying…' : 'Verify'}
       </button>
 
       <div className={styles.resendRow}>

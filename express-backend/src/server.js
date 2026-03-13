@@ -20,6 +20,16 @@ if (missingEnv.length > 0) {
   process.exit(1);
 }
 
+// ── SMTP warning (non-fatal; dev uses file-log fallback) ──
+const SMTP_VARS = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'];
+const missingSmtp = SMTP_VARS.filter((key) => !process.env[key]);
+if (missingSmtp.length > 0) {
+  logger.warn(
+    `SMTP not fully configured (${missingSmtp.join(', ')} missing). ` +
+    'Emails will be logged to file instead of sent. Configure all SMTP_* vars for production.'
+  );
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 

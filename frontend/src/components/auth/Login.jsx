@@ -7,15 +7,12 @@ import styles from './auth.module.css';
 function Login({ onSwitchView }) {
   const dispatch = useDispatch();
 
-  const [email,         setEmail]         = useState('');
-  const [password,      setPassword]      = useState('');
-  const [loading,       setLoading]       = useState(false);
-  const [error,         setError]         = useState('');
-
-  const [unverified,    setUnverified]    = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendSuccess, setResendSuccess] = useState(false);
-  const [resendError,   setResendError]   = useState('');
+  const [email,        setEmail]        = useState('');
+  const [password,     setPassword]     = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLock,     setCapsLock]     = useState(false);
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState('');
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -37,7 +34,7 @@ function Login({ onSwitchView }) {
         dispatch(setTheme(result.theme ?? 'light'));
       } else if (result.error === 'Email not verified.') {
         dispatch(loginFailure(result.error));
-        onSwitchView('verify', email);
+        onSwitchView('verify', { email, cooldownSeconds: 0 });
         return;
       } else {
         dispatch(loginFailure(result.error));
@@ -49,62 +46,6 @@ function Login({ onSwitchView }) {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function handleResend() {
-    setResendLoading(true);
-    setResendError('');
-    try {
-      await window.api.auth.resendVerification(email);
-      setResendSuccess(true);
-    } catch {
-      setResendError('Failed to send. Please try again.');
-    } finally {
-      setResendLoading(false);
-    }
-  }
-
-  function handleBackToLogin() {
-    setUnverified(false);
-    setResendSuccess(false);
-    setResendError('');
-    setError('');
-  }
-
-  if (unverified) {
-    return (
-      <>
-        <h1 className={styles.cardTitle}>Email not verified</h1>
-        <p className={styles.verifyHint}>
-          Your email is not verified. Resend the verification link to{' '}
-          <strong>{email}</strong>.
-        </p>
-
-        {resendSuccess ? (
-          <p className={styles.successBox}>
-            Verification email sent. Check the server console (dev mode).
-          </p>
-        ) : (
-          <>
-            {resendError && <p className={styles.error}>{resendError}</p>}
-            <button
-              type="button"
-              className={styles.submit}
-              onClick={handleResend}
-              disabled={resendLoading}
-            >
-              {resendLoading ? 'Sending…' : 'Resend verification email'}
-            </button>
-          </>
-        )}
-
-        <div className={styles.footer}>
-          <button type="button" className={styles.switchLink} onClick={handleBackToLogin}>
-            Back to sign in
-          </button>
-        </div>
-      </>
-    );
   }
 
   return (
@@ -127,19 +68,33 @@ function Login({ onSwitchView }) {
 
         <div className={styles.field}>
           <label className={styles.label} htmlFor="login-password">Password</label>
-          <input
-            id="login-password"
-            type="password"
-            className={styles.input}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
+          <div className={styles.passwordWrap}>
+            <input
+              id="login-password"
+              type={showPassword ? 'text' : 'password'}
+              className={styles.input}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyUp={(e) => setCapsLock(e.getModifierState('CapsLock'))}
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              className={styles.passwordToggle}
+              onClick={() => setShowPassword((v) => !v)}
+              tabIndex={-1}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? '🙈' : '👁️'}
+            </button>
+          </div>
+          {capsLock && <p className={styles.capsWarning}>Caps Lock is on</p>}
         </div>
 
         {error && <p className={styles.error}>{error}</p>}
 
         <button type="submit" className={styles.submit} disabled={loading}>
+          {loading && <span className={styles.spinner} />}
           {loading ? 'Signing in…' : 'Sign in'}
         </button>
       </form>

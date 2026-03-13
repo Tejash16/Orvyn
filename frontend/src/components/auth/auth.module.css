@@ -1,13 +1,78 @@
-/* ── Auth wrap — fills remaining height, centers card ────── */
+/* ── Split layout container ──────────────────────────────── */
 
 .authWrap {
   flex: 1;
   min-height: 0;
   display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  background-color: var(--bg-app);
+}
+
+/* Left — brand panel */
+.brandPanel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 32px;
+  width: 42%;
+  min-width: 220px;
+  padding: 48px 40px;
+  background: linear-gradient(150deg, var(--accent-primary) 0%, var(--accent-hover) 100%);
+  flex-shrink: 0;
+}
+
+.brandLogo {
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: #ffffff;
+}
+
+.brandTagline {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #ffffff;
+  margin: 0;
+}
+
+.brandFeatures {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.brandFeature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.4;
+}
+
+.brandFeatureIcon {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+/* Right — form panel */
+.formPanel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   align-items: center;
   justify-content: center;
   overflow: auto;
-  padding: 24px 16px;
+  padding: 40px 24px;
   background-color: var(--bg-app);
 }
 
@@ -15,7 +80,7 @@
 
 .card {
   width: 100%;
-  max-width: 380px;
+  max-width: 400px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-light);
   border-radius: 12px;
@@ -62,6 +127,80 @@
   border-color: var(--border-focus);
 }
 
+/* ── Password field with show/hide toggle ────────────────── */
+
+.passwordWrap {
+  position: relative;
+}
+
+.passwordWrap .input {
+  padding-right: 38px;
+}
+
+.passwordToggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.passwordToggle:hover {
+  color: var(--text-primary);
+}
+
+/* ── Caps lock warning ───────────────────────────────────── */
+
+.capsWarning {
+  font-size: 0.75rem;
+  color: #d97706;
+  margin: 3px 0 0;
+}
+
+/* ── Password strength meter ─────────────────────────────── */
+
+.strengthMeter {
+  margin-top: 8px;
+}
+
+.strengthBars {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 5px;
+}
+
+.strengthBar {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background-color: var(--input-border);
+  transition: background-color 0.2s ease;
+}
+
+.strengthBar.active.s1 { background-color: #ef4444; }
+.strengthBar.active.s2 { background-color: #f97316; }
+.strengthBar.active.s3 { background-color: #eab308; }
+.strengthBar.active.s4 { background-color: #22c55e; }
+
+.strengthLabel {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.strengthLabel.s1 { color: #ef4444; }
+.strengthLabel.s2 { color: #f97316; }
+.strengthLabel.s3 { color: #eab308; }
+.strengthLabel.s4 { color: #22c55e; }
+
 /* ── Feedback ────────────────────────────────────────────── */
 
 .error {
@@ -93,8 +232,12 @@
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
   margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .submit:hover:not(:disabled) {
@@ -104,6 +247,20 @@
 .submit:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ── Footer ──────────────────────────────────────────────── */
@@ -137,7 +294,7 @@
   color: var(--accent-hover);
 }
 
-/* ── Unverified email hint ───────────────────────────────── */
+/* ── Hints ───────────────────────────────────────────────── */
 
 .verifyHint {
   font-size: 0.875rem;
@@ -145,8 +302,6 @@
   margin: 0 0 20px;
   line-height: 1.5;
 }
-
-/* ── Disabled note (ForgotPassword) ─────────────────────── */
 
 .disabledNote {
   font-size: 0.8125rem;
@@ -156,7 +311,7 @@
   line-height: 1.5;
 }
 
-/* ── 6-digit verification code inputs ──────────────────── */
+/* ── 6-digit code inputs ─────────────────────────────────── */
 
 .codeInputWrap {
   display: flex;
@@ -195,4 +350,11 @@
 .cooldownText {
   font-size: 0.8125rem;
   color: var(--text-muted);
+}
+
+/* ── Responsive: hide brand panel on narrow windows ─────── */
+
+@media (max-width: 600px) {
+  .brandPanel { display: none; }
+  .formPanel  { padding: 24px 16px; }
 }
