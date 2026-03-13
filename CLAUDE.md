@@ -1,16 +1,16 @@
-# CLAUDE.md — DocRack Desktop App
+# CLAUDE.md — Orvyn Desktop App
 
-This file defines the strict architecture, runtime, and development rules for the DocRack Desktop App.
+This file defines the strict architecture, runtime, and development rules for the Orvyn Desktop App.
 Claude must read and follow every rule in this file before taking any action on this codebase.
 
 ---
 
 ## Copilot Feature Guide
-Architecture and implementation guide for the Copilot feature: ./DocRack-Copilot-guide.md
+Architecture and implementation guide for the Copilot feature: ./Orvyn-Copilot-guide.md
 
 ## 1. Project Overview
 
-**DocRack** is a Windows-only desktop application for intelligent document management.
+**Orvyn** is a Windows-only desktop application for intelligent document management.
 It combines a local AI engine, a local database, and a cloud authentication layer into a unified desktop experience powered by Electron.
 
 | Layer            | Technology                     | Deployment     |
@@ -26,7 +26,7 @@ It combines a local AI engine, a local database, and a cloud authentication laye
 ## 2. Folder Structure Definition
 
 ```
-Docrack/
+Orvyn/
 ├── electron/               # Electron main process + preload
 │   ├── main.js             # App entry point, lifecycle, IPC
 │   ├── preload.js          # contextBridge API exposed to React
@@ -300,7 +300,7 @@ This uses `concurrently` to start all four processes:
 
 ## 10. UI Architecture Rules (Redux & Theme)
 
-DocRack uses Redux as the official global state management layer.
+Orvyn uses Redux as the official global state management layer.
 
 ### Redux Rules
 
@@ -380,21 +380,21 @@ All API routes (Express and Python business routes) are under `/api/v1/`. Python
 
 ## 13.5. Logging
 
-DocRack uses structured, file-based logging across all layers. Logs are essential
+Orvyn uses structured, file-based logging across all layers. Logs are essential
 for diagnosing issues in packaged builds where there is no console.
 
 ### Log Locations
 
 | Layer | Library | Log Path | Rotation |
 |-------|---------|----------|----------|
-| Electron | `electron-log` | `%APPDATA%/DocRack/logs/electron.log` | 5 MB, archived with timestamp |
-| Python | `logging.handlers.RotatingFileHandler` | Same dir as Electron (via `DOCRACK_LOG_DIR` env) | 5 MB, 5 backup files |
+| Electron | `electron-log` | `%APPDATA%/Orvyn/logs/electron.log` | 5 MB, archived with timestamp |
+| Python | `logging.handlers.RotatingFileHandler` | Same dir as Electron (via `Orvyn_LOG_DIR` env) | 5 MB, 5 backup files |
 | Express | `winston` | `express-backend/logs/express.log` | 5 MB, 5 backup files |
 
 ### Architecture
 
 - **Electron** (`electron/services/logger.js`): Wraps `electron-log`. Use `const log = require('./logger')`.
-- **Python**: Log directory is passed from Electron via `DOCRACK_LOG_DIR` env var. Falls back to `python-backend/logs/` in dev.
+- **Python**: Log directory is passed from Electron via `Orvyn_LOG_DIR` env var. Falls back to `python-backend/logs/` in dev.
 - **Express** (`src/services/logger.js`): Wraps `winston`. Morgan HTTP logs piped through winston.
 
 ### IPC Channels for Logs
@@ -451,13 +451,13 @@ The UI must adapt fluidly across resolutions (1366x768 to 4K) and manual window 
 
 ## 15. Smart DataRoom Architecture
 
-DocRack's core feature is the Smart DataRoom — an AI-powered virtual file organizer.
+Orvyn's core feature is the Smart DataRoom — an AI-powered virtual file organizer.
 
 ### Virtual File System
 
-- Files are **never copied** into the application. DocRack stores only the absolute path
+- Files are **never copied** into the application. Orvyn stores only the absolute path
   reference (`original_path`) in SQLite. The actual file stays on disk where the user placed it.
-- If a file is moved or deleted externally, DocRack detects this via `file:check-exists` and
+- If a file is moved or deleted externally, Orvyn detects this via `file:check-exists` and
   offers a **Relocate** option so the user can point to the new location.
 - File metadata (name, extension, size, checksum, extracted text) is stored in the database
   alongside the path reference.
@@ -583,7 +583,7 @@ All IPC channels are defined in `electron/ipc/` handler files and exposed via
 | `file:move-to-folder` | `window.api.file.moveToFolder(fileId, folderId)` | Move file to a different folder |
 | `file:rename` | `window.api.file.rename(fileId, newName)` | Rename file display name (not on disk) |
 | `file:relocate` | `window.api.file.relocate(fileId)` | Open picker to update path for moved file |
-| `file:remove-from-docrack` | `window.api.file.removeFromDocrack(fileId)` | Remove from DB only, keep file on disk |
+| `file:remove-from-Orvyn` | `window.api.file.removeFromOrvyn(fileId)` | Remove from DB only, keep file on disk |
 | `file:delete-from-system` | `window.api.file.deleteFromSystem(fileId)` | Delete from DB AND from disk |
 | `file:open` | `window.api.file.open(filePath)` | Open file with default system app |
 | `file:open-with` | `window.api.file.openWith(filePath)` | Open Windows "Open With" dialog |
@@ -745,7 +745,7 @@ State shape:
 
 Thunks: selectAndRegisterFiles, selectAndRegisterFolder, classifyFiles,
         generateDataroom, registerFiles, classifyRegisteredFiles,
-        generateNewDataroom, moveFileToFolder, removeFromDocrack,
+        generateNewDataroom, moveFileToFolder, removeFromOrvyn,
         deleteFromSystem, openFile, openFileWith, copyFilePath,
         copyFileToClipboard, relocateFile, renameFile
 ```
@@ -799,13 +799,13 @@ interface for browsing DataRoom contents. It mimics Windows Explorer behavior.
 
 ### Right-Click Context Menus (`ContextMenu` component in `components/common/`)
 
-- **File**: Open, Open With, Copy File, Copy Path, Move to Folder, Rename (F2), Relocate, Remove from DocRack, Delete from System.
+- **File**: Open, Open With, Copy File, Copy Path, Move to Folder, Rename (F2), Relocate, Remove from Orvyn, Delete from System.
 - **Folder**: Open, New Subfolder, Rename, Edit Description, Delete Folder.
 - **Background**: New Folder, Upload Files, Upload Folder, Refresh.
 
 ### Confirmation Dialogs
 
-- **Remove from DocRack** — Single confirmation (file stays on disk).
+- **Remove from Orvyn** — Single confirmation (file stays on disk).
 - **Delete from System** — Double confirmation: user types exact filename to confirm. Permanently deletes from disk.
 - **Delete Folder** — Single confirmation (files become unclassified).
 - All dialogs: **Escape** to cancel, **Enter** to confirm.
@@ -814,7 +814,7 @@ interface for browsing DataRoom contents. It mimics Windows Explorer behavior.
 
 | Key | Action |
 |-----|--------|
-| `Delete` | Remove selected file(s) from DocRack |
+| `Delete` | Remove selected file(s) from Orvyn |
 | `F2` | Rename selected item |
 | `Enter` | Open file / navigate into folder |
 | `Backspace` | Navigate to parent folder |
@@ -830,8 +830,8 @@ interface for browsing DataRoom contents. It mimics Windows Explorer behavior.
 
 ## 21. Design System
 
-For all UI work, read `design-system/docrack/MASTER.md` first.
-For page-specific overrides, check `design-system/docrack/pages/<page-name>.md`.
+For all UI work, read `design-system/Orvyn/MASTER.md` first.
+For page-specific overrides, check `design-system/Orvyn/pages/<page-name>.md`.
 All colors, typography, and spacing must come from the design system tokens.
 
 ## 22. AI Development Context

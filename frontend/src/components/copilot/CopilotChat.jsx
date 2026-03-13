@@ -77,7 +77,7 @@ function CopilotChat() {
           <div className={styles.emptyIcon}>
             <IconSparkle />
           </div>
-          <h2 className={styles.emptyTitle}>DocRack Copilot</h2>
+          <h2 className={styles.emptyTitle}>Orvyn Copilot</h2>
           
           {hasNoFiles ? (
             <p className={styles.emptySubtitle}>

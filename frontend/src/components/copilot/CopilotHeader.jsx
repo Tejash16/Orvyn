@@ -74,7 +74,7 @@ function CopilotHeader() {
   const pct = total > 0 ? Math.round((complete / total) * 100) : 0;
 
   // Scope label
-  let scopeLabel = scopeName || 'DocRack Copilot';
+  let scopeLabel = scopeName || 'Orvyn Copilot';
   if (scopeType === 'global') {
     scopeLabel = 'All DataRooms';
   } else if (scopeType === 'multi_dataroom') {

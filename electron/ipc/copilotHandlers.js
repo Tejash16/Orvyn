@@ -123,7 +123,7 @@ async function pythonDelete(endpoint) {
 // ---------------------------------------------------------------------------
 
 function buildSystemPrompt() {
-  return `You are DocRack Copilot, an intelligent AI assistant for document management and analysis.
+  return `You are Orvyn Copilot, an intelligent AI assistant for document management and analysis.
 
 You help users understand, search, analyze, and extract information from their documents.
 You work with any type of document in any domain: business, legal, financial, medical,
@@ -930,7 +930,7 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
 
       const comparePrompt = `Compare the following documents and highlight:\n- Key similarities\n- Key differences\n- Any conflicts or inconsistencies\n\n${fileBlocks}`;
 
-      const systemPrompt = `You are DocRack Copilot, an expert document analyst. The user has selected specific documents for comparison. Your task is to provide a structured, actionable comparison that highlights similarities, differences, and any conflicts or inconsistencies between the documents. Be specific and cite the documents by name.`;
+      const systemPrompt = `You are Orvyn Copilot, an expert document analyst. The user has selected specific documents for comparison. Your task is to provide a structured, actionable comparison that highlights similarities, differences, and any conflicts or inconsistencies between the documents. Be specific and cite the documents by name.`;
 
       const messages = [
         {

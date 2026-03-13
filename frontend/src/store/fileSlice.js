@@ -92,10 +92,10 @@ export const moveFileToFolder = createAsyncThunk(
   }
 );
 
-export const removeFromDocrack = createAsyncThunk(
-  'file/removeFromDocrack',
+export const removeFromOrvyn = createAsyncThunk(
+  'file/removeFromOrvyn',
   async (fileId, { dispatch, rejectWithValue }) => {
-    const result = await window.api.file.removeFromDocrack(fileId);
+    const result = await window.api.file.removeFromOrvyn(fileId);
     if (!result.success) return rejectWithValue(result.error);
     dispatch(refreshCurrentView());
     return result;
@@ -307,7 +307,7 @@ const fileSlice = createSlice({
     // Mutation thunks — only track errors
     const mutationThunks = [
       moveFileToFolder,
-      removeFromDocrack,
+      removeFromOrvyn,
       deleteFromSystem,
       renameFile,
       relocateFile,

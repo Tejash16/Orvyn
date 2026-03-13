@@ -1,4 +1,4 @@
-# DocRack V1 with new feature — Copilot Feature: Complete Architecture & Build Guide
+# Orvyn V1 with new feature — Copilot Feature: Complete Architecture & Build Guide
 
 ---
 
@@ -140,7 +140,7 @@ USER QUERY: "Are there inconsistencies across my documents?"
 
 ### 1. Maintain File Integrity by Storing Checksums in Embedding Metadata
 
-**Problem:** If a user edits an Excel or Word file outside DocRack, the embeddings become stale.
+**Problem:** If a user edits an Excel or Word file outside Orvyn, the embeddings become stale.
 
 **Edge case:** A file's binary metadata can change (e.g. Excel recalculates formulas, Word
 updates revision history, PDF re-saves with different compression) while the extracted text
@@ -529,8 +529,8 @@ virtual table updates itself via the triggers. Do NOT manually INSERT into `file
 ### Chat Storage Schema
 ```sql
 -- NOTE: No user_id column. The SQLite database is already per-user
--- (each user has their own DB file at {userData}/users/{userId}/docrack.db).
--- If DocRack ever moves to shared/cloud storage, add user_id then.
+-- (each user has their own DB file at {userData}/users/{userId}/Orvyn.db).
+-- If Orvyn ever moves to shared/cloud storage, add user_id then.
 
 CREATE TABLE IF NOT EXISTS chat_sessions (
     id TEXT PRIMARY KEY,
@@ -642,7 +642,7 @@ Domain-specific modes are OPTIONAL enhancements the user selects.
 
 ### System Prompt
 ```
-You are DocRack Copilot, an intelligent AI assistant for document management and analysis.
+You are Orvyn Copilot, an intelligent AI assistant for document management and analysis.
 
 You help users understand, search, analyze, and extract information from their documents.
 You work with any type of document in any domain: business, legal, financial, medical,
@@ -986,14 +986,14 @@ Rename file                          Update file_name in ChromaDB metadata (all 
                                      No FTS5 text change (content unchanged)
                                      No entity change
 
-Remove from DocRack                  Delete embeddings from ChromaDB
-(file:remove-from-docrack)           Delete chunks from file_chunks (FTS5)
+Remove from Orvyn                  Delete embeddings from ChromaDB
+(file:remove-from-Orvyn)           Delete chunks from file_chunks (FTS5)
                                      Delete entities from file_entities
                                      Delete indexing_jobs for this file
                                      Mark dataroom_insights as stale
                                      Clear ai_summary, reset embedding_status='none'
 
-Delete from System                   Same as Remove from DocRack
+Delete from System                   Same as Remove from Orvyn
 (file:delete-from-system)            PLUS: delete physical file from disk
                                      PLUS: delete file record from files table
 
@@ -1029,7 +1029,7 @@ Edit folder description              No vector change
                                      Mark dataroom_insights stale
 
 Delete folder — Remove files         For EACH file in folder (+ all nested subfolders):
-from DocRack                           Delete embeddings from ChromaDB
+from Orvyn                           Delete embeddings from ChromaDB
                                        Delete chunks from file_chunks
                                        Delete entities from file_entities
                                        Delete indexing_jobs
@@ -1071,7 +1071,7 @@ def sync_file_renamed(file_id, new_name, user_id, chroma_path):
             collection.update(ids=[chunk_id], metadatas=[new_meta])
 
 def sync_file_removed(file_id, user_id, dataroom_id, chroma_path, db_session):
-    """Called when file removed from DocRack or deleted from system"""
+    """Called when file removed from Orvyn or deleted from system"""
     delete_file_embeddings(file_id, user_id, chroma_path)
     db_session.execute(text("DELETE FROM file_chunks WHERE file_id = :fid"), {"fid": file_id})
     db_session.execute(text("DELETE FROM file_entities WHERE file_id = :fid"), {"fid": file_id})
@@ -1570,7 +1570,7 @@ All under `/api/v1/`. Local data only — Python never calls Gemini.
 Copy and paste this entire prompt into Claude Code:
 
 ```
-Phase C1: Build the document intelligence pipeline for DocRack Copilot.
+Phase C1: Build the document intelligence pipeline for Orvyn Copilot.
 
 READ CLAUDE.md FIRST. Follow every rule in it.
 
@@ -1882,14 +1882,14 @@ This is critical. Wire sync calls into these existing Python endpoints:
 
 PUT /api/v1/files/{id}/rename → call sync_file_renamed()
 DELETE /api/v1/files/{id} → call sync_file_removed()
-  (handles both remove-from-docrack and delete-from-system)
+  (handles both remove-from-Orvyn and delete-from-system)
 PUT /api/v1/files/{id}/move-to-folder → call sync_file_moved_folder()
 PUT /api/v1/files/{id}/relocate → call has_file_changed(file_record, new_path).
   Uses triple-check: file_size + mtime + checksum (fast checks first, expensive last).
   If True → call sync_file_content_changed()
 DELETE /api/v1/folders/{id} → collect ALL nested file IDs (recursive),
   call sync_folder_deleted() with the full list.
-  The endpoint already supports two modes (remove files from docrack vs delete from system).
+  The endpoint already supports two modes (remove files from Orvyn vs delete from system).
   Both modes must call sync_folder_deleted().
 DELETE /api/v1/datarooms/{id} → call sync_dataroom_deleted()
 
@@ -2278,7 +2278,7 @@ Flow:
      { query_text: message, query_vector, scope_type, scope_ids,
        session_id, scope_name, db_path, chroma_path, user_id }
      → get { session_id, formatted_chunks, history, sources }
-  3. Build system_prompt (the general-purpose DocRack Copilot prompt)
+  3. Build system_prompt (the general-purpose Orvyn Copilot prompt)
   4. Build messages array: history + document excerpts + user message
   5. Call Express POST /api/v1/ai/chat/stream with
      { system_prompt, messages, tools: COPILOT_TOOLS, tool_config: { mode: "AUTO" } }
@@ -2489,7 +2489,7 @@ Copy and paste:
 ```
 Phase C4: Build the copilot right-side sliding panel UI.
 
-READ CLAUDE.md FIRST. Read design-system/docrack/MASTER.md for design tokens.
+READ CLAUDE.md FIRST. Read design-system/Orvyn/MASTER.md for design tokens.
 
 The copilot is a RIGHT-SIDE PANEL that slides in/out alongside the file explorer.
 When open, the file explorer flex-shrinks to accommodate.
@@ -2531,7 +2531,7 @@ LAYOUT:
 === CHAT TAB (default) ===
 
 Empty state:
-- "DocRack Copilot" heading
+- "Orvyn Copilot" heading
 - "Ask anything about your documents." subtitle
 - 4 suggested questions (clickable → sends as message)
 - Suggestions from API (context-aware, domain-agnostic)

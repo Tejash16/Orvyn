@@ -1,9 +1,9 @@
-# DocRack — Project Context
+# Orvyn — Project Context
 
 ## Company
-Orbicle Labs (startup). DocRack is our primary product.
+Orbicle Labs (startup). Orvyn is our primary product.
 
-## What is DocRack?
+## What is Orvyn?
 A privacy-first Windows desktop application for intelligent document management.
 Users import documents, and AI classifies them into Smart DataRooms automatically.
 Files are never copied — only paths are stored (virtual file system).

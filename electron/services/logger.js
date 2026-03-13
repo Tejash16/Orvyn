@@ -2,7 +2,7 @@
  * Logger — Electron main process only.
  *
  * Wraps electron-log to provide structured, file-based logging.
- * Logs are written to: %APPDATA%/DocRack/logs/electron.log
+ * Logs are written to: %APPDATA%/Orvyn/logs/electron.log
  *
  * Features:
  *   - Automatic log rotation (max 5 files, 5 MB each)
@@ -19,7 +19,7 @@ const path = require('path');
 
 // ── File transport configuration ─────────────────────────
 
-// Resolves to %APPDATA%/DocRack/logs/electron.log
+// Resolves to %APPDATA%/Orvyn/logs/electron.log
 log.transports.file.resolvePathFn = (variables) =>
   path.join(variables.userData, 'logs', 'electron.log');
 

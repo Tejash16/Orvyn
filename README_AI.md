@@ -1,4 +1,4 @@
-# DocRack — AI-Assisted Development
+# Orvyn — AI-Assisted Development
 
 This repository is optimized for AI-assisted development.
 
@@ -25,7 +25,7 @@ This repository is optimized for AI-assisted development.
 | `.claude/context/project.md` | Business context and current development phase |
 | `.claude/context/features.md` | Feature status tracker (done / in-progress / planned) |
 | `.claude/commands/*.md` | Reusable Claude Code command prompts |
-| `design-system/docrack/MASTER.md` | AI-generated design system (colors, typography, components) |
+| `design-system/Orvyn/MASTER.md` | AI-generated design system (colors, typography, components) |
 | `.agent/skills/` | Antigravity skill modules (installed by script) |
 
 ## Architecture
@@ -33,8 +33,8 @@ See `CLAUDE.md` sections 1-3 for the full stack, folder structure, and layer res
 See sections 15-20 for Smart DataRoom, classification engine, IPC channels, and Redux state.
 
 ## Design Rules
-All UI work follows `design-system/docrack/MASTER.md`.
-Page-specific overrides are in `design-system/docrack/pages/`.
+All UI work follows `design-system/Orvyn/MASTER.md`.
+Page-specific overrides are in `design-system/Orvyn/pages/`.
 Theme rules are in `CLAUDE.md` Section 11. Responsive rules in Section 14.
 
 ## Daily Workflow

@@ -17,10 +17,10 @@ load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Logging — file-based with rotation.
-# Log directory is set via DOCRACK_LOG_DIR env var (passed by Electron at spawn),
+# Log directory is set via Orvyn_LOG_DIR env var (passed by Electron at spawn),
 # falling back to python-backend/logs/ for standalone dev.
 # ---------------------------------------------------------------------------
-_log_dir = os.getenv("DOCRACK_LOG_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs"))
+_log_dir = os.getenv("Orvyn_LOG_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs"))
 os.makedirs(_log_dir, exist_ok=True)
 
 _file_handler = logging.handlers.RotatingFileHandler(
@@ -35,9 +35,9 @@ _file_handler.setFormatter(
 
 logging.basicConfig(level=logging.INFO, handlers=[_file_handler, logging.StreamHandler()])
 
-logger = logging.getLogger("docrack")
+logger = logging.getLogger("Orvyn")
 
-app = FastAPI(title="DocRack AI Engine")
+app = FastAPI(title="Orvyn AI Engine")
 
 # ---------------------------------------------------------------------------
 # In-memory engine registry — set by POST /init-db, cleared on app restart.

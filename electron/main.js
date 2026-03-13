@@ -89,7 +89,7 @@ ipcMain.handle('app:openLogsFolder', async () => {
 // ── Startup ───────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-  log.info('DocRack starting up');
+  log.info('Orvyn starting up');
   // Spawn the local Python backend before the window opens.
   // start() finds a free port dynamically, then spawns Python.
   // The renderer's session restore flow waits for Python health before proceeding.
@@ -110,7 +110,7 @@ app.whenReady().then(async () => {
 // ── Shutdown ──────────────────────────────────────────────
 
 app.on('will-quit', () => {
-  log.info('DocRack shutting down');
+  log.info('Orvyn shutting down');
   // Stop Python cleanly on every quit path (window close, system shutdown, etc.)
   pythonProcess.stop();
 });

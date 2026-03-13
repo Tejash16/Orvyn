@@ -1,8 +1,8 @@
-Review and refine the UI of a specific page or component in DocRack.
+Review and refine the UI of a specific page or component in Orvyn.
 
 Before making changes:
-1. Read design-system/docrack/MASTER.md for color tokens, typography, and spacing
-2. Check if design-system/docrack/pages/ has a page-specific override
+1. Read design-system/Orvyn/MASTER.md for color tokens, typography, and spacing
+2. Check if design-system/Orvyn/pages/ has a page-specific override
 3. Read CLAUDE.md Section 11 (theme rules) — all UI must support light + dark
 4. Read CLAUDE.md Section 14 (responsive rules) — must work across resolutions
 5. Never hardcode colors — use CSS custom properties scoped to data-theme

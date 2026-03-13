@@ -122,7 +122,7 @@ function registerFileHandlers(ipcMain, getMainWindow) {
     }
   });
 
-  ipcMain.handle('file:remove-from-docrack', async (_event, { file_id }) => {
+  ipcMain.handle('file:remove-from-Orvyn', async (_event, { file_id }) => {
     try {
       const data = await pythonService.deleteFile(file_id, false);
       return { success: true, ...data };

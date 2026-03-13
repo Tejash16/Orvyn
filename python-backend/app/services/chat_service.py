@@ -1,5 +1,5 @@
 """
-Chat Service — Chat context preparation and message persistence for DocRack Copilot.
+Chat Service — Chat context preparation and message persistence for Orvyn Copilot.
 
 Handles:
   - Chat session creation and management
@@ -21,7 +21,7 @@ from typing import Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger("docrack.chat_service")
+logger = logging.getLogger("Orvyn.chat_service")
 
 # ---------------------------------------------------------------------------
 # Configuration — loaded from environment

@@ -1,5 +1,5 @@
 """
-AI Classification Service — Data preparation & result application for DocRack.
+AI Classification Service — Data preparation & result application for Orvyn.
 
 Gemini API calls have moved to the Express backend (holds the API key securely).
 This module now handles only:

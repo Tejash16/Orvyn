@@ -83,7 +83,7 @@ contextBridge.exposeInMainWorld('api', {
     selectFolder:      ()                                  => ipcRenderer.invoke('file:select-folder'),
     register:          (dataroomId, filePaths)              => ipcRenderer.invoke('file:register', { dataroom_id: dataroomId, file_paths: filePaths }),
     moveToFolder:      (fileId, folderId, dataroomId)       => ipcRenderer.invoke('file:move-to-folder', { file_id: fileId, folder_id: folderId, dataroom_id: dataroomId }),
-    removeFromDocrack: (fileId)                            => ipcRenderer.invoke('file:remove-from-docrack', { file_id: fileId }),
+    removeFromOrvyn: (fileId)                            => ipcRenderer.invoke('file:remove-from-Orvyn', { file_id: fileId }),
     deleteFromSystem:  (fileId)                            => ipcRenderer.invoke('file:delete-from-system', { file_id: fileId }),
     checkExists:       (fileId)                            => ipcRenderer.invoke('file:check-exists', { file_id: fileId }),
     relocate:          (fileId)                            => ipcRenderer.invoke('file:relocate', { file_id: fileId }),

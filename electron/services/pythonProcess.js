@@ -87,7 +87,7 @@ function _spawn() {
     windowsHide: true,
     env: {
       ...process.env,
-      DOCRACK_LOG_DIR: logsPath,
+      Orvyn_LOG_DIR: logsPath,
     },
   });
 

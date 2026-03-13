@@ -1,5 +1,5 @@
 """
-Embedding Service — ChromaDB + FTS5 management for DocRack Copilot.
+Embedding Service — ChromaDB + FTS5 management for Orvyn Copilot.
 
 Handles:
   - ChromaDB setup and collection management
@@ -23,7 +23,7 @@ import chromadb
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger("docrack")
+logger = logging.getLogger("Orvyn")
 
 # ---------------------------------------------------------------------------
 # Environment config
@@ -827,7 +827,7 @@ def sync_file_renamed(file_id: str, new_name: str, user_id: str, chroma_path: st
 
 def sync_file_removed(file_id: str, user_id: str, dataroom_id: str,
                       chroma_path: str, db_session):
-    """Clean up all Copilot data when file is removed from DocRack or deleted."""
+    """Clean up all Copilot data when file is removed from Orvyn or deleted."""
     delete_file_embeddings(file_id, user_id, chroma_path)
     db_session.execute(text("DELETE FROM file_chunks WHERE file_id = :fid"), {"fid": file_id})
     db_session.execute(text("DELETE FROM file_entities WHERE file_id = :fid"), {"fid": file_id})

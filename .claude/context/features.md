@@ -1,4 +1,4 @@
-# DocRack — Feature Status
+# Orvyn — Feature Status
 
 ## COMPLETED
 
@@ -22,7 +22,7 @@
 - File registration with text extraction (PDF, DOCX, XLSX, PPTX, TXT, CSV, images)
 - Max 50 files per classification batch
 - File operations: open, open with, copy path, copy to clipboard, rename, relocate
-- Remove from DocRack (DB only) and Delete from System (DB + disk)
+- Remove from Orvyn (DB only) and Delete from System (DB + disk)
 - Confidence scoring with color indicators (green/yellow/orange)
 
 ### AI Classification Engine

@@ -34,7 +34,7 @@ import {
   copyFilePath,
   copyFileToClipboard,
   renameFile,
-  removeFromDocrack,
+  removeFromOrvyn,
   deleteFromSystem,
 } from '../../store/fileSlice';
 import { addToast } from '../../store/uiSlice';
@@ -612,7 +612,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
       { type: 'separator' },
       { type: 'action', label: 'Rename', icon: <IconPencil />, shortcut: 'F2', onClick: () => startRename(item) },
       { type: 'separator' },
-      { type: 'action', label: 'Remove from DocRack', icon: <IconTrash />, danger: true, shortcut: 'Del', onClick: () => setRemoveConfirm(item) },
+      { type: 'action', label: 'Remove from Orvyn', icon: <IconTrash />, danger: true, shortcut: 'Del', onClick: () => setRemoveConfirm(item) },
       { type: 'action', label: 'Delete from System', icon: <IconTrash />, danger: true, onClick: () => setDeleteConfirm(item) },
     ];
   }
@@ -811,10 +811,10 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
 
   function confirmRemove() {
     if (!removeConfirm) return;
-    dispatch(removeFromDocrack(removeConfirm.id))
+    dispatch(removeFromOrvyn(removeConfirm.id))
       .unwrap()
       .then(() => {
-        dispatch(addToast({ message: `'${removeConfirm.name}' removed from DocRack`, type: 'success' }));
+        dispatch(addToast({ message: `'${removeConfirm.name}' removed from Orvyn`, type: 'success' }));
       })
       .catch((err) => {
         dispatch(addToast({ message: err || 'Failed to remove file', type: 'error' }));
@@ -1051,7 +1051,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
             className={`${styles.selectionBtn} ${styles.selectionBtnDanger}`}
             onClick={() => {
               selectedItems.forEach((s) => {
-                if (s.type === 'file') dispatch(removeFromDocrack(s.id));
+                if (s.type === 'file') dispatch(removeFromOrvyn(s.id));
               });
               dispatch(clearSelection());
             }}
@@ -1344,13 +1344,13 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
         />
       )}
 
-      {/* Remove from DocRack confirmation */}
+      {/* Remove from Orvyn confirmation */}
       {removeConfirm && (
         <div className={styles.confirmBackdrop} onClick={() => setRemoveConfirm(null)} onKeyDown={(e) => { if (e.key === 'Escape') setRemoveConfirm(null); if (e.key === 'Enter') confirmRemove(); }}>
           <div className={styles.confirmModal} onClick={(e) => e.stopPropagation()}>
-            <h3 className={styles.confirmTitle}>Remove from DocRack</h3>
+            <h3 className={styles.confirmTitle}>Remove from Orvyn</h3>
             <p className={styles.confirmText}>
-              Remove &quot;{removeConfirm.name}&quot; from DocRack? The file will remain on your computer.
+              Remove &quot;{removeConfirm.name}&quot; from Orvyn? The file will remain on your computer.
             </p>
             <div className={styles.confirmActions}>
               <button className={styles.confirmBtnSecondary} onClick={() => setRemoveConfirm(null)} type="button">Cancel</button>
@@ -1421,7 +1421,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
                   onClick={() => confirmDeleteFolder('remove')}
                   type="button"
                 >
-                  Remove from DocRack
+                  Remove from Orvyn
                 </button>
               )}
               {deleteFolderPreview && deleteFolderPreview.file_count > 0 && (

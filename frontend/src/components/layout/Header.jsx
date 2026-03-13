@@ -26,7 +26,7 @@ function Header() {
               />
             </svg>
           </div>
-          <span className={styles.appTitle}>DocRack</span>
+          <span className={styles.appTitle}>Orvyn</span>
         </div>
       </div>
 

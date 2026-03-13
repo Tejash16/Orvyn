@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="DocRack Python Backend")
+    parser = argparse.ArgumentParser(description="Orvyn Python Backend")
     parser.add_argument("--port", type=int, default=None, help="Port to listen on")
     parser.add_argument("--host", type=str, default=None, help="Host to bind to")
     args = parser.parse_args()

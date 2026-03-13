@@ -6,7 +6,7 @@
       "Bash(node:*)",
       "Bash(./venv/Scripts/python.exe:*)",
       "Bash(npm install:*)",
-      "Bash(find c:UserstejusOneDriveDesktopDocrackelectronipc -type f -name *.js)"
+      "Bash(find c:UserstejusOneDriveDesktopOrvynelectronipc -type f -name *.js)"
     ]
   }
 }

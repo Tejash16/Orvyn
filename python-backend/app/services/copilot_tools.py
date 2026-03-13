@@ -24,7 +24,7 @@ from typing import Optional, List
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger("docrack.copilot_tools")
+logger = logging.getLogger("Orvyn.copilot_tools")
 
 
 # ---------------------------------------------------------------------------

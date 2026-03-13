@@ -1,4 +1,4 @@
-Analyze the DocRack repository and explain:
+Analyze the Orvyn repository and explain:
 
 1. Service boundaries — verify each layer matches CLAUDE.md Section 3
 2. IPC communication — check actual IPC handlers against CLAUDE.md Section 17

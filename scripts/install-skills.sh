@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== DocRack Skills Installer ==="
+echo "=== Orvyn Skills Installer ==="
 echo ""
 
 # Colors for output
