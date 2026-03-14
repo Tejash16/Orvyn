@@ -5,8 +5,7 @@
   align-items: center;
   justify-content: space-between;
   height: 44px;
-  background-color: var(--bg-surface);
-  border-bottom: 1px solid var(--border-light);
+  background-color: var(--chrome-bg);
   flex-shrink: 0;
   user-select: none;
 }
@@ -25,26 +24,27 @@
 .brandGroup {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 
 .logoMark {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
   color: #ffffff;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
 }
 
 .appTitle {
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--text-primary);
+  letter-spacing: 0.06em;
+  color: var(--chrome-text-active);
   text-transform: uppercase;
 }
 
@@ -65,27 +65,27 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  color: var(--text-tertiary);
+  color: var(--chrome-text);
   transition: background-color 0.15s ease, color 0.15s ease;
   padding: 0;
   outline: none;
 }
 
 .controlBtn:focus-visible {
-  outline: 1px solid var(--toggle-btn-focus-outline);
+  outline: 1px solid var(--chrome-focus-outline);
   outline-offset: -2px;
 }
 
 .controlBtn:hover {
-  color: var(--text-primary);
+  color: var(--chrome-text-hover);
 }
 
 .minimize:hover {
-  background-color: var(--bg-hover);
+  background-color: var(--chrome-hover-bg);
 }
 
 .maximize:hover {
-  background-color: var(--bg-hover);
+  background-color: var(--chrome-hover-bg);
 }
 
 .close:hover {

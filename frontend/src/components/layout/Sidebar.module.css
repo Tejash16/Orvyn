@@ -5,9 +5,8 @@
   flex-direction: column;
   width: 200px;
   flex-shrink: 0;
-  background-color: var(--bg-sidebar);
-  border-right: 1px solid var(--border-light);
-  transition: width 0.2s ease-in-out;
+  background-color: var(--chrome-bg);
+  transition: width 0.22s ease-in-out;
   overflow: visible;
   position: relative;
 }
@@ -16,16 +15,50 @@
   width: 56px;
 }
 
-/* ── Section label (Linear-style) ────────────────────────── */
+/* ── Sidebar header — toggle lives here ─────────────────── */
 
-.sectionLabel {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-tertiary);
-  padding: 16px 16px 4px;
-  user-select: none;
+.sidebarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 44px;
+  padding: 0 10px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--chrome-divider);
+}
+
+.collapsed .sidebarHeader {
+  justify-content: center;
+  padding: 0;
+}
+
+/* ── Collapse toggle button (now at top) ─────────────────── */
+
+.toggleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: var(--chrome-text);
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.toggleBtn:hover {
+  background-color: var(--chrome-hover-bg);
+  color: var(--chrome-text-hover);
+}
+
+.toggleBtn:focus-visible {
+  outline: 1px solid var(--chrome-focus-outline);
+  outline-offset: -2px;
 }
 
 /* ── Nav sections ────────────────────────────────────────── */
@@ -34,7 +67,7 @@
 .bottomNav {
   display: flex;
   flex-direction: column;
-  padding: 4px 0;
+  padding: 6px 0;
 }
 
 .spacer {
@@ -45,7 +78,7 @@
 
 .divider {
   height: 1px;
-  background-color: var(--border-light);
+  background-color: var(--chrome-divider);
   margin: 4px 12px;
 }
 
@@ -61,20 +94,20 @@
   margin: 1px 8px;
   border-radius: 8px;
   cursor: pointer;
-  color: var(--text-secondary);
+  color: var(--chrome-text);
   white-space: nowrap;
   transition: background-color 0.15s ease, color 0.15s ease;
   user-select: none;
 }
 
 .navItem:hover {
-  background-color: var(--bg-hover);
-  color: var(--text-primary);
+  background-color: var(--chrome-hover-bg);
+  color: var(--chrome-text-hover);
 }
 
 .navItem.active {
-  background-color: var(--accent-soft);
-  color: var(--accent-primary);
+  background-color: var(--chrome-active-bg);
+  color: var(--chrome-active-color);
   font-weight: 500;
 }
 
@@ -87,7 +120,7 @@
   width: 3px;
   height: 16px;
   border-radius: 0 2px 2px 0;
-  background-color: var(--accent-primary);
+  background-color: var(--chrome-active-color);
 }
 
 /* ── Icon ────────────────────────────────────────────────── */
@@ -131,44 +164,38 @@
   left: calc(100% + 10px);
   top: 50%;
   transform: translateY(-50%);
-  background-color: var(--bg-surface);
-  color: var(--text-primary);
+  background-color: var(--tooltip-bg);
+  color: var(--tooltip-text);
   font-size: 12px;
   font-weight: 500;
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 6px;
   white-space: nowrap;
   pointer-events: none;
-  box-shadow: var(--shadow-lg);
-  border: 1px solid var(--border-light);
+  box-shadow: var(--tooltip-shadow);
+  border: 1px solid var(--tooltip-border);
   z-index: 200;
+  /* Arrow pointing left */
+  letter-spacing: 0.01em;
 }
 
-/* ── Collapse toggle button ──────────────────────────────── */
-
-.toggleBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 40px;
-  flex-shrink: 0;
-  background: transparent;
-  border: none;
-  border-top: 1px solid var(--border-light);
-  color: var(--text-tertiary);
-  cursor: pointer;
-  padding: 0;
-  outline: none;
-  transition: background-color 0.15s ease, color 0.15s ease;
+/* Tooltip arrow */
+.tooltip::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: var(--tooltip-border);
 }
 
-.toggleBtn:hover {
-  background-color: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.toggleBtn:focus-visible {
-  outline: 1px solid var(--toggle-btn-focus-outline);
-  outline-offset: -2px;
+.tooltip::after {
+  content: '';
+  position: absolute;
+  right: calc(100% - 1px);
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: var(--tooltip-bg);
 }

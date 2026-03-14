@@ -1,63 +1,76 @@
 /* ── Theme variables ─────────────────────────────────────── */
 
 [data-theme="light"] {
-  /* Background layers — create DEPTH with subtle layering */
-  --bg-base: #F8F9FC;
+  /* ── Chrome (sidebar + header) — clean white/light ─────── */
+  --chrome-bg: #FAFCFB;
+  --chrome-text: rgba(45, 65, 55, 0.68);
+  --chrome-text-hover: #0F1C16;
+  --chrome-text-active: #0F1C16;
+  --chrome-label: rgba(90, 115, 100, 0.5);
+  --chrome-divider: rgba(0, 0, 0, 0.07);
+  --chrome-hover-bg: rgba(5, 150, 105, 0.06);
+  --chrome-active-bg: rgba(5, 150, 105, 0.1);
+  --chrome-active-color: #059669;
+  --chrome-focus-outline: rgba(5, 150, 105, 0.4);
+
+  /* ── Background layers ────────────────────────────────── */
+  --bg-base: #F2F8F5;
   --bg-surface: #FFFFFF;
-  --bg-sidebar: #F1F3F8;
-  --bg-hover: #ECEEF4;
-  --bg-active: #E4E7F0;
+  --bg-sidebar: #FAFCFB;
+  --bg-hover: #E6F0EB;
+  --bg-active: #CCE8D8;
   --bg-overlay: rgba(0, 0, 0, 0.4);
 
-  /* Legacy aliases (mapped to new palette) */
-  --bg-app: #F8F9FC;
-  --bg-header: #FFFFFF;
+  /* Legacy aliases */
+  --bg-app: #F2F8F5;
+  --bg-header: #FAFCFB;
 
-  /* Text */
-  --text-primary: #1A1D2E;
-  --text-secondary: #5F6580;
-  --text-tertiary: #9095AE;
+  /* ── Text ─────────────────────────────────────────────── */
+  --text-primary: #0F1C16;
+  --text-secondary: #3D5A47;
+  --text-tertiary: #5F8570;
   --text-inverse: #FFFFFF;
-  --text-muted: #5F6580;
+  --text-muted: #526B5B;
 
-  /* Accent */
-  --accent-primary: #6C5CE7;
-  --accent-hover: #5A4BD1;
-  --accent-soft: rgba(108, 92, 231, 0.08);
-  --accent-softer: rgba(108, 92, 231, 0.04);
+  /* ── Accent — Emerald Green ───────────────────────────── */
+  --accent-primary: #059669;
+  --accent-hover: #047857;
+  --accent-soft: rgba(5, 150, 105, 0.1);
+  --accent-softer: rgba(5, 150, 105, 0.05);
 
-  /* Borders */
-  --border-light: #E8EAF0;
-  --border-medium: #D4D7E3;
-  --border-focus: #6C5CE7;
-  --border-color: #E8EAF0;
+  /* ── Borders ──────────────────────────────────────────── */
+  --border-light: #D8E8E0;
+  --border-medium: #B5D4C3;
+  --border-focus: #059669;
+  --border-color: #D8E8E0;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.03);
+  /* ── Shadows ──────────────────────────────────────────── */
+  --shadow-sm: 0 1px 3px rgba(0, 30, 15, 0.06);
+  --shadow-md: 0 2px 10px rgba(0, 30, 15, 0.08), 0 1px 3px rgba(0, 30, 15, 0.05);
+  --shadow-lg: 0 8px 28px rgba(0, 30, 15, 0.10), 0 2px 8px rgba(0, 30, 15, 0.06);
+  --shadow-card: 0 1px 4px rgba(0, 30, 15, 0.06), 0 0 0 1px rgba(0, 30, 15, 0.04);
 
-  /* Navigation states */
-  --nav-hover-bg: #ECEEF4;
-  --nav-hover-color: #1A1D2E;
-  --nav-active-bg: rgba(108, 92, 231, 0.08);
-  --nav-active-color: #6C5CE7;
+  /* ── Navigation states (content area) ────────────────── */
+  --nav-hover-bg: #E6F0EB;
+  --nav-hover-color: #0F1C16;
+  --nav-active-bg: rgba(5, 150, 105, 0.1);
+  --nav-active-color: #059669;
 
-  /* Tooltip */
-  --tooltip-bg: #FFFFFF;
-  --tooltip-border: #E8EAF0;
-  --tooltip-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  /* ── Tooltip — always dark for readability ────────────── */
+  --tooltip-bg: #0C1E14;
+  --tooltip-border: #164D28;
+  --tooltip-text: #E2E8F0;
+  --tooltip-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 
-  /* Toggle & controls */
-  --toggle-btn-color: #9095AE;
-  --toggle-btn-hover-bg: #ECEEF4;
-  --toggle-btn-hover-color: #1A1D2E;
-  --toggle-btn-focus-outline: rgba(108, 92, 231, 0.4);
-  --control-btn-color: #5F6580;
-  --control-btn-hover-bg: #ECEEF4;
+  /* ── Toggle & controls ────────────────────────────────── */
+  --toggle-btn-color: #5F8570;
+  --toggle-btn-hover-bg: #E6F0EB;
+  --toggle-btn-hover-color: #0F1C16;
+  --toggle-btn-focus-outline: rgba(5, 150, 105, 0.4);
+  --control-btn-color: #3D5A47;
+  --control-btn-hover-bg: rgba(5, 150, 105, 0.06);
 
-  /* Status */
+  /* ── Status ───────────────────────────────────────────── */
   --danger-color: #EF4444;
   --danger-hover: #DC2626;
   --success-color: #22C55E;
@@ -68,15 +81,15 @@
   --warning-border: rgba(245, 158, 11, 0.25);
   --info-color: #3B82F6;
 
-  /* Inputs & modals */
+  /* ── Inputs & modals ──────────────────────────────────── */
   --modal-bg: #FFFFFF;
   --modal-backdrop: rgba(0, 0, 0, 0.4);
-  --input-bg: #F8F9FC;
-  --input-border: #D4D7E3;
-  --btn-secondary-border: #D4D7E3;
-  --btn-secondary-hover: #ECEEF4;
+  --input-bg: #FFFFFF;
+  --input-border: #D1D5DB;
+  --btn-secondary-border: #D1D5DB;
+  --btn-secondary-hover: #E6F0EB;
 
-  /* File type icon backgrounds */
+  /* ── File type icon backgrounds ───────────────────────── */
   --icon-bg-pdf: #FEE2E2;
   --icon-fg-pdf: #DC2626;
   --icon-bg-docx: #DBEAFE;
@@ -92,63 +105,76 @@
 }
 
 [data-theme="dark"] {
-  /* Background layers */
-  --bg-base: #0F1117;
-  --bg-surface: #1A1D2E;
-  --bg-sidebar: #141620;
-  --bg-hover: #232638;
-  --bg-active: #2A2E45;
+  /* ── Chrome (sidebar + header) — always near-black ─────── */
+  --chrome-bg: #0C111D;
+  --chrome-text: rgba(156, 163, 184, 0.8);
+  --chrome-text-hover: #E2E8F0;
+  --chrome-text-active: #FFFFFF;
+  --chrome-label: rgba(148, 163, 184, 0.38);
+  --chrome-divider: rgba(255, 255, 255, 0.07);
+  --chrome-hover-bg: rgba(255, 255, 255, 0.05);
+  --chrome-active-bg: rgba(16, 185, 129, 0.15);
+  --chrome-active-color: #34D399;
+  --chrome-focus-outline: rgba(16, 185, 129, 0.45);
+
+  /* ── Background layers ────────────────────────────────── */
+  --bg-base: #0F1A14;
+  --bg-surface: #162119;
+  --bg-sidebar: #0C111D;
+  --bg-hover: #1D3025;
+  --bg-active: #253D2D;
   --bg-overlay: rgba(0, 0, 0, 0.6);
 
   /* Legacy aliases */
-  --bg-app: #0F1117;
-  --bg-header: #1A1D2E;
+  --bg-app: #0F1A14;
+  --bg-header: #0C111D;
 
-  /* Text */
-  --text-primary: #E8EAF0;
-  --text-secondary: #9095AE;
-  --text-tertiary: #5F6580;
-  --text-inverse: #1A1D2E;
-  --text-muted: #9095AE;
+  /* ── Text ─────────────────────────────────────────────── */
+  --text-primary: #D4EBE0;
+  --text-secondary: #7EA892;
+  --text-tertiary: #3D6450;
+  --text-inverse: #0F1C16;
+  --text-muted: #7EA892;
 
-  /* Accent */
-  --accent-primary: #7C6DF0;
-  --accent-hover: #8B7FF5;
-  --accent-soft: rgba(124, 109, 240, 0.12);
-  --accent-softer: rgba(124, 109, 240, 0.06);
+  /* ── Accent — Emerald Green ───────────────────────────── */
+  --accent-primary: #10B981;
+  --accent-hover: #34D399;
+  --accent-soft: rgba(16, 185, 129, 0.12);
+  --accent-softer: rgba(16, 185, 129, 0.06);
 
-  /* Borders */
-  --border-light: #232638;
-  --border-medium: #2A2E45;
-  --border-focus: #7C6DF0;
-  --border-color: #232638;
+  /* ── Borders ──────────────────────────────────────────── */
+  --border-light: #1D3025;
+  --border-medium: #253D2D;
+  --border-focus: #10B981;
+  --border-color: #1D3025;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  /* ── Shadows ──────────────────────────────────────────── */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.03);
 
-  /* Navigation states */
-  --nav-hover-bg: #232638;
-  --nav-hover-color: #E8EAF0;
-  --nav-active-bg: rgba(124, 109, 240, 0.12);
-  --nav-active-color: #7C6DF0;
+  /* ── Navigation states (content area) ────────────────── */
+  --nav-hover-bg: #1D3025;
+  --nav-hover-color: #D4EBE0;
+  --nav-active-bg: rgba(16, 185, 129, 0.14);
+  --nav-active-color: #10B981;
 
-  /* Tooltip */
-  --tooltip-bg: #1A1D2E;
-  --tooltip-border: #2A2E45;
-  --tooltip-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  /* ── Tooltip ──────────────────────────────────────────── */
+  --tooltip-bg: #0C1E14;
+  --tooltip-border: #164D28;
+  --tooltip-text: #E2E8F0;
+  --tooltip-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 
-  /* Toggle & controls */
-  --toggle-btn-color: #5F6580;
-  --toggle-btn-hover-bg: #232638;
-  --toggle-btn-hover-color: #E8EAF0;
-  --toggle-btn-focus-outline: rgba(124, 109, 240, 0.4);
-  --control-btn-color: #9095AE;
-  --control-btn-hover-bg: #232638;
+  /* ── Toggle & controls ────────────────────────────────── */
+  --toggle-btn-color: #3D6450;
+  --toggle-btn-hover-bg: #1D3025;
+  --toggle-btn-hover-color: #D4EBE0;
+  --toggle-btn-focus-outline: rgba(16, 185, 129, 0.4);
+  --control-btn-color: #7EA892;
+  --control-btn-hover-bg: #1D3025;
 
-  /* Status */
+  /* ── Status ───────────────────────────────────────────── */
   --danger-color: #EF4444;
   --danger-hover: #DC2626;
   --success-color: #22C55E;
@@ -157,17 +183,17 @@
   --warning-color: #FBBF24;
   --warning-bg: rgba(251, 191, 36, 0.1);
   --warning-border: rgba(251, 191, 36, 0.25);
-  --info-color: #3B82F6;
+  --info-color: #60A5FA;
 
-  /* Inputs & modals */
-  --modal-bg: #1A1D2E;
+  /* ── Inputs & modals ──────────────────────────────────── */
+  --modal-bg: #162119;
   --modal-backdrop: rgba(0, 0, 0, 0.6);
-  --input-bg: rgba(255, 255, 255, 0.04);
-  --input-border: #2A2E45;
-  --btn-secondary-border: #2A2E45;
-  --btn-secondary-hover: #232638;
+  --input-bg: rgba(16, 185, 129, 0.04);
+  --input-border: #253D2D;
+  --btn-secondary-border: #253D2D;
+  --btn-secondary-hover: #1D3025;
 
-  /* File type icon backgrounds */
+  /* ── File type icon backgrounds ───────────────────────── */
   --icon-bg-pdf: #3B1111;
   --icon-fg-pdf: #FCA5A5;
   --icon-bg-docx: #1E2A4A;
@@ -178,8 +204,8 @@
   --icon-fg-pptx: #FDBA74;
   --icon-bg-image: #2E1065;
   --icon-fg-image: #C4B5FD;
-  --icon-bg-default: #1F2937;
-  --icon-fg-default: #9CA3AF;
+  --icon-bg-default: #1D3025;
+  --icon-fg-default: #7EA892;
 }
 
 /* ── App shell ───────────────────────────────────────────── */
@@ -199,6 +225,8 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  /* Dark chrome background bleeds through the rounded corner of app-content */
+  background-color: var(--bg-sidebar);
 }
 
 /* Scrollable main area — takes all remaining space beside the sidebar */
@@ -208,6 +236,10 @@
   overflow: auto;
   color: var(--text-primary);
   background-color: var(--bg-base);
+  /* Creates the smooth curved intersection with the dark sidebar/header */
+  border-top-left-radius: 16px;
+  border-top: 1px solid var(--chrome-divider);
+  border-left: 1px solid var(--chrome-divider);
 }
 
 /* Offline banner */

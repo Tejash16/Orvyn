@@ -14,41 +14,73 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 32px;
+  gap: 36px;
   width: 42%;
-  min-width: 220px;
-  padding: 48px 40px;
-  background: linear-gradient(150deg, var(--accent-primary) 0%, var(--accent-hover) 100%);
+  min-width: 240px;
+  padding: 52px 44px;
+  background: linear-gradient(150deg, #0C111D 0%, #0A1A12 55%, #064E3B 100%);
   flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle radial glow behind brand content */
+.brandPanel::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.22) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.brandPanel::after {
+  content: '';
+  position: absolute;
+  bottom: -40px;
+  left: -40px;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.14) 0%, transparent 70%);
+  pointer-events: none;
 }
 
 .brandLogo {
-  font-size: 1.375rem;
-  font-weight: 700;
-  letter-spacing: -0.5px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   color: #ffffff;
+  text-transform: uppercase;
+  position: relative;
+  z-index: 1;
 }
 
 .brandTagline {
-  font-size: 1.5rem;
+  font-size: 1.625rem;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.32;
   color: #ffffff;
   margin: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .brandFeatures {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
 }
 
 .brandFeature {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.88);
+  color: rgba(255, 255, 255, 0.85);
   line-height: 1.4;
 }
 
@@ -56,12 +88,13 @@
   width: 34px;
   height: 34px;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.95);
 }
 
 /* Right — form panel */
@@ -73,26 +106,27 @@
   justify-content: center;
   overflow: auto;
   padding: 40px 24px;
-  background-color: var(--bg-app);
+  background-color: var(--bg-base);
 }
 
-/* ── Card ────────────────────────────────────────────────── */
+/* Light mode: subtle white-to-green-tint gradient (Zeytra-style) */
+:global([data-theme="light"]) .formPanel {
+  background: linear-gradient(160deg, #FFFFFF 0%, #EAF5EE 100%);
+}
+
+/* ── Form content container (no card box) ─────────────── */
 
 .card {
   width: 100%;
-  max-width: 400px;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-light);
-  border-radius: 12px;
-  padding: 36px 32px;
-  box-shadow: var(--shadow-md);
+  max-width: 420px;
 }
 
 .cardTitle {
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 24px;
+  margin: 0 0 28px;
+  letter-spacing: -0.02em;
 }
 
 /* ── Form fields ─────────────────────────────────────────── */
@@ -106,25 +140,27 @@
 
 .label {
   font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--text-muted);
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
 }
 
 .input {
-  padding: 9px 12px;
+  padding: 11px 14px;
   font-size: 0.9375rem;
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
-  border-radius: 6px;
+  border-radius: 10px;
   outline: none;
   width: 100%;
   box-sizing: border-box;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .input:focus {
   border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* ── Password field with show/hide toggle ────────────────── */
@@ -134,7 +170,7 @@
 }
 
 .passwordWrap .input {
-  padding-right: 38px;
+  padding-right: 40px;
 }
 
 .passwordToggle {
@@ -145,17 +181,17 @@
   background: none;
   border: none;
   cursor: pointer;
-  padding: 2px;
-  color: var(--text-muted);
+  padding: 4px;
+  color: var(--text-tertiary);
   display: flex;
   align-items: center;
-  font-size: 1rem;
   line-height: 1;
   transition: color 0.15s ease;
+  border-radius: 4px;
 }
 
 .passwordToggle:hover {
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 
 /* ── Caps lock warning ───────────────────────────────────── */
@@ -214,7 +250,7 @@
   color: var(--success-color);
   background-color: var(--success-bg);
   border: 1px solid var(--success-border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 10px 14px;
   margin-bottom: 16px;
   line-height: 1.5;
@@ -224,24 +260,26 @@
 
 .submit {
   width: 100%;
-  padding: 10px 0;
+  padding: 13px 0;
   font-size: 0.9375rem;
   font-weight: 600;
   color: #ffffff;
   background-color: var(--accent-primary);
   border: none;
-  border-radius: 6px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background-color 0.15s ease, opacity 0.15s ease;
-  margin-top: 6px;
+  transition: background-color 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+  margin-top: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  letter-spacing: 0.02em;
 }
 
 .submit:hover:not(:disabled) {
   background-color: var(--accent-hover);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
 }
 
 .submit:disabled {
@@ -285,13 +323,15 @@
   border: none;
   cursor: pointer;
   padding: 0;
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
+  text-decoration-color: rgba(59, 110, 245, 0.4);
 }
 
 .switchLink:hover {
   color: var(--accent-hover);
+  text-decoration-color: var(--accent-hover);
 }
 
 /* ── Hints ───────────────────────────────────────────────── */
@@ -329,14 +369,15 @@
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
-  border-radius: 8px;
+  border-radius: 10px;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
   box-sizing: border-box;
 }
 
 .codeDigit:focus {
   border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .resendRow {

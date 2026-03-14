@@ -9,6 +9,34 @@ import VerifyCode from './VerifyCode';
 import ResetCode from './ResetCode';
 import styles from './auth.module.css';
 
+/* ── Brand panel feature icons ───────────────────────────── */
+
+const IconFolderAI = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    <line x1="12" y1="11" x2="12" y2="17" />
+    <line x1="9" y1="14" x2="15" y2="14" />
+  </svg>
+);
+
+const IconSparkles = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z" />
+  </svg>
+);
+
+const IconChat = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
 /**
  * AuthFlowContainer — owns all transient auth flow state.
  *
@@ -93,15 +121,21 @@ function AuthLayout() {
         </p>
         <div className={styles.brandFeatures}>
           <div className={styles.brandFeature}>
-            <span className={styles.brandFeatureIcon}>🗂️</span>
+            <span className={styles.brandFeatureIcon}>
+              <IconFolderAI />
+            </span>
             Smart DataRoom organisation
           </div>
           <div className={styles.brandFeature}>
-            <span className={styles.brandFeatureIcon}>🤖</span>
+            <span className={styles.brandFeatureIcon}>
+              <IconSparkles />
+            </span>
             AI-powered classification
           </div>
           <div className={styles.brandFeature}>
-            <span className={styles.brandFeatureIcon}>💬</span>
+            <span className={styles.brandFeatureIcon}>
+              <IconChat />
+            </span>
             Copilot chat &amp; insights
           </div>
         </div>

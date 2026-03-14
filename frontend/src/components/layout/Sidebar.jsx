@@ -49,13 +49,24 @@ const IconCopilot = () => (
   </svg>
 );
 
-const IconChevron = ({ collapsed }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2.5"
+/* Expand/collapse icons — panel layout style */
+const IconPanelCollapse = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2"
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    {collapsed
-      ? <polyline points="9 18 15 12 9 6" />
-      : <polyline points="15 18 9 12 15 6" />}
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M9 3v18" />
+    <polyline points="15 9 12 12 15 15" />
+  </svg>
+);
+
+const IconPanelExpand = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M9 3v18" />
+    <polyline points="12 9 15 12 12 15" />
   </svg>
 );
 
@@ -79,7 +90,7 @@ function NavItem({ icon, label, collapsed, active, onClick }) {
       {/* Label — hidden when collapsed via CSS */}
       <span className={styles.navLabel}>{label}</span>
 
-      {/* Tooltip — only mounted + visible when collapsed and hovered */}
+      {/* Tooltip — only mounted when collapsed and hovered */}
       {collapsed && hovered && (
         <span className={styles.tooltip} role="tooltip">{label}</span>
       )}
@@ -98,10 +109,17 @@ function Sidebar() {
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
 
-      {/* Section label */}
-      {!collapsed && (
-        <div className={styles.sectionLabel}>Navigation</div>
-      )}
+      {/* Sidebar header — collapse/expand toggle at top */}
+      <div className={styles.sidebarHeader}>
+        <button
+          className={styles.toggleBtn}
+          onClick={() => dispatch(toggleSidebar())}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <IconPanelExpand /> : <IconPanelCollapse />}
+        </button>
+      </div>
 
       {/* Top section */}
       <nav className={styles.topNav} aria-label="Main navigation">
@@ -143,16 +161,6 @@ function Sidebar() {
           onClick={() => dispatch(setActivePage('settings'))}
         />
       </nav>
-
-      {/* Collapse toggle */}
-      <button
-        className={styles.toggleBtn}
-        onClick={() => dispatch(toggleSidebar())}
-        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      >
-        <IconChevron collapsed={collapsed} />
-      </button>
 
     </aside>
   );
