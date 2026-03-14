@@ -134,7 +134,17 @@ function CopilotPanel() {
   /* ── Context auto-switch ─────────────────────────────── */
 
   useEffect(() => {
-    if (!currentDataroomId) return;
+    // When no DataRoom is selected → global scope (multi-dataroom)
+    if (!currentDataroomId) {
+      dispatch(setSelectedFiles([]));
+      dispatch(setCopilotScope({
+        scopeType: 'global',
+        scopeIds: [],
+        scopeName: 'All DataRooms',
+      }));
+      return;
+    }
+
     const dataroomName = currentPath?.[0]?.name || '';
 
     if (selectedItems.length > 0) {

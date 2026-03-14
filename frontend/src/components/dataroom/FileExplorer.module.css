@@ -242,6 +242,76 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* ── Toolbar separator ─────────────────────────────────── */
+
+.toolbarSep {
+  width: 1px;
+  height: 20px;
+  background-color: var(--border-light);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+/* ── Copilot toggle ────────────────────────────────────── */
+
+.copilotToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.copilotToggle:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.copilotToggleActive {
+  background-color: var(--accent-soft);
+  color: var(--accent-primary);
+}
+
+/* ── Explorer content row (file content + copilot side by side) ── */
+
+.explorerContentRow {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.explorerMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── DataRoom card icon color ─────────────────────────── */
+
+.iconBgDataroom {
+  background-color: var(--accent-soft);
+  color: var(--accent-primary);
+}
+
+/* ── DataRoom card meta ───────────────────────────────── */
+
+.gridCardMeta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
 /* ── Dropdown menus ─────────────────────────────────────── */
 
 .dropdownWrap {

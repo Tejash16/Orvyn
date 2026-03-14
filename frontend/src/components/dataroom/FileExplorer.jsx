@@ -19,6 +19,7 @@ import {
   unmarkFileForMove,
   markFileContentChanged,
   clearFileContentChanged,
+  resetExplorer,
 } from '../../store/fileExplorerSlice';
 import {
   createFolder,
@@ -38,7 +39,8 @@ import {
   deleteFromSystem,
 } from '../../store/fileSlice';
 import { addToast } from '../../store/uiSlice';
-import { openCopilot, sendMessage, startStreaming, indexFiles } from '../../store/copilotSlice';
+import { openCopilot, toggleCopilot, sendMessage, startStreaming, indexFiles } from '../../store/copilotSlice';
+import CopilotPanel from '../copilot/CopilotPanel';
 import ContextMenu from '../common/ContextMenu';
 import MoveMarkedFilesModal from './MoveMarkedFilesModal';
 import styles from './FileExplorer.module.css';
@@ -241,9 +243,31 @@ const IconFileText = () => (
   </svg>
 );
 
+const IconCopilot = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z" />
+  </svg>
+);
+
+const IconDataRoom = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="3" width="20" height="14" rx="2" />
+    <path d="M8 21h8M12 17v4" />
+  </svg>
+);
+
+const IconPlus = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
 /* ── Component ──────────────────────────────────────────── */
 
-function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
+function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onGoHome, onCreateDataroom }) {
   const dispatch = useDispatch();
   const {
     currentDataroomId,
@@ -260,6 +284,13 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
     pendingMoves,
     contentChangedIds,
   } = useSelector((s) => s.fileExplorer);
+
+  // Copilot state
+  const copilotOpen = useSelector((s) => s.copilot.isOpen);
+
+  // DataRoom list for DataRoom-list mode
+  const datarooms = useSelector((s) => s.dataroom.datarooms);
+  const isDataroomListMode = !dataroomId;
 
   // Back / forward history — local state
   const [history, setHistory] = useState([]);
@@ -325,6 +356,9 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
   useEffect(() => {
     if (dataroomId && dataroomId !== currentDataroomId) {
       dispatch(navigateToDataroom(dataroomId));
+    }
+    if (!dataroomId && currentDataroomId) {
+      dispatch(resetExplorer());
     }
   }, [dataroomId, currentDataroomId, dispatch]);
 
@@ -445,7 +479,13 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
 
       if (e.key === 'Backspace') {
         e.preventDefault();
-        dispatch(navigateUp());
+        if (isDataroomListMode) return;
+        if (currentPath.length <= 1) {
+          // At DataRoom root → go back to DataRoom list
+          goHome();
+        } else {
+          dispatch(navigateUp());
+        }
         return;
       }
 
@@ -491,8 +531,10 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
   }
 
   function goHome() {
-    if (currentPath.length <= 1) return;
-    dispatch(navigateToPathIndex(0));
+    // Always go back to DataRoom list view
+    if (onGoHome) {
+      onGoHome();
+    }
   }
 
   function handleBreadcrumb(index) {
@@ -940,25 +982,43 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
       <div className={styles.navBar}>
         <button className={styles.navBtn} onClick={goBack} disabled={historyIndex <= 0} title="Back" type="button"><IconBack /></button>
         <button className={styles.navBtn} onClick={goForward} disabled={historyIndex >= history.length - 1} title="Forward" type="button"><IconForward /></button>
-        <button className={styles.navBtn} onClick={goHome} disabled={currentPath.length <= 1} title="Home" type="button"><IconHome /></button>
+        <button className={styles.navBtn} onClick={goHome} disabled={isDataroomListMode} title="Home" type="button"><IconHome /></button>
         <button className={styles.navBtn} onClick={() => { dispatch(refreshCurrentView()); dispatch(fetchDatarooms()); }} title="Refresh" type="button"><IconRefresh /></button>
 
         <div className={styles.navSep} />
 
         <div className={styles.breadcrumbs}>
-          {currentPath.map((seg, i) => (
-            <span key={seg.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {i > 0 && <span className={styles.crumbSep}>/</span>}
-              <button
-                className={`${styles.crumb} ${i === currentPath.length - 1 ? styles.crumbActive : ''}`}
-                onClick={() => handleBreadcrumb(i)}
-                type="button"
-                title={seg.name}
-              >
-                {seg.name}
-              </button>
+          {isDataroomListMode ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <span className={`${styles.crumb} ${styles.crumbActive}`}>DataRooms</span>
             </span>
-          ))}
+          ) : (
+            <>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <button
+                  className={styles.crumb}
+                  onClick={goHome}
+                  type="button"
+                  title="DataRooms"
+                >
+                  DataRooms
+                </button>
+              </span>
+              {currentPath.map((seg, i) => (
+                <span key={seg.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <span className={styles.crumbSep}>/</span>
+                  <button
+                    className={`${styles.crumb} ${i === currentPath.length - 1 ? styles.crumbActive : ''}`}
+                    onClick={() => handleBreadcrumb(i)}
+                    type="button"
+                    title={seg.name}
+                  >
+                    {seg.name}
+                  </button>
+                </span>
+              ))}
+            </>
+          )}
         </div>
       </div>
     );
@@ -970,16 +1030,22 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
     return (
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
-          <button className={styles.toolBtn} onClick={openNewFolderDialog} type="button">
-            <IconFolderPlus /> New Folder
-          </button>
+          {isDataroomListMode ? (
+            <button className={styles.toolBtn} onClick={() => onCreateDataroom && onCreateDataroom()} type="button">
+              <IconPlus /> New DataRoom
+            </button>
+          ) : (
+            <button className={styles.toolBtn} onClick={openNewFolderDialog} type="button">
+              <IconFolderPlus /> New Folder
+            </button>
+          )}
         </div>
 
         <div className={styles.toolbarRight}>
           <input
             className={styles.toolSearch}
             type="text"
-            placeholder="Search..."
+            placeholder={isDataroomListMode ? 'Search data rooms...' : 'Search...'}
             value={searchQuery}
             onChange={(e) => dispatch(setSearchQuery(e.target.value))}
           />
@@ -998,6 +1064,17 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
               type="button"
             ><IconList /></button>
           </div>
+
+          <div className={styles.toolbarSep} />
+
+          <button
+            className={`${styles.copilotToggle} ${copilotOpen ? styles.copilotToggleActive : ''}`}
+            onClick={() => dispatch(toggleCopilot())}
+            title={copilotOpen ? 'Close Copilot' : 'Open Copilot'}
+            type="button"
+          >
+            <IconCopilot />
+          </button>
         </div>
       </div>
     );
@@ -1262,6 +1339,106 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
     );
   }
 
+  // ── Render: DataRoom grid (when at DataRoom list level) ──
+
+  function renderDataroomGrid() {
+    const filteredDR = searchQuery
+      ? datarooms.filter((dr) => (dr.name || '').toLowerCase().includes(searchQuery.toLowerCase()))
+      : datarooms;
+
+    const sortedDR = [...filteredDR].sort((a, b) => {
+      if (b.is_starred !== a.is_starred) return (b.is_starred ? 1 : 0) - (a.is_starred ? 1 : 0);
+      return new Date(b.updated_at) - new Date(a.updated_at);
+    });
+
+    if (sortedDR.length === 0 && searchQuery) {
+      return (
+        <div className={styles.emptyState}>
+          <IconEmptyFolder />
+          <span className={styles.emptyTitle}>No results found</span>
+          <span className={styles.emptyHint}>No data rooms match &quot;{searchQuery}&quot;</span>
+          <div className={styles.emptyAction}>
+            <button className={styles.toolBtn} onClick={() => dispatch(setSearchQuery(''))} type="button">
+              Clear Search
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (sortedDR.length === 0) {
+      return (
+        <div className={styles.emptyStateCentered}>
+          <IconDataRoom />
+          <span className={styles.emptyTitle}>No DataRooms yet</span>
+          <span className={styles.emptyHint}>Create your first DataRoom to start organizing documents.</span>
+          <div className={styles.emptyAction}>
+            <button className={styles.toolBtn} onClick={() => onCreateDataroom && onCreateDataroom()} type="button">
+              <IconPlus /> New DataRoom
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (viewMode === 'grid') {
+      return (
+        <div className={styles.grid}>
+          {sortedDR.map((dr) => (
+            <div
+              key={dr.id}
+              className={styles.gridCard}
+              onDoubleClick={() => onSelectDataroom && onSelectDataroom(dr.id)}
+            >
+              <div className={`${styles.gridCardIcon} ${styles.iconBgDataroom}`}>
+                <IconDataRoom />
+              </div>
+              <div className={styles.gridCardName} title={dr.name}>{dr.name}</div>
+              <div className={styles.gridCardMeta}>
+                {dr.folder_count ?? 0} folders &middot; {dr.file_count ?? 0} files
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // List view
+    return (
+      <table className={styles.listTable}>
+        <thead>
+          <tr>
+            <th className={styles.listHeader}>Name</th>
+            <th className={styles.listHeader}>Folders</th>
+            <th className={styles.listHeader}>Files</th>
+            <th className={styles.listHeader}>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedDR.map((dr) => (
+            <tr
+              key={dr.id}
+              className={styles.listRow}
+              onDoubleClick={() => onSelectDataroom && onSelectDataroom(dr.id)}
+            >
+              <td>
+                <div className={styles.listNameCell}>
+                  <div className={`${styles.listIcon} ${styles.iconBgDataroom}`}>
+                    <IconDataRoom />
+                  </div>
+                  <span className={styles.listFileName} title={dr.name}>{dr.name}</span>
+                </div>
+              </td>
+              <td className={styles.listMuted}>{dr.folder_count ?? 0}</td>
+              <td className={styles.listMuted}>{dr.file_count ?? 0}</td>
+              <td className={styles.listMuted}>{formatDate(dr.updated_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
   // ── Main render ──
 
   return (
@@ -1269,29 +1446,39 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload }) {
       ref={explorerRef}
       className={styles.explorer}
       tabIndex={-1}
-      onDragOver={handleExplorerDragOver}
-      onDragLeave={handleExplorerDragLeave}
-      onDrop={handleExplorerDrop}
+      onDragOver={!isDataroomListMode ? handleExplorerDragOver : undefined}
+      onDragLeave={!isDataroomListMode ? handleExplorerDragLeave : undefined}
+      onDrop={!isDataroomListMode ? handleExplorerDrop : undefined}
     >
       {renderNavBar()}
       {renderToolbar()}
-      {renderSelectionBar()}
+      {!isDataroomListMode && renderSelectionBar()}
 
-      {isLoading ? (
-        <div className={styles.loadingOverlay}>
-          <div className={styles.spinner} />
+      <div className={styles.explorerContentRow}>
+        <div className={styles.explorerMain}>
+          {isDataroomListMode ? (
+            <div className={styles.content}>
+              {renderDataroomGrid()}
+            </div>
+          ) : isLoading ? (
+            <div className={styles.loadingOverlay}>
+              <div className={styles.spinner} />
+            </div>
+          ) : filtered.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            <div
+              className={styles.content}
+              onClick={handleBackgroundClick}
+              onContextMenu={handleBackgroundContextMenu}
+            >
+              {viewMode === 'grid' ? renderGridView() : renderListView()}
+            </div>
+          )}
         </div>
-      ) : filtered.length === 0 ? (
-        renderEmptyState()
-      ) : (
-        <div
-          className={styles.content}
-          onClick={handleBackgroundClick}
-          onContextMenu={handleBackgroundContextMenu}
-        >
-          {viewMode === 'grid' ? renderGridView() : renderListView()}
-        </div>
-      )}
+
+        <CopilotPanel />
+      </div>
 
       {error && (
         <div style={{

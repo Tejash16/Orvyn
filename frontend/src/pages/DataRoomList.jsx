@@ -395,21 +395,14 @@ function DataRoomList() {
 
       {/* ── Right panel ────────────────────────────────── */}
       <div className={styles.mainPanel}>
-        {selectedId ? (
-          <FileExplorer
-            dataroomId={selectedId}
-            onClose={() => setSelectedId(null)}
-            onOpenUpload={handleOpenUpload}
-          />
-        ) : (
-          <div className={styles.emptyState}>
-            <IconEmptyBox />
-            <span className={styles.emptyTitle}>Select a DataRoom or create a new one</span>
-            <span className={styles.emptyHint}>
-              Choose a data room from the left panel to view its contents.
-            </span>
-          </div>
-        )}
+        <FileExplorer
+          dataroomId={selectedId}
+          onClose={() => setSelectedId(null)}
+          onOpenUpload={handleOpenUpload}
+          onSelectDataroom={(id) => handleSelect(id)}
+          onGoHome={() => setSelectedId(null)}
+          onCreateDataroom={() => setShowCreateModal(true)}
+        />
       </div>
 
       {/* ── Create modal ───────────────────────────────── */}

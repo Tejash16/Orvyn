@@ -9,7 +9,6 @@ import DataRoomList from './pages/DataRoomList';
 import UploadPage from './pages/UploadPage';
 import AuthPage from './pages/AuthPage';
 import ResetPassword from './pages/ResetPassword';
-import CopilotPanel from './components/copilot/CopilotPanel';
 import ToastContainer from './components/common/Toast';
 import './App.css';
 
@@ -75,7 +74,6 @@ function App() {
             {activePage === 'upload' && <UploadPage />}
             {activePage === 'settings' && <SettingsPage />}
           </main>
-          <CopilotPanel />
         </div>
       ) : (
         <AuthPage />
