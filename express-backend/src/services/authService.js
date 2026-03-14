@@ -468,6 +468,29 @@ async function resendResetCode(email) {
   return { cooldownSeconds };
 }
 
+/**
+ * Send user feedback email to the Orvyn team.
+ *
+ * @param {{ name: string, email: string, feedback: string }} params
+ */
+async function sendFeedbackEmail({ name, email, feedback }) {
+  if (!feedback || !feedback.trim()) {
+    const err = new Error('Feedback cannot be empty.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const escapedName     = validator.escape(name || 'Unknown User');
+  const escapedFeedback = validator.escape(feedback.trim());
+
+  await sendEmail({
+    to:      'orbicle.labs@gmail.com',
+    subject: `Feedback from ${name || 'Unknown User'}`,
+    text:    `Feedback from: ${name}\nEmail: ${email}\n\n${feedback.trim()}`,
+    html:    `<h3>Feedback from ${escapedName}</h3><p><strong>Email:</strong> ${validator.escape(email)}</p><hr/><p>${escapedFeedback.replace(/\n/g, '<br/>')}</p>`,
+  });
+}
+
 module.exports = {
   registerUser,
   loginUser,
@@ -477,6 +500,7 @@ module.exports = {
   resetPassword,
   resendVerificationCode,
   resendResetCode,
+  sendFeedbackEmail,
   // Token helpers used by authController for flows not delegated to this service
   hashToken,
   issueAccessToken,

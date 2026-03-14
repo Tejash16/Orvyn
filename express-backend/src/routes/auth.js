@@ -12,6 +12,7 @@ const {
   verifyResetCode,
   resetPassword,
   resendResetCode,
+  submitFeedback,
 } = require('../controllers/authController');
 const { authenticate } = require('../middleware/authenticate');
 const {
@@ -22,6 +23,7 @@ const {
   registerLimiter,
   verifyResetCodeLimiter,
   resendResetCodeLimiter,
+  feedbackLimiter,
 } = require('../middleware/rateLimiter');
 
 const router = Router();
@@ -48,5 +50,8 @@ router.post('/forgot-password',    forgotPasswordLimiter,    forgotPassword);
 router.post('/verify-reset-code',  verifyResetCodeLimiter,   verifyResetCode);
 router.post('/reset-password',     resetPasswordLimiter,     resetPassword);
 router.post('/resend-reset-code',  resendResetCodeLimiter,   resendResetCode);
+
+// Feedback
+router.post('/feedback',          authenticate, feedbackLimiter, submitFeedback);
 
 module.exports = router;

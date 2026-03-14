@@ -300,6 +300,32 @@ async function resendResetCode(req, res, next) {
   }
 }
 
+// ── Submit Feedback ───────────────────────────────────────
+
+async function submitFeedback(req, res, next) {
+  try {
+    const { feedback } = req.body;
+
+    const user = await User.findById(req.user.userId);
+    if (!user || user.isDeleted) {
+      return res.status(404).json({ success: false, error: 'User not found.' });
+    }
+
+    await authService.sendFeedbackEmail({
+      name:     user.name,
+      email:    user.email,
+      feedback,
+    });
+
+    return res.status(200).json({ success: true, message: 'Feedback submitted successfully.' });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ success: false, error: err.message });
+    }
+    next(err);
+  }
+}
+
 module.exports = {
   register,
   verifyEmail,
@@ -313,4 +339,5 @@ module.exports = {
   resetPassword,
   resendVerification,
   resendResetCode,
+  submitFeedback,
 };

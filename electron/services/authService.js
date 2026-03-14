@@ -273,6 +273,23 @@ function getCurrentUser() { return _user; }
 // Never passed to the renderer.
 function getToken() { return _token; }
 
+// ── Send Feedback ────────────────────────────────────────
+
+async function sendFeedback({ feedback }) {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/feedback`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${_token}`,
+    },
+    body: JSON.stringify({ feedback }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to send feedback.');
+  return data;
+}
+
 module.exports = {
   register,
   login,
@@ -287,6 +304,7 @@ module.exports = {
   resetPassword,
   resendResetCode,
   deleteAccount,
+  sendFeedback,
   logout,
   getCurrentUser,
   getToken,

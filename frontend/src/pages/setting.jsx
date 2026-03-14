@@ -21,6 +21,12 @@ function SettingsPage() {
   const [deleteError,     setDeleteError]     = useState('');
   const [deleteLoading,   setDeleteLoading]   = useState(false);
 
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackText,      setFeedbackText]      = useState('');
+  const [feedbackError,     setFeedbackError]     = useState('');
+  const [feedbackLoading,   setFeedbackLoading]   = useState(false);
+  const [feedbackSuccess,   setFeedbackSuccess]   = useState(false);
+
   async function handleThemeToggle() {
     const prevTheme = theme;
     const newTheme  = theme === 'light' ? 'dark' : 'light';
@@ -69,6 +75,43 @@ function SettingsPage() {
       setDeleteError('An unexpected error occurred.');
     } finally {
       setDeleteLoading(false);
+    }
+  }
+
+  function openFeedbackModal() {
+    setFeedbackText('');
+    setFeedbackError('');
+    setFeedbackSuccess(false);
+    setShowFeedbackModal(true);
+  }
+
+  function closeFeedbackModal() {
+    if (feedbackLoading) return;
+    setShowFeedbackModal(false);
+    setFeedbackText('');
+    setFeedbackError('');
+    setFeedbackSuccess(false);
+  }
+
+  async function handleFeedbackSubmit() {
+    if (!feedbackText.trim()) {
+      setFeedbackError('Please enter your feedback.');
+      return;
+    }
+    setFeedbackLoading(true);
+    setFeedbackError('');
+    try {
+      const result = await window.api.auth.sendFeedback(feedbackText.trim());
+      if (result.success) {
+        setFeedbackSuccess(true);
+        setTimeout(() => closeFeedbackModal(), 1500);
+      } else {
+        setFeedbackError(result.error || 'Failed to send feedback.');
+      }
+    } catch {
+      setFeedbackError('An unexpected error occurred.');
+    } finally {
+      setFeedbackLoading(false);
     }
   }
 
@@ -160,6 +203,25 @@ function SettingsPage() {
         </div>
       </section>
 
+      {/* Feedback */}
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <svg className={styles.sectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <h2 className={styles.sectionTitle}>Feedback</h2>
+        </div>
+        <div className={styles.row}>
+          <div className={styles.rowInfo}>
+            <span className={styles.label}>Send feedback</span>
+            <p className={styles.hint}>Help us improve Orvyn by sharing your thoughts</p>
+          </div>
+          <button className={styles.btnSecondary} onClick={openFeedbackModal}>
+            Send feedback
+          </button>
+        </div>
+      </section>
+
       {/* Danger zone */}
       <section className={`${styles.section} ${styles.dangerSection}`}>
         <div className={`${styles.sectionHeader} ${styles.dangerSectionHeader}`}>
@@ -182,6 +244,55 @@ function SettingsPage() {
           </button>
         </div>
       </section>
+
+      {/* Feedback modal */}
+      {showFeedbackModal && (
+        <div
+          className={styles.modalBackdrop}
+          role="presentation"
+          onClick={(e) => { if (e.target === e.currentTarget) closeFeedbackModal(); }}
+        >
+          <div
+            className={styles.modal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="feedback-modal-title"
+          >
+            <h2 className={styles.modalTitle} id="feedback-modal-title">Send Feedback</h2>
+            <p className={styles.modalDescription}>
+              We appreciate your feedback. Let us know how we can improve Orvyn.
+            </p>
+            <textarea
+              className={styles.modalTextarea}
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              placeholder="Write your feedback here..."
+              rows={5}
+              maxLength={2000}
+              autoFocus
+              disabled={feedbackSuccess}
+            />
+            {feedbackError && <p className={styles.modalError}>{feedbackError}</p>}
+            {feedbackSuccess && <p className={styles.modalSuccess}>Feedback sent successfully!</p>}
+            <div className={styles.modalActions}>
+              <button
+                className={styles.btnSecondary}
+                onClick={closeFeedbackModal}
+                disabled={feedbackLoading}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.btnPrimary}
+                onClick={handleFeedbackSubmit}
+                disabled={feedbackLoading || feedbackSuccess}
+              >
+                {feedbackLoading ? 'Sending...' : 'Submit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete confirmation modal */}
       {showDeleteModal && (

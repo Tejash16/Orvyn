@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('api', {
     verifyResetCode:       (email, code)                  => ipcRenderer.invoke('auth:verifyResetCode', { email, code }),
     resetPassword:         ({ email, code, newPassword }) => ipcRenderer.invoke('auth:resetPassword', { email, code, newPassword }),
     resendResetCode:       (email)                        => ipcRenderer.invoke('auth:resendResetCode', { email }),
+    sendFeedback:          (feedback) => ipcRenderer.invoke('auth:sendFeedback', { feedback }),
     getCurrentUser: ()        => ipcRenderer.invoke('auth:getCurrentUser'),
     getLocalDbPath: ()        => ipcRenderer.invoke('auth:getLocalDbPath'),
     // Called once on app mount — Electron performs the entire restore sequence.

@@ -369,6 +369,17 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
     }
   });
 
+  // ── Send Feedback ─────────────────────────────────────────
+
+  ipcMain.handle('auth:sendFeedback', async (_event, { feedback }) => {
+    try {
+      await authService.sendFeedback({ feedback });
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
 }
 
 module.exports = registerAuthHandlers;

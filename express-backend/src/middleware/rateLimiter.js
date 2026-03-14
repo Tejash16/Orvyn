@@ -72,6 +72,16 @@ const resendResetCodeLimiter = rateLimit({
   },
 });
 
+const feedbackLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ success: false, error: 'Too many feedback submissions. Try again in 15 minutes.' });
+  },
+});
+
 module.exports = {
   loginLimiter,
   forgotPasswordLimiter,
@@ -80,4 +90,5 @@ module.exports = {
   registerLimiter,
   verifyResetCodeLimiter,
   resendResetCodeLimiter,
+  feedbackLimiter,
 };
