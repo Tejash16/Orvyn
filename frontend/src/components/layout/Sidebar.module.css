@@ -21,10 +21,9 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  height: 44px;
-  padding: 0 10px;
+  height: 52px;
+  padding: 8px 10px 0;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--chrome-divider);
 }
 
 .collapsed .sidebarHeader {

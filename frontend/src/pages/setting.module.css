@@ -1,85 +1,177 @@
+/* ── Settings page layout ────────────────────────────────── */
+
 .page {
-  padding: 32px 40px;
-  max-width: 640px;
+  padding: 40px 48px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: 36px;
 }
 
 .title {
-  font-size: 1.375rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 32px;
+  letter-spacing: -0.02em;
+  margin: 0;
 }
 
-/* ── Section ─────────────────────────────────────────────── */
-
-.section {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border-top: 1px solid var(--border-light);
-  padding-top: 20px;
-  margin-bottom: 28px;
-}
-
-.sectionTitle {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-tertiary);
-  margin-bottom: 12px;
-}
-
-/* ── Profile grid ────────────────────────────────────────── */
-
-.profileGrid {
-  display: grid;
-  grid-template-columns: 130px 1fr;
-  row-gap: 12px;
-  align-items: center;
-}
-
-.fieldLabel {
-  font-size: 13px;
+.subtitle {
+  font-size: 0.875rem;
   color: var(--text-secondary);
+  margin: 6px 0 0;
 }
 
-.fieldValue {
-  font-size: 0.9375rem;
+/* ── Profile card ───────────────────────────────────────── */
+
+.profileCard {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  padding: 24px 28px;
+  margin-bottom: 28px;
+  box-shadow: var(--shadow-sm);
+}
+
+.avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 12px rgba(5, 150, 105, 0.3);
+}
+
+.avatarInitials {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+  user-select: none;
+}
+
+.profileInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.profileName {
+  font-size: 1.125rem;
+  font-weight: 600;
   color: var(--text-primary);
-  font-weight: 500;
+  margin: 0 0 2px;
+  letter-spacing: -0.01em;
+}
+
+.profileEmail {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
   word-break: break-all;
 }
 
-/* ── Row ─────────────────────────────────────────────────── */
+.profileMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.profileMetaIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+/* ── Section ────────────────────────────────────────────── */
+
+.section {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  padding: 0;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px 0;
+}
+
+.sectionIcon {
+  width: 18px;
+  height: 18px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.sectionTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+/* ── Row (items inside a section card) ──────────────────── */
 
 .row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 52px;
+  padding: 16px 24px;
   gap: 16px;
+  transition: background-color 0.12s ease;
+}
+
+.row + .row {
+  border-top: 1px solid var(--border-light);
 }
 
 .rowInfo {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .label {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .hint {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   margin: 0;
+  line-height: 1.45;
 }
 
-/* ── Toggle switch ───────────────────────────────────────── */
+.value {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* ── Toggle switch ──────────────────────────────────────── */
 
 .toggle {
   position: relative;
@@ -114,30 +206,32 @@
   background-color: #ffffff;
   transition: transform 0.2s ease;
   pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .toggle.on .thumb {
   transform: translateX(20px);
 }
 
-/* ── Buttons ─────────────────────────────────────────────── */
+/* ── Buttons ────────────────────────────────────────────── */
 
 .btnSecondary {
   flex-shrink: 0;
-  padding: 7px 16px;
-  font-size: 13px;
+  padding: 8px 18px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary);
   background-color: transparent;
   border: 1px solid var(--btn-secondary-border);
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
   white-space: nowrap;
 }
 
 .btnSecondary:hover:not(:disabled) {
   background-color: var(--btn-secondary-hover);
+  border-color: var(--border-medium);
 }
 
 .btnSecondary:disabled {
@@ -147,13 +241,13 @@
 
 .btnDanger {
   flex-shrink: 0;
-  padding: 7px 16px;
-  font-size: 13px;
+  padding: 8px 18px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: #ffffff;
   background-color: var(--danger-color);
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.15s ease;
   white-space: nowrap;
@@ -168,17 +262,18 @@
   cursor: not-allowed;
 }
 
-/* ── Danger section ──────────────────────────────────────── */
+/* ── Danger section ─────────────────────────────────────── */
 
 .dangerSection {
-  border-top-color: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.15);
 }
 
-.dangerTitle {
+.dangerSectionHeader .sectionIcon,
+.dangerSectionHeader .sectionTitle {
   color: var(--danger-color);
 }
 
-/* ── Modal ───────────────────────────────────────────────── */
+/* ── Modal ──────────────────────────────────────────────── */
 
 .modalBackdrop {
   position: fixed;
@@ -193,7 +288,7 @@
 .modal {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-light);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 28px 32px;
   width: min(460px, calc(100vw - 48px));
   display: flex;
@@ -210,37 +305,38 @@
 }
 
 .modalWarning {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-secondary);
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .modalLabel {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .modalInput {
   width: 100%;
-  padding: 9px 12px;
+  padding: 10px 14px;
   font-size: 0.9375rem;
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
-  border-radius: 6px;
+  border-radius: 8px;
   outline: none;
   box-sizing: border-box;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .modalInput:focus {
   border-color: var(--danger-color);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
 }
 
 .modalError {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--danger-color);
   margin: 0;
 }
