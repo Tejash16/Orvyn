@@ -10,7 +10,7 @@ const SUPPORTED_EXTENSIONS = new Set([
   '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.png', '.jpg', '.jpeg',
 ]);
 
-const MAX_FILES_PER_BATCH = 50;
+const MAX_FILES_PER_BATCH = 70;
 
 /**
  * Registers file-related IPC handlers.

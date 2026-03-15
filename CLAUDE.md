@@ -480,7 +480,7 @@ Any file with an unsupported extension is rejected at registration time.
 
 ### Constraints
 
-- Maximum **50 files** per classification batch.
+- Maximum **70 files** per classification batch.
 - Nested folder structure with unlimited depth. Each folder node has a `context` field
   (description) that guides the AI classifier.
 - File fingerprinting extracts the first **1000 characters** of text content per file for
@@ -523,7 +523,7 @@ placed in `electron/.env`, `python-backend/.env`, or any file shipped with the d
 
 3. **Batched Parallel Processing** — Express splits files into batches of **10 files per
    Gemini API call**. Up to **5 batches run in parallel** using `Promise.all()`,
-   processing a maximum of 50 files efficiently.
+   processing a maximum of 70 files efficiently.
 
 4. **Folder Assignment** — The AI returns a `folder_id` and `confidence` score (0.0–1.0)
    for each file.

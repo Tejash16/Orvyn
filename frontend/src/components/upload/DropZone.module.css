@@ -2,13 +2,13 @@
 
 .dropZone {
   border: 2px dashed var(--border-medium);
-  border-radius: 14px;
-  padding: var(--space-lg, 24px) var(--space-lg, 24px);
+  border-radius: 12px;
+  padding: var(--space-md, 16px);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-sm, 8px);
+  gap: 6px;
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease;
   background-color: var(--bg-surface);
@@ -21,7 +21,7 @@
   content: '';
   position: absolute;
   inset: -2px;
-  border-radius: 16px;
+  border-radius: 14px;
   background: linear-gradient(135deg, var(--accent-primary), transparent, var(--accent-primary));
   opacity: 0;
   z-index: 0;
@@ -46,9 +46,9 @@
 /* ── Icon wrap ─────────────────────────────────────────── */
 
 .iconWrap {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   background: var(--accent-soft);
   display: flex;
   align-items: center;
@@ -66,7 +66,7 @@
 
 .title {
   font-family: 'Fira Code', monospace;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-primary);
   z-index: 1;
@@ -74,7 +74,7 @@
 
 .text {
   font-family: 'Fira Sans', sans-serif;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: var(--text-tertiary);
   text-align: center;
   z-index: 1;
@@ -84,7 +84,7 @@
 
 .buttons {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   margin-top: var(--space-xs, 4px);
   z-index: 1;
 }
@@ -93,7 +93,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 18px;
+  padding: 7px 16px;
   font-size: 0.8125rem;
   font-weight: 600;
   font-family: 'Fira Sans', sans-serif;
@@ -120,7 +120,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 18px;
+  padding: 7px 16px;
   font-size: 0.8125rem;
   font-weight: 600;
   font-family: 'Fira Sans', sans-serif;

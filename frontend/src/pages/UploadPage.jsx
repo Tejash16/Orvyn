@@ -27,7 +27,7 @@ import styles from './UploadPage.module.css';
 const SUPPORTED_EXTENSIONS = new Set([
   '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.png', '.jpg', '.jpeg',
 ]);
-const MAX_FILES = 50;
+const MAX_FILES = 70;
 
 /* ── Component ──────────────────────────────────────────── */
 
@@ -144,6 +144,7 @@ function UploadPage() {
     setIsDragOver(false);
     setLocalError(null);
 
+    const items = e.dataTransfer.items;
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
 
@@ -151,14 +152,15 @@ function UploadPage() {
     const folderPaths = [];
 
     for (let i = 0; i < files.length; i++) {
-      const f = files[i];
-      if (f.path) {
-        const ext = f.name.lastIndexOf('.');
-        if (ext === -1 || f.type === '') {
-          folderPaths.push(f.path);
-        } else {
-          paths.push(f.path);
-        }
+      const file = files[i];
+      if (!file.path) continue;
+
+      // Use webkitGetAsEntry for reliable folder vs file detection
+      const entry = items?.[i]?.webkitGetAsEntry?.();
+      if (entry?.isDirectory) {
+        folderPaths.push(file.path);
+      } else {
+        paths.push(file.path);
       }
     }
 
@@ -330,163 +332,165 @@ function UploadPage() {
         </div>
       )}
 
-      {/* ── Select Screen ── */}
-      {step === 'select' && (
-        <div className={styles.content}>
-          <div className={styles.selectLayout}>
-            {/* Left Panel: File Browser */}
-            <div className={styles.leftPanel}>
-              <FileList
-                files={selectedFiles}
-                onRemoveFile={handleRemoveFile}
-                validCount={validCount}
-                invalidCount={invalidCount}
-                totalSize={totalSize}
-                maxFiles={MAX_FILES}
-              />
-            </div>
+      {/* ── Select Screen (always visible) ── */}
+      <div className={styles.content}>
+        <div className={styles.selectLayout}>
+          {/* Left Panel: File Browser */}
+          <div className={styles.leftPanel}>
+            <FileList
+              files={selectedFiles}
+              onRemoveFile={handleRemoveFile}
+              validCount={validCount}
+              invalidCount={invalidCount}
+              totalSize={totalSize}
+              maxFiles={MAX_FILES}
+            />
+          </div>
 
-            {/* Right Panel: Upload & Configure */}
-            <div className={styles.rightPanel}>
-              <DropZone
-                onSelectFiles={handleSelectFiles}
-                onSelectFolder={handleSelectFolder}
-                isDragOver={isDragOver}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              />
+          {/* Right Panel: Upload & Configure */}
+          <div className={styles.rightPanel}>
+            <DropZone
+              onSelectFiles={handleSelectFiles}
+              onSelectFolder={handleSelectFolder}
+              isDragOver={isDragOver}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            />
 
-              <ClassificationModeSelector
-                mode={mode}
-                onModeChange={setMode}
-                targetDataroomId={targetDataroomId}
-                onTargetChange={setTargetDataroomId}
-                aiName={aiName}
-                onAiNameChange={setAiName}
-                aiDescription={aiDescription}
-                onAiDescriptionChange={setAiDescription}
-                datarooms={datarooms}
-              />
+            <ClassificationModeSelector
+              mode={mode}
+              onModeChange={setMode}
+              targetDataroomId={targetDataroomId}
+              onTargetChange={setTargetDataroomId}
+              aiName={aiName}
+              onAiNameChange={setAiName}
+              aiDescription={aiDescription}
+              onAiDescriptionChange={setAiDescription}
+              datarooms={datarooms}
+            />
 
-              {/* Status card */}
-              <div className={styles.statusCard}>
-                <div className={styles.statusHeader}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                  </svg>
-                  <span className={styles.statusTitle}>
-                    {mode === 'ai' ? 'AI Organization' : 'Custom Classification'}
-                  </span>
-                </div>
-                <span className={styles.statusSubtitle}>
-                  {mode === 'ai' ? 'Upload files to start organizing' : 'Upload files to start classifying'}
+            {/* Status card */}
+            <div className={styles.statusCard}>
+              <div className={styles.statusHeader}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+                <span className={styles.statusTitle}>
+                  {mode === 'ai' ? 'AI Organization' : 'Custom Classification'}
                 </span>
-
-                {validCount === 0 ? (
-                  <>
-                    <div className={styles.statusInfo}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="12" y1="16" x2="12" y2="12" />
-                        <line x1="12" y1="8" x2="12.01" y2="8" />
-                      </svg>
-                      No files uploaded yet
-                    </div>
-                    <div className={styles.statusGhost}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                      </svg>
-                      Upload Files First
-                    </div>
-                  </>
-                ) : (
-                  <div className={styles.statusActions}>
-                    <button className={styles.btnSecondary} onClick={handleCancel} type="button">
-                      Cancel
-                    </button>
-                    <button
-                      className={styles.btnPrimary}
-                      onClick={handleClassify}
-                      disabled={!canClassify}
-                      type="button"
-                    >
-                      Classify {validCount} file{validCount !== 1 ? 's' : ''}
-                    </button>
-                  </div>
-                )}
-
-                <div className={styles.statusHint}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="16" x2="12" y2="12" />
-                    <line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                  {validCount === 0
-                    ? 'Upload files using the upload zone above to get started'
-                    : `${validCount} file${validCount !== 1 ? 's' : ''} ready for ${mode === 'ai' ? 'AI organization' : 'classification'}`
-                  }
-                </div>
               </div>
+              <span className={styles.statusSubtitle}>
+                {mode === 'ai' ? 'Upload files to start organizing' : 'Upload files to start classifying'}
+              </span>
 
-              {/* Error bar */}
-              {localError && (
-                <div className={styles.errorBar}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  {localError}
+              {validCount === 0 ? (
+                <>
+                  <div className={styles.statusInfo}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    No files uploaded yet
+                  </div>
+                  <div className={styles.statusGhost}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                    Upload Files First
+                  </div>
+                </>
+              ) : (
+                <div className={styles.statusActions}>
+                  <button className={styles.btnSecondary} onClick={handleCancel} type="button">
+                    Cancel
+                  </button>
+                  <button
+                    className={styles.btnPrimary}
+                    onClick={handleClassify}
+                    disabled={!canClassify}
+                    type="button"
+                  >
+                    Classify {validCount} file{validCount !== 1 ? 's' : ''}
+                  </button>
                 </div>
               )}
+
+              <div className={styles.statusHint}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+                {validCount === 0
+                  ? 'Upload files using the upload zone above to get started'
+                  : `${validCount} file${validCount !== 1 ? 's' : ''} ready for ${mode === 'ai' ? 'AI organization' : 'classification'}`
+                }
+              </div>
+            </div>
+
+            {/* Error bar */}
+            {localError && step === 'select' && (
+              <div className={styles.errorBar}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                {localError}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Progress Modal ── */}
+      {step === 'progress' && (
+        <div className={styles.modalBackdrop}>
+          <div className={styles.modalContent}>
+            <ProgressView
+              progressStep={progressStep}
+              mode={mode}
+              validCount={validCount}
+              error={localError || uploadModal.error}
+              onRetry={handleRetry}
+            />
+            <div className={styles.modalFooter}>
+              <button className={styles.btnSecondary} onClick={handleCancel} type="button">
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Progress Screen ── */}
-      {step === 'progress' && (
-        <div className={styles.content}>
-          <ProgressView
-            progressStep={progressStep}
-            mode={mode}
-            validCount={validCount}
-            error={localError || uploadModal.error}
-            onRetry={handleRetry}
-          />
-          <div className={styles.footer}>
-            <button className={styles.btnSecondary} onClick={handleCancel} type="button">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Results Screen ── */}
+      {/* ── Results Modal ── */}
       {step === 'results' && (
-        <div className={styles.content}>
-          <ResultsView
-            mode={mode}
-            uploadModal={uploadModal}
-          />
-          <div className={styles.footer}>
-            <button className={styles.btnSecondary} onClick={handleBackToDatarooms} type="button">
-              Back to DataRooms
-            </button>
-            <button className={styles.btnSecondary} onClick={handleUploadMore} type="button">
-              Upload More
-            </button>
-            {resultDataroomId && (
-              <button className={styles.btnPrimary} onClick={handleViewDataroom} type="button">
-                View DataRoom
+        <div className={styles.modalBackdrop}>
+          <div className={styles.modalContent}>
+            <ResultsView
+              mode={mode}
+              uploadModal={uploadModal}
+            />
+            <div className={styles.modalFooter}>
+              <button className={styles.btnSecondary} onClick={handleBackToDatarooms} type="button">
+                Back to DataRooms
               </button>
-            )}
+              <button className={styles.btnSecondary} onClick={handleUploadMore} type="button">
+                Upload More
+              </button>
+              {resultDataroomId && (
+                <button className={styles.btnPrimary} onClick={handleViewDataroom} type="button">
+                  View DataRoom
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

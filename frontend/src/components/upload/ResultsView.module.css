@@ -1,11 +1,9 @@
-/* ── Results Screen ─────────────────────────────────────── */
+/* ── Results Screen (modal context) ───────────────────────── */
 
 .wrap {
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg, 24px);
-  max-width: 640px;
-  margin: 0 auto;
+  gap: var(--space-md, 16px);
   width: 100%;
 }
 
@@ -15,13 +13,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: var(--space-lg, 24px) 0;
+  gap: 10px;
+  padding: var(--space-md, 16px) 0 var(--space-sm, 8px);
 }
 
 .successIcon {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   background-color: var(--success-bg);
   border: 2px solid var(--success-border);
@@ -33,7 +31,7 @@
 
 .successTitle {
   font-family: 'Fira Code', monospace;
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -42,32 +40,32 @@
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
 }
 
 .statCard {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs, 4px);
-  padding: var(--space-md, 16px);
+  gap: 2px;
+  padding: 12px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-light);
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow: var(--shadow-card);
   text-align: center;
 }
 
 .statValue {
   font-family: 'Fira Code', monospace;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .statLabel {
   font-family: 'Fira Sans', sans-serif;
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -78,26 +76,28 @@
 
 .sectionLabel {
   font-family: 'Fira Code', monospace;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .folders {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
 }
 
 .folderItem {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px var(--space-md, 16px);
+  gap: 8px;
+  padding: 10px 12px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-light);
-  border-radius: 10px;
+  border-radius: 8px;
   font-family: 'Fira Sans', sans-serif;
   font-size: 0.8125rem;
   color: var(--text-primary);
