@@ -156,7 +156,7 @@ function FileList({ files, onRemoveFile, validCount, invalidCount, totalSize, ma
             <div className={styles.toolbar}>
                 <div className={styles.toolbarStats}>
                     <span className={styles.stat}>
-                        <IconFileSmall /> {validCount} file{validCount !== 1 ? 's' : ''}
+                        <IconFileSmall /> {files.length} / {maxFiles} files
                     </span>
                     <span className={styles.stat}>
                         <IconHardDrive /> {formatSize(totalSize)}

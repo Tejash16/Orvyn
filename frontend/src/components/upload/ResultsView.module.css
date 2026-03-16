@@ -30,7 +30,7 @@
 }
 
 .successTitle {
-  font-family: 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
@@ -57,14 +57,14 @@
 }
 
 .statValue {
-  font-family: 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .statLabel {
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.625rem;
   color: var(--text-tertiary);
   text-transform: uppercase;
@@ -75,7 +75,7 @@
 /* ── Folder breakdown ──────────────────────────────────── */
 
 .sectionLabel {
-  font-family: 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary);
@@ -98,14 +98,14 @@
   background-color: var(--bg-surface);
   border: 1px solid var(--border-light);
   border-radius: 8px;
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.8125rem;
   color: var(--text-primary);
   box-shadow: var(--shadow-card);
 }
 
 .folderCount {
-  font-family: 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--text-tertiary);
   margin-left: auto;

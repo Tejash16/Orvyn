@@ -34,7 +34,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.8125rem;
   font-weight: 700;
   border: 2px solid var(--border-medium);
@@ -57,7 +57,7 @@
 }
 
 .stepLabel {
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.6875rem;
   font-weight: 500;
   color: var(--text-tertiary);
@@ -109,7 +109,7 @@
 }
 
 .progressText {
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.9375rem;
   color: var(--text-secondary);
   text-align: center;
@@ -142,7 +142,7 @@
 }
 
 .errorText {
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.8125rem;
   color: var(--danger-color);
   line-height: 1.5;
@@ -152,7 +152,7 @@
   padding: 7px 18px;
   font-size: 0.8125rem;
   font-weight: 600;
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   color: var(--accent-primary);
   background: var(--accent-soft);
   border: 1px solid transparent;

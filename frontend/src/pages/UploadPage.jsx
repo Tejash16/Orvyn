@@ -12,6 +12,7 @@ import {
   setActivePage,
   clearUploadPageState,
   setPendingViewDataroomId,
+  addToast,
 } from '../store/uiSlice';
 
 import DropZone from '../components/upload/DropZone';
@@ -27,7 +28,7 @@ import styles from './UploadPage.module.css';
 const SUPPORTED_EXTENSIONS = new Set([
   '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.csv', '.png', '.jpg', '.jpeg',
 ]);
-const MAX_FILES = 70;
+const MAX_FILES = 100;
 
 /* ── Component ──────────────────────────────────────────── */
 
@@ -71,18 +72,18 @@ function UploadPage() {
 
     const available = MAX_FILES - selectedFiles.length;
     if (available <= 0) {
-      setLocalError(`Maximum ${MAX_FILES} files per batch.`);
+      dispatch(addToast({ message: `Upload limit reached (${MAX_FILES} files). Remove some files to add new ones.`, type: 'warning' }));
       return;
     }
 
     const pathsToLoad = paths.slice(0, available);
     if (paths.length > available) {
-      setLocalError(`Only ${available} more files can be added (limit: ${MAX_FILES}).`);
+      dispatch(addToast({ message: `Only ${available} of ${paths.length} files were added — upload limit is ${MAX_FILES} files per batch.`, type: 'warning' }));
     }
 
     const result = await window.api.file.getPathsInfo(pathsToLoad);
     if (!result.success) {
-      setLocalError(result.error || 'Failed to read file info.');
+      dispatch(addToast({ message: result.error || 'Failed to read file info.', type: 'error' }));
       return;
     }
 
@@ -99,7 +100,7 @@ function UploadPage() {
     setLocalError(null);
     const result = await window.api.file.selectFiles();
     if (!result.success) {
-      setLocalError(result.error);
+      dispatch(addToast({ message: result.error || 'Failed to select files.', type: 'error' }));
       return;
     }
     if (result.filePaths.length === 0) return;
@@ -110,7 +111,7 @@ function UploadPage() {
     setLocalError(null);
     const result = await window.api.file.selectFolder();
     if (!result.success) {
-      setLocalError(result.error);
+      dispatch(addToast({ message: result.error || 'Failed to select folder.', type: 'error' }));
       return;
     }
     if (result.filePaths.length === 0) return;
@@ -229,7 +230,7 @@ function UploadPage() {
         });
 
         if (!createResult.success) {
-          setLocalError(createResult.error || 'Failed to create DataRoom.');
+          dispatch(addToast({ message: createResult.error || 'Failed to create DataRoom.', type: 'error' }));
           setStep('select');
           return;
         }
@@ -239,7 +240,7 @@ function UploadPage() {
       }
 
       if (!regResult || !regResult.registered) {
-        setLocalError('No files were registered.');
+        dispatch(addToast({ message: 'No files were registered.', type: 'error' }));
         setStep('select');
         return;
       }
@@ -368,7 +369,7 @@ function UploadPage() {
               aiDescription={aiDescription}
               onAiDescriptionChange={setAiDescription}
               datarooms={datarooms}
-            />
+            /> 
 
             {/* Status card */}
             <div className={styles.statusCard}>
@@ -434,18 +435,6 @@ function UploadPage() {
               </div>
             </div>
 
-            {/* Error bar */}
-            {localError && step === 'select' && (
-              <div className={styles.errorBar}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-                {localError}
-              </div>
-            )}
           </div>
         </div>
       </div>

@@ -4,12 +4,12 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-light);
   border-radius: 12px;
-  padding: 12px var(--space-md, 16px);
+  padding: var(--space-md, 16px) var(--space-md, 16px);
   box-shadow: var(--shadow-card);
 }
 
 .sectionTitle {
-  font-family: 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.8125rem;
   font-weight: 700;
   color: var(--text-primary);
@@ -17,7 +17,7 @@
 }
 
 .sectionSubtitle {
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.6875rem;
   color: var(--text-tertiary);
   margin-bottom: var(--space-sm, 8px);
@@ -28,22 +28,22 @@
 .modeCards {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .modeCard {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1.5px solid var(--border-light);
   border-radius: 10px;
   background: var(--bg-surface);
   cursor: pointer;
   text-align: left;
   transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
 }
 
 .modeCard:hover {
@@ -103,7 +103,7 @@
 
 .configArea {
   border-top: 1px solid var(--border-light);
-  padding-top: 10px;
+  padding-top: 14px;
 }
 
 .configHeader {
@@ -125,7 +125,7 @@
 }
 
 .configTitle {
-  font-family: 'Fira Code', monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-primary);
@@ -145,7 +145,7 @@
 }
 
 .label {
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.6875rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -162,7 +162,7 @@
 }
 
 .fieldHint {
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.625rem;
   color: var(--text-tertiary);
   line-height: 1.4;
@@ -173,7 +173,7 @@
   width: 100%;
   padding: 8px 10px;
   font-size: 0.8125rem;
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -189,11 +189,28 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.select option {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  padding: 8px 10px;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+}
+
+.select option:checked {
+  background-color: var(--accent-soft);
+  color: var(--accent-primary);
+}
+
+.select option:hover {
+  background-color: var(--bg-hover);
+}
+
 .input {
   width: 100%;
   padding: 8px 10px;
   font-size: 0.8125rem;
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -218,7 +235,7 @@
   width: 100%;
   padding: 8px 10px;
   font-size: 0.8125rem;
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   color: var(--text-primary);
   background-color: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -251,7 +268,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.6875rem;
   font-weight: 600;
   color: var(--text-tertiary);
@@ -276,7 +293,7 @@
   align-items: center;
   gap: 8px;
   padding: 3px 0;
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary);
@@ -297,7 +314,7 @@
   align-items: center;
   gap: 8px;
   padding: 2px 0 2px 28px;
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.75rem;
   color: var(--text-secondary);
 }
@@ -316,7 +333,7 @@
   padding: 8px 0 0;
   margin-top: 10px;
   border-top: 1px solid var(--border-light);
-  font-family: 'Fira Sans', sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.6875rem;
   color: var(--text-tertiary);
 }

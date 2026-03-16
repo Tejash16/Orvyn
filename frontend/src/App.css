@@ -1,6 +1,10 @@
 /* ── Theme variables ─────────────────────────────────────── */
 
 [data-theme="light"] {
+  /* ── Font families ─────────────────────────────────────── */
+  --font-sans: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Cascadia Code', 'Consolas', ui-monospace, monospace;
+
   /* ── Chrome (sidebar + header) — clean white/light ─────── */
   --chrome-bg: #FAFCFB;
   --chrome-text: rgba(45, 65, 55, 0.68);
@@ -105,36 +109,40 @@
 }
 
 [data-theme="dark"] {
-  /* ── Chrome (sidebar + header) — always near-black ─────── */
-  --chrome-bg: #0C111D;
-  --chrome-text: rgba(156, 163, 184, 0.8);
-  --chrome-text-hover: #E2E8F0;
+  /* ── Font families ─────────────────────────────────────── */
+  --font-sans: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Cascadia Code', 'Consolas', ui-monospace, monospace;
+
+  /* ── Chrome (sidebar + header) — neutral near-black ────── */
+  --chrome-bg: #111111;
+  --chrome-text: rgba(250, 250, 250, 0.6);
+  --chrome-text-hover: #FAFAFA;
   --chrome-text-active: #FFFFFF;
-  --chrome-label: rgba(148, 163, 184, 0.38);
+  --chrome-label: rgba(250, 250, 250, 0.3);
   --chrome-divider: rgba(255, 255, 255, 0.07);
   --chrome-hover-bg: rgba(255, 255, 255, 0.05);
   --chrome-active-bg: rgba(16, 185, 129, 0.15);
   --chrome-active-color: #34D399;
   --chrome-focus-outline: rgba(16, 185, 129, 0.45);
 
-  /* ── Background layers ────────────────────────────────── */
-  --bg-base: #0F1A14;
-  --bg-surface: #162119;
-  --bg-sidebar: #0C111D;
-  --bg-hover: #1D3025;
-  --bg-active: #253D2D;
-  --bg-overlay: rgba(0, 0, 0, 0.6);
+  /* ── Background layers — neutral dark ──────────────────── */
+  --bg-base: #0F0F0F;
+  --bg-surface: #1A1A1A;
+  --bg-sidebar: #111111;
+  --bg-hover: #252525;
+  --bg-active: #2E2E2E;
+  --bg-overlay: rgba(0, 0, 0, 0.65);
 
   /* Legacy aliases */
-  --bg-app: #0F1A14;
-  --bg-header: #0C111D;
+  --bg-app: #0F0F0F;
+  --bg-header: #111111;
 
-  /* ── Text ─────────────────────────────────────────────── */
-  --text-primary: #D4EBE0;
-  --text-secondary: #7EA892;
-  --text-tertiary: #3D6450;
-  --text-inverse: #0F1C16;
-  --text-muted: #7EA892;
+  /* ── Text — clean neutrals ─────────────────────────────── */
+  --text-primary: #FAFAFA;
+  --text-secondary: #A3A3A3;
+  --text-tertiary: #666666;
+  --text-inverse: #0F0F0F;
+  --text-muted: #888888;
 
   /* ── Accent — Emerald Green ───────────────────────────── */
   --accent-primary: #10B981;
@@ -142,37 +150,37 @@
   --accent-soft: rgba(16, 185, 129, 0.12);
   --accent-softer: rgba(16, 185, 129, 0.06);
 
-  /* ── Borders ──────────────────────────────────────────── */
-  --border-light: #1D3025;
-  --border-medium: #253D2D;
+  /* ── Borders — semi-transparent white ──────────────────── */
+  --border-light: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.12);
   --border-focus: #10B981;
-  --border-color: #1D3025;
+  --border-color: rgba(255, 255, 255, 0.08);
 
   /* ── Shadows ──────────────────────────────────────────── */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.25);
-  --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04);
 
   /* ── Navigation states (content area) ────────────────── */
-  --nav-hover-bg: #1D3025;
-  --nav-hover-color: #D4EBE0;
+  --nav-hover-bg: #252525;
+  --nav-hover-color: #FAFAFA;
   --nav-active-bg: rgba(16, 185, 129, 0.14);
   --nav-active-color: #10B981;
 
   /* ── Tooltip ──────────────────────────────────────────── */
-  --tooltip-bg: #0C1E14;
-  --tooltip-border: #164D28;
-  --tooltip-text: #E2E8F0;
+  --tooltip-bg: #1A1A1A;
+  --tooltip-border: rgba(255, 255, 255, 0.12);
+  --tooltip-text: #FAFAFA;
   --tooltip-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 
   /* ── Toggle & controls ────────────────────────────────── */
-  --toggle-btn-color: #3D6450;
-  --toggle-btn-hover-bg: #1D3025;
-  --toggle-btn-hover-color: #D4EBE0;
+  --toggle-btn-color: #666666;
+  --toggle-btn-hover-bg: #252525;
+  --toggle-btn-hover-color: #FAFAFA;
   --toggle-btn-focus-outline: rgba(16, 185, 129, 0.4);
-  --control-btn-color: #7EA892;
-  --control-btn-hover-bg: #1D3025;
+  --control-btn-color: #A3A3A3;
+  --control-btn-hover-bg: #252525;
 
   /* ── Status ───────────────────────────────────────────── */
   --danger-color: #EF4444;
@@ -186,26 +194,26 @@
   --info-color: #60A5FA;
 
   /* ── Inputs & modals ──────────────────────────────────── */
-  --modal-bg: #162119;
-  --modal-backdrop: rgba(0, 0, 0, 0.6);
-  --input-bg: rgba(16, 185, 129, 0.04);
-  --input-border: #253D2D;
-  --btn-secondary-border: #253D2D;
-  --btn-secondary-hover: #1D3025;
+  --modal-bg: #1A1A1A;
+  --modal-backdrop: rgba(0, 0, 0, 0.65);
+  --input-bg: rgba(255, 255, 255, 0.04);
+  --input-border: rgba(255, 255, 255, 0.12);
+  --btn-secondary-border: rgba(255, 255, 255, 0.12);
+  --btn-secondary-hover: #252525;
 
-  /* ── File type icon backgrounds ───────────────────────── */
-  --icon-bg-pdf: #3B1111;
+  /* ── File type icon backgrounds — semi-transparent ────── */
+  --icon-bg-pdf: rgba(239, 68, 68, 0.12);
   --icon-fg-pdf: #FCA5A5;
-  --icon-bg-docx: #1E2A4A;
+  --icon-bg-docx: rgba(59, 130, 246, 0.12);
   --icon-fg-docx: #93C5FD;
-  --icon-bg-xlsx: #0D3320;
+  --icon-bg-xlsx: rgba(34, 197, 94, 0.12);
   --icon-fg-xlsx: #86EFAC;
-  --icon-bg-pptx: #3B1A0A;
+  --icon-bg-pptx: rgba(234, 88, 12, 0.12);
   --icon-fg-pptx: #FDBA74;
-  --icon-bg-image: #2E1065;
+  --icon-bg-image: rgba(124, 58, 237, 0.12);
   --icon-fg-image: #C4B5FD;
-  --icon-bg-default: #1D3025;
-  --icon-fg-default: #7EA892;
+  --icon-bg-default: rgba(255, 255, 255, 0.06);
+  --icon-fg-default: #A3A3A3;
 }
 
 /* ── App shell ───────────────────────────────────────────── */
