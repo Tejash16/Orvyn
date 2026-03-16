@@ -1515,6 +1515,7 @@ class ApplyGenerateRequest(BaseModel):
     description: Optional[str] = ""
     gemini_result: dict  # {folders: [...], assignments: [...]}
     file_ids: List[str]
+    dataroom_id: Optional[str] = None
 
 
 @app.post("/api/v1/ai/prepare-classify")
@@ -1638,6 +1639,7 @@ async def ai_apply_generate(request: ApplyGenerateRequest):
             request.description,
             request.gemini_result,
             request.file_ids,
+            request.dataroom_id,
         )
 
         # Create indexing jobs for assigned files

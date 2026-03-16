@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   registerFiles,
@@ -41,7 +41,7 @@ function UploadPage() {
 
   // ── Local state ──
   const [selectedFiles, setSelectedFiles] = useState([]);
-  const [mode, setMode] = useState('custom');
+  const [mode, setMode] = useState('ai');
   const [step, setStep] = useState('select'); // 'select' | 'progress' | 'results'
   const [progressStep, setProgressStep] = useState('registering');
   const [targetDataroomId, setTargetDataroomId] = useState(uploadPreselectedDataroomId || '');
@@ -50,6 +50,11 @@ function UploadPage() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [localError, setLocalError] = useState(null);
   const [resultDataroomId, setResultDataroomId] = useState(null);
+  const [registeredFileIds, setRegisteredFileIds] = useState([]);
+  const [createdDataroomId, setCreatedDataroomId] = useState(null);
+
+  // Ref mirrors cleanup-relevant state so event handlers see fresh values
+  const cleanupRef = useRef({ registeredFileIds: [], createdDataroomId: null, mode: 'ai', step: 'select' });
 
   // ── Read initial files from Redux on mount, then clear ──
   useEffect(() => {
@@ -65,6 +70,31 @@ function UploadPage() {
       dispatch(resetUploadState());
     };
   }, [dispatch]);
+
+  // ── Cleanup on app close / component unmount during classification ──
+  useEffect(() => {
+    function fireCleanup() {
+      const info = cleanupRef.current;
+      if (info.step !== 'progress') return;
+      if (info.mode === 'ai' && info.createdDataroomId) {
+        window.api.dataroom.delete(info.createdDataroomId);
+      } else if (info.registeredFileIds.length > 0) {
+        info.registeredFileIds.forEach((id) => window.api.file.removeFromOrvyn(id));
+      }
+    }
+
+    function handleBeforeUnload(e) {
+      if (cleanupRef.current.step !== 'progress') return;
+      e.preventDefault();
+      fireCleanup();
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      fireCleanup();
+    };
+  }, []);
 
   // ── File loading helper ──
   const loadPathsInfo = useCallback(async (paths) => {
@@ -177,16 +207,37 @@ function UploadPage() {
     }
   }
 
+  // ── Cleanup helper — rollback registered files / created dataroom ──
+
+  async function performCleanup() {
+    try {
+      if (mode === 'ai' && createdDataroomId) {
+        await window.api.dataroom.delete(createdDataroomId);
+      } else if (registeredFileIds.length > 0) {
+        await Promise.all(
+          registeredFileIds.map((id) => window.api.file.removeFromOrvyn(id))
+        );
+      }
+    } catch (_) {
+      // Best-effort cleanup — don't block the UI
+    }
+    dispatch(fetchDatarooms());
+  }
+
   // ── Navigation helpers ──
 
-  function handleCancel() {
+  async function handleCancel() {
+    await performCleanup();
     setSelectedFiles([]);
     setLocalError(null);
-    setMode('custom');
+    setMode('ai');
     setTargetDataroomId('');
     setAiName('');
     setAiDescription('');
     setResultDataroomId(null);
+    setRegisteredFileIds([]);
+    setCreatedDataroomId(null);
+    cleanupRef.current = { registeredFileIds: [], createdDataroomId: null, mode: 'ai', step: 'select' };
     dispatch(resetUploadState());
     setStep('select');
     setProgressStep('registering');
@@ -211,6 +262,8 @@ function UploadPage() {
 
     setLocalError(null);
     setStep('progress');
+    cleanupRef.current.step = 'progress';
+    cleanupRef.current.mode = mode;
     setProgressStep('registering');
     dispatch(resetUploadState());
 
@@ -236,6 +289,8 @@ function UploadPage() {
         }
 
         dataroomId = createResult.dataroom.id;
+        setCreatedDataroomId(dataroomId);
+        cleanupRef.current.createdDataroomId = dataroomId;
         regResult = await dispatch(registerFiles({ dataroomId, filePaths })).unwrap();
       }
 
@@ -248,6 +303,8 @@ function UploadPage() {
       setProgressStep('classifying');
 
       const registeredIds = regResult.registered.map((f) => f.id);
+      setRegisteredFileIds(registeredIds);
+      cleanupRef.current.registeredFileIds = registeredIds;
 
       if (mode === 'custom') {
         await dispatch(classifyRegisteredFiles({
@@ -263,6 +320,7 @@ function UploadPage() {
           name: aiName.trim(),
           description: aiDescription.trim(),
           fileIds: registeredIds,
+          dataroomId,
         })).unwrap();
 
         setResultDataroomId(genResult.dataroom?.id || dataroomId);
@@ -270,15 +328,27 @@ function UploadPage() {
         setStep('results');
       }
 
+      // Success — clear tracking state so cancel on results screen doesn't rollback
+      setRegisteredFileIds([]);
+      setCreatedDataroomId(null);
+      cleanupRef.current = { registeredFileIds: [], createdDataroomId: null, mode, step: 'results' };
+
       dispatch(fetchDatarooms());
       dispatch(refreshCurrentView());
     } catch (err) {
       setLocalError(typeof err === 'string' ? err : err?.message || 'An error occurred.');
+      await performCleanup();
+      setRegisteredFileIds([]);
+      setCreatedDataroomId(null);
+      cleanupRef.current = { registeredFileIds: [], createdDataroomId: null, mode, step: 'select' };
     }
   }
 
   function handleRetry() {
     setLocalError(null);
+    setRegisteredFileIds([]);
+    setCreatedDataroomId(null);
+    cleanupRef.current = { registeredFileIds: [], createdDataroomId: null, mode, step: 'select' };
     dispatch(resetUploadState());
     setStep('select');
     setProgressStep('registering');
@@ -287,6 +357,9 @@ function UploadPage() {
   function handleUploadMore() {
     setSelectedFiles([]);
     setLocalError(null);
+    setRegisteredFileIds([]);
+    setCreatedDataroomId(null);
+    cleanupRef.current = { registeredFileIds: [], createdDataroomId: null, mode: 'ai', step: 'select' };
     dispatch(resetUploadState());
     setStep('select');
     setProgressStep('registering');

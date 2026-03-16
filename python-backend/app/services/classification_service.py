@@ -198,21 +198,32 @@ def apply_generate_results(
     description: str,
     gemini_result: dict,
     file_ids: list[str],
+    dataroom_id: str = None,
 ) -> dict:
     """
     Apply AI-generated DataRoom structure (from Express/Gemini) to the database.
-    Creates DataRoom, folders, and assigns files.
+    If dataroom_id is provided, reuses the existing DataRoom; otherwise creates a new one.
+    Creates folders and assigns files.
     """
     with Session(engine) as session:
-        # Create DataRoom
-        dataroom = DataRoom(
-            id=str(uuid.uuid4()),
-            name=name,
-            description=description,
-            created_by_ai=True,
-        )
-        session.add(dataroom)
-        session.flush()
+        if dataroom_id:
+            # Reuse existing DataRoom
+            dataroom = session.query(DataRoom).filter_by(id=dataroom_id).first()
+            if not dataroom:
+                raise ValueError(f"DataRoom {dataroom_id} not found.")
+            dataroom.name = name
+            dataroom.description = description
+            dataroom.created_by_ai = True
+        else:
+            # Create new DataRoom
+            dataroom = DataRoom(
+                id=str(uuid.uuid4()),
+                name=name,
+                description=description,
+                created_by_ai=True,
+            )
+            session.add(dataroom)
+            session.flush()
 
         # Recursively create folders — build path-to-id mapping
         folder_path_map = {}

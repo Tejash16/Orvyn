@@ -75,8 +75,8 @@ export const classifyRegisteredFiles = createAsyncThunk(
 
 export const generateNewDataroom = createAsyncThunk(
   'file/generateNewDataroom',
-  async ({ name, description, fileIds }, { rejectWithValue }) => {
-    const result = await window.api.ai.generateDataroom(name, description, fileIds);
+  async ({ name, description, fileIds, dataroomId }, { rejectWithValue }) => {
+    const result = await window.api.ai.generateDataroom(name, description, fileIds, dataroomId);
     if (!result.success) return rejectWithValue(result.error);
     return result;
   }

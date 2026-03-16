@@ -343,16 +343,19 @@ async function prepareGenerate(fileIds) {
   return data;
 }
 
-async function applyGenerateResults(name, description, geminiResult, fileIds) {
+async function applyGenerateResults(name, description, geminiResult, fileIds, dataroomId) {
+  const body = {
+    name,
+    description,
+    gemini_result: geminiResult,
+    file_ids: fileIds,
+  };
+  if (dataroomId) body.dataroom_id = dataroomId;
+
   const res = await fetch(`${getPythonUrl()}/api/v1/ai/apply-generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name,
-      description,
-      gemini_result: geminiResult,
-      file_ids: fileIds,
-    }),
+    body: JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Failed to apply generation results.');

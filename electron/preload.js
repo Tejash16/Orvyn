@@ -104,7 +104,7 @@ contextBridge.exposeInMainWorld('api', {
   // AI classification
   ai: {
     classify:         (dataroomId, fileIds)                => ipcRenderer.invoke('ai:classify', { dataroom_id: dataroomId, file_ids: fileIds }),
-    generateDataroom: (name, description, fileIds)         => ipcRenderer.invoke('ai:generate-dataroom', { dataroom_name: name, dataroom_description: description, file_ids: fileIds }),
+    generateDataroom: (name, description, fileIds, dataroomId) => ipcRenderer.invoke('ai:generate-dataroom', { dataroom_name: name, dataroom_description: description, file_ids: fileIds, dataroom_id: dataroomId }),
   },
 
   // Copilot — chat, indexing, audit, insights

@@ -17,6 +17,8 @@ function registerAiHandlers(ipcMain) {
 
   ipcMain.handle('ai:classify', async (_event, { dataroom_id, file_ids }) => {
     try {
+      const startTime = Date.now();
+
       // Step 1: Python prepares fingerprints + folder tree from local DB
       const prepared = await pythonService.prepareClassify(dataroom_id, file_ids);
 
@@ -38,15 +40,17 @@ function registerAiHandlers(ipcMain) {
         classified: applied.classified,
         low_confidence_skipped: applied.low_confidence_skipped,
         missing_file_ids: prepared.missing_file_ids,
-        results,
+        time_seconds: (Date.now() - startTime) / 1000,
       };
     } catch (err) {
       return { success: false, error: err.message };
     }
   });
 
-  ipcMain.handle('ai:generate-dataroom', async (_event, { dataroom_name, dataroom_description, file_ids }) => {
+  ipcMain.handle('ai:generate-dataroom', async (_event, { dataroom_name, dataroom_description, file_ids, dataroom_id }) => {
     try {
+      const startTime = Date.now();
+
       // Step 1: Python prepares file fingerprints from local DB
       const prepared = await pythonService.prepareGenerate(file_ids);
 
@@ -63,12 +67,14 @@ function registerAiHandlers(ipcMain) {
         dataroom_description,
         geminiResult,
         file_ids,
+        dataroom_id,
       );
 
       return {
         success: true,
         ...applied,
         missing_file_ids: prepared.missing_file_ids,
+        time_seconds: (Date.now() - startTime) / 1000,
       };
     } catch (err) {
       return { success: false, error: err.message };

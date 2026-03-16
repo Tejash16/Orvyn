@@ -76,24 +76,25 @@ function ResultsView({ mode, uploadModal }) {
                 )}
             </div>
 
-            {/* Classification results breakdown */}
-            {mode === 'custom' && classResult?.results && classResult.results.length > 0 && (
+            {/* Classification summary breakdown */}
+            {mode === 'custom' && classResult && (classResult.classified > 0 || classResult.low_confidence_skipped > 0) && (
                 <>
-                    <div className={styles.sectionLabel}>Folder Breakdown</div>
+                    <div className={styles.sectionLabel}>Summary</div>
                     <div className={styles.folders}>
-                        {Object.entries(
-                            classResult.results.reduce((acc, r) => {
-                                const folder = r.assigned_folder || 'Unassigned';
-                                acc[folder] = (acc[folder] || 0) + 1;
-                                return acc;
-                            }, {})
-                        ).map(([folder, count]) => (
-                            <div key={folder} className={styles.folderItem}>
+                        {classResult.classified > 0 && (
+                            <div key="classified" className={styles.folderItem}>
                                 <IconFolder />
-                                <span>{folder}</span>
-                                <span className={styles.folderCount}>{count} file{count !== 1 ? 's' : ''}</span>
+                                <span>Classified</span>
+                                <span className={styles.folderCount}>{classResult.classified} file{classResult.classified !== 1 ? 's' : ''}</span>
                             </div>
-                        ))}
+                        )}
+                        {classResult.low_confidence_skipped > 0 && (
+                            <div key="unassigned" className={styles.folderItem}>
+                                <IconFolder />
+                                <span>Unassigned</span>
+                                <span className={styles.folderCount}>{classResult.low_confidence_skipped} file{classResult.low_confidence_skipped !== 1 ? 's' : ''}</span>
+                            </div>
+                        )}
                     </div>
                 </>
             )}
