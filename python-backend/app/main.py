@@ -52,7 +52,7 @@ _VALID_THEMES = {"light", "dark"}
 _ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".csv", ".png", ".jpg", ".jpeg"}
 
 # Max files per registration request.
-_MAX_FILES_PER_REQUEST = 70
+_MAX_FILES_PER_REQUEST = 100
 
 # Max characters stored in extracted_text column.
 _MAX_EXTRACTED_TEXT_LENGTH = 5000
