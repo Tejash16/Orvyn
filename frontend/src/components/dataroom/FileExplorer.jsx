@@ -368,6 +368,11 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
       isNavigatingRef.current = false;
       return;
     }
+    if (!currentDataroomId) {
+      setHistory([]);
+      setHistoryIndex(-1);
+      return;
+    }
     if (currentDataroomId && currentPath.length > 0) {
       const entry = { folderId: currentFolderId, path: [...currentPath] };
       setHistory((prev) => {
@@ -980,8 +985,8 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
   function renderNavBar() {
     return (
       <div className={styles.navBar}>
-        <button className={styles.navBtn} onClick={goBack} disabled={historyIndex <= 0} title="Back" type="button"><IconBack /></button>
-        <button className={styles.navBtn} onClick={goForward} disabled={historyIndex >= history.length - 1} title="Forward" type="button"><IconForward /></button>
+        <button className={styles.navBtn} onClick={goBack} disabled={historyIndex <= 0 || isDataroomListMode} title="Back" type="button"><IconBack /></button>
+        <button className={styles.navBtn} onClick={goForward} disabled={historyIndex >= history.length - 1 || isDataroomListMode} title="Forward" type="button"><IconForward /></button>
         <button className={styles.navBtn} onClick={goHome} disabled={isDataroomListMode} title="Home" type="button"><IconHome /></button>
         <button className={styles.navBtn} onClick={() => { dispatch(refreshCurrentView()); dispatch(fetchDatarooms()); }} title="Refresh" type="button"><IconRefresh /></button>
 
@@ -1031,11 +1036,11 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
           {isDataroomListMode ? (
-            <button className={styles.toolBtn} onClick={() => onCreateDataroom && onCreateDataroom()} type="button">
+            <button className={`${styles.toolBtn} ${styles.toolBtnPrimary}`} onClick={() => onCreateDataroom && onCreateDataroom()} type="button">
               <IconPlus /> New DataRoom
             </button>
           ) : (
-            <button className={styles.toolBtn} onClick={openNewFolderDialog} type="button">
+            <button className={`${styles.toolBtn} ${styles.toolBtnPrimary}`} onClick={openNewFolderDialog} type="button">
               <IconFolderPlus /> New Folder
             </button>
           )}
@@ -1158,6 +1163,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
         onBlur={handleRenameBlur}
         onKeyDown={handleRenameKeyDown}
         onClick={(e) => e.stopPropagation()}
+        maxLength={40}
       />
     );
   }
@@ -1192,7 +1198,9 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
                 {renderItemIcon(item, 'grid')}
               </div>
               {renamingId === item.id ? renderInlineRename(item) : (
-                <span className={styles.gridCardName} title={item.name}>{item.name}</span>
+                <span className={styles.gridCardName} title={item.name}>
+                  {item.name.length > 15 ? item.name.slice(0, 15) + '...' : item.name}
+                </span>
               )}
               {item.type === 'file' && contentChangedIds.includes(item.id) && (
                 <span className={styles.staleBadge}>Content changed</span>
@@ -1393,9 +1401,11 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
               <div className={`${styles.gridCardIcon} ${styles.iconBgDataroom}`}>
                 <IconDataRoom />
               </div>
-              <div className={styles.gridCardName} title={dr.name}>{dr.name}</div>
+              <div className={styles.gridCardName} title={dr.name}>
+                {dr.name.length > 15 ? dr.name.slice(0, 15) + '...' : dr.name}
+              </div>
               <div className={styles.gridCardMeta}>
-                {dr.folder_count ?? 0} folders &middot; {dr.file_count ?? 0} files
+                {`${dr.folder_count ?? 0} folders`} &middot; {`${dr.file_count ?? 0} files`}
               </div>
             </div>
           ))}
@@ -1406,12 +1416,12 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
     // List view
     return (
       <table className={styles.listTable}>
-        <thead>
+        <thead className={styles.listHeader}>
           <tr>
-            <th className={styles.listHeader}>Name</th>
-            <th className={styles.listHeader}>Folders</th>
-            <th className={styles.listHeader}>Files</th>
-            <th className={styles.listHeader}>Updated</th>
+            <th>Name</th>
+            <th style={{ width: 80 }}>Folders</th>
+            <th style={{ width: 80 }}>Files</th>
+            <th style={{ width: 130 }}>Updated</th>
           </tr>
         </thead>
         <tbody>
@@ -1725,6 +1735,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 placeholder="Folder name..."
+                maxLength={40}
                 onKeyDown={(e) => { if (e.key === 'Enter') submitNewFolder(); if (e.key === 'Escape') setNewFolderDialog(false); }}
               />
             </div>

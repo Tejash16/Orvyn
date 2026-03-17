@@ -115,12 +115,14 @@
   gap: 4px;
   font-size: 11px;
   font-weight: 500;
-  color: var(--accent-primary);
+  color: #ffffff;
+  background-color: var(--accent-primary);
+  box-shadow: var(--shadow-sm);
 }
 
 .newChatBtn:hover {
-  background-color: var(--accent-soft);
-  color: var(--accent-primary);
+  background-color: var(--accent-hover);
+  color: #ffffff;
 }
 
 /* ── Tabs ────────────────────────────────────────────── */

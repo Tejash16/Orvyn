@@ -85,7 +85,7 @@ function CopilotHeader() {
     <div className={styles.header}>
       <div className={styles.headerLeft}>
         <span className={styles.scopeLabel}>
-          {scopeLabel}
+          {scopeLabel.length > 25 ? scopeLabel.slice(0, 25) + '...' : scopeLabel} 
         </span>
         {total > 0 && (
           <div className={styles.indexStatus}>

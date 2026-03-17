@@ -89,6 +89,7 @@ function InlineForm({ initialName, initialContext, onSubmit, onCancel, label }) 
         value={name}
         onChange={(e) => { setName(e.target.value); setError(''); }}
         onKeyDown={handleKeyDown}
+        maxLength={40}
       />
       <textarea
         className={styles.inlineTextarea}

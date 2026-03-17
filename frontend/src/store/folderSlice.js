@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { refreshCurrentView } from './fileExplorerSlice';
+import { refreshCurrentView, updatePathSegmentName } from './fileExplorerSlice';
 import { fetchDatarooms } from './dataroomSlice';
 
 // ── Thunks ───────────────────────────────────────────────────
@@ -38,6 +38,7 @@ export const renameFolder = createAsyncThunk(
 
     const result = await window.api.folder.rename(folderId, trimmed);
     if (!result.success) return rejectWithValue(result.error);
+    dispatch(updatePathSegmentName({ id: folderId, name: trimmed }));
     dispatch(refreshCurrentView());
     dispatch(fetchDatarooms());
     return result.folder;

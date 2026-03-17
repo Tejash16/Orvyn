@@ -66,6 +66,7 @@ function ClassificationModeSelector({
                                 placeholder="Enter a name for your new data room"
                                 value={aiName}
                                 onChange={(e) => onAiNameChange(e.target.value)}
+                                maxLength={40}
                             />
                             <span className={styles.fieldHint}>
                                 The AI will create this data room and organize all files inside it

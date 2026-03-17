@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { updatePathSegmentName } from './fileExplorerSlice';
 
 // ── Thunks ───────────────────────────────────────────────────
 
@@ -56,6 +57,9 @@ export const updateDataroom = createAsyncThunk(
 
     const result = await window.api.dataroom.update(id, updates);
     if (!result.success) return rejectWithValue(result.error);
+    if (updates.name) {
+      dispatch(updatePathSegmentName({ id, name: updates.name.trim() }));
+    }
     dispatch(fetchDatarooms());
     return result.dataroom;
   }

@@ -280,6 +280,11 @@ const fileExplorerSlice = createSlice({
     removePendingMoveById(state, action) {
       state.pendingMoves = state.pendingMoves.filter((m) => m.id !== action.payload);
     },
+    updatePathSegmentName(state, action) {
+      const { id, name } = action.payload;
+      const seg = state.currentPath.find((s) => s.id === id);
+      if (seg) seg.name = name;
+    },
     resetExplorer(state) {
       state.currentDataroomId = null;
       state.currentFolderId = null;
@@ -429,6 +434,7 @@ export const {
   unmarkFileForMove,
   clearPendingMoves,
   removePendingMoveById,
+  updatePathSegmentName,
   resetExplorer,
   markFileContentChanged,
   clearFileContentChanged,

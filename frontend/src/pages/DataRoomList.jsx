@@ -298,16 +298,17 @@ function DataRoomList() {
                       onBlur={handleRenameBlur}
                       onKeyDown={handleRenameKeyDown}
                       onClick={(e) => e.stopPropagation()}
+                      maxLength={40}
                     />
                   ) : (
-                    <span className={styles.drName} title={dr.name}>{dr.name}</span>
+                    <span className={styles.drName} title={dr.name}>
+                      {dr.name.length > 15 ? dr.name.slice(0, 15) + '...' : dr.name}
+                    </span>
                   )}
-                  {dr.description && (
-                    <span className={styles.drDesc}>{dr.description}</span>
-                  )}
+
                   <div className={styles.drMeta}>
-                    <span>{dr.folder_count ?? 0} folders</span>
-                    <span>{dr.file_count ?? 0} files</span>
+                    <span>{`${dr.folder_count ?? 0} folders `}</span>
+                    <span>{`${dr.file_count ?? 0} files`}</span>
                   </div>
                 </div>
 
