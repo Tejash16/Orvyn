@@ -165,7 +165,7 @@
 
 .toolBtn:hover {
   background-color: var(--bg-hover);
-  color: var(--text-primary);
+  /* color: var(--text-primary); */
 }
 
 .toolBtnPrimary {
