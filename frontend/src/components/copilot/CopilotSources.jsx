@@ -1,7 +1,8 @@
 import styles from './CopilotPanel.module.css';
 
-function CopilotSources({ sources }) {
-  if (!sources || sources.length === 0) return null;
+function CopilotSources({ sources: rawSources }) {
+  const sources = typeof rawSources === 'string' ? JSON.parse(rawSources) : rawSources;
+  if (!sources || !Array.isArray(sources) || sources.length === 0) return null;
 
   const handleClick = (source) => {
     // Navigate to file in explorer

@@ -85,10 +85,13 @@ function CopilotSessionList({ onClose }) {
               {SCOPE_LABELS[scopeKey] || scopeKey}
             </div>
             {grouped[scopeKey].map((session) => (
-              <button
+              <div
                 key={session.id}
                 className={`${styles.sessionItem} ${session.id === activeSessionId ? styles.sessionItemActive : ''}`}
                 onClick={() => handleLoad(session.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleLoad(session.id); }}
               >
                 <span className={styles.sessionTitle}>
                   {session.title || 'Untitled Chat'}
@@ -101,7 +104,7 @@ function CopilotSessionList({ onClose }) {
                 >
                   <IconTrash />
                 </button>
-              </button>
+              </div>
             ))}
           </div>
         ))

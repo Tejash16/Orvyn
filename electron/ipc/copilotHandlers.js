@@ -400,6 +400,55 @@ async function executeTool(name, args, scopeType, scopeIds) {
 }
 
 // ---------------------------------------------------------------------------
+// Background title regeneration for sessions with missing/default titles
+// ---------------------------------------------------------------------------
+
+async function regenerateMissingTitles(sessions, ctx, event) {
+  for (const s of sessions) {
+    try {
+      // Get first user message for this session
+      const messagesResult = await pythonGet(
+        `/api/v1/chat/sessions/${encodeURIComponent(s.id)}/messages`,
+        ctx,
+      );
+      const messages = messagesResult.messages || messagesResult;
+      const firstUserMsg = messages.find((m) => m.role === 'user');
+      if (!firstUserMsg || !firstUserMsg.content) continue;
+
+      // Try Express title generation
+      let title;
+      try {
+        const titleResult = await expressPost('/api/v1/ai/generate-title', {
+          message: firstUserMsg.content,
+        });
+        if (titleResult.title && titleResult.title.trim()) {
+          title = titleResult.title.trim();
+        }
+      } catch {
+        // Fallback to first 6 words
+        const words = firstUserMsg.content.trim().split(/\s+/);
+        title = words.slice(0, 6).join(' ') + (words.length > 6 ? '...' : '');
+      }
+
+      if (title) {
+        await pythonPost('/api/v1/copilot/update-session-title', {
+          session_id: s.id,
+          title,
+          ...ctx,
+        });
+        // Notify React of the updated title
+        event.sender.send('copilot:stream-end-title', {
+          session_id: s.id,
+          session_title: title,
+        });
+      }
+    } catch (err) {
+      log.warn(`copilot: failed to regenerate title for session ${s.id}:`, err.message);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Register all copilot IPC handlers
 // ---------------------------------------------------------------------------
 
@@ -506,17 +555,36 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
 
       // Generate title if first message in session
       if (!searchResults.session_title) {
+        // Smart fallback: first ~6 words of the user message
+        const words = data.message.trim().split(/\s+/);
+        const fallbackTitle = words.slice(0, 6).join(' ') + (words.length > 6 ? '...' : '');
+
+        let generatedTitle = fallbackTitle;
         try {
           const titleResult = await expressPost('/api/v1/ai/generate-title', {
             message: data.message,
           });
+          if (titleResult.title && titleResult.title.trim()) {
+            generatedTitle = titleResult.title.trim();
+          }
+        } catch (err) {
+          log.warn('copilot: title generation failed, using fallback:', err.message);
+        }
+
+        // Always save a title (generated or fallback)
+        try {
           await pythonPost('/api/v1/copilot/update-session-title', {
             session_id: searchResults.session_id,
-            title: titleResult.title || 'New Chat',
+            title: generatedTitle,
             ...ctx,
           });
+          // Send title update to React so the session list reflects it
+          event.sender.send('copilot:stream-end-title', {
+            session_id: searchResults.session_id,
+            session_title: generatedTitle,
+          });
         } catch (err) {
-          log.warn('copilot: title generation failed (non-fatal):', err.message);
+          log.warn('copilot: title save failed:', err.message);
         }
       }
 
@@ -627,6 +695,7 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
           file_size_bytes: fileData.file_size_bytes,
           file_mtime: fileData.file_mtime,
           content_checksum: fileData.checksum,
+          preview_text: fileData.preview_text || null,
           ...ctx,
         });
 
@@ -789,14 +858,22 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
 
   // ── Passthrough handlers (Python direct) ─────────────────
 
-  ipcMain.handle('copilot:get-sessions', async (_event, data) => {
+  ipcMain.handle('copilot:get-sessions', async (event, data) => {
     try {
       const ctx = getUserContext();
       const params = { ...ctx };
       if (data && data.scope_type) params.scope_type = data.scope_type;
       if (data && data.scope_id) params.scope_id = data.scope_id;
       const result = await pythonGet('/api/v1/chat/sessions', params);
-      return { success: true, sessions: result.sessions || result };
+      const sessions = result.sessions || result;
+
+      // Background: regenerate titles for sessions still named "New Chat" or untitled
+      const needsTitle = sessions.filter((s) => !s.title || s.title === 'New Chat');
+      if (needsTitle.length > 0) {
+        regenerateMissingTitles(needsTitle, ctx, event).catch(() => {});
+      }
+
+      return { success: true, sessions };
     } catch (err) {
       log.error('copilot:get-sessions failed:', err.message);
       return { success: false, error: err.message };
@@ -1080,7 +1157,8 @@ registerCopilotHandlers._indexFilesInternal = async function (event, { file_ids,
         file_id: fileId, dataroom_id, chunks: fileData.chunks,
         vectors: embedResult.vectors, embedding_model: embedResult.model || 'gemini-embedding-001',
         file_size_bytes: fileData.file_size_bytes, file_mtime: fileData.file_mtime,
-        content_checksum: fileData.checksum, ...ctx,
+        content_checksum: fileData.checksum, preview_text: fileData.preview_text || null,
+        ...ctx,
       });
 
       // Entity extraction (best-effort)

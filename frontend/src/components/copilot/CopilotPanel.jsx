@@ -9,6 +9,7 @@ import {
   appendStreamChunk,
   finalizeStreamMessage,
   updateIndexProgress,
+  updateSessionTitle,
   setCopilotScope,
   setSelectedFiles,
   getIndexStatus,
@@ -91,6 +92,15 @@ function CopilotPanel() {
       cleanups.push(
         window.api.copilot.onIndexProgress((progress) => {
           dispatch(updateIndexProgress(progress));
+        })
+      );
+    }
+
+    // Title update listener (fires after title generation completes)
+    if (window.api.copilot.onTitleUpdate) {
+      cleanups.push(
+        window.api.copilot.onTitleUpdate((data) => {
+          dispatch(updateSessionTitle(data));
         })
       );
     }

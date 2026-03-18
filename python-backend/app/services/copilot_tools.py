@@ -26,6 +26,31 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger("Orvyn.copilot_tools")
 
+# Overlap trim (slightly less than RAG_CHUNK_OVERLAP_CHARS=750 for safety)
+_OVERLAP_TRIM = int(os.getenv("RAG_CHUNK_OVERLAP_CHARS", "750")) - 50
+
+
+def _concatenate_chunks(chunk_rows: list, max_chars: int = 10000) -> str:
+    """Concatenate ordered chunks with overlap trimming and character cap.
+
+    Chunks have ~750 char overlap. For chunks after the first, skip leading
+    content that overlaps with the previous chunk's tail. Uses a conservative
+    trim (750-50=700) to avoid cutting unique content at paragraph boundaries.
+    """
+    if not chunk_rows:
+        return ""
+    parts = [chunk_rows[0][0]]
+    for i in range(1, len(chunk_rows)):
+        chunk_text = chunk_rows[i][0]
+        if len(chunk_text) > _OVERLAP_TRIM:
+            parts.append(chunk_text[_OVERLAP_TRIM:])
+        else:
+            parts.append(chunk_text)
+    result = "\n".join(parts)
+    if len(result) > max_chars:
+        result = result[:max_chars] + "\n... [truncated]"
+    return result
+
 
 # ---------------------------------------------------------------------------
 # Data-only tools — Python executes directly
@@ -127,11 +152,11 @@ def _format_tool_search_results(results: list) -> dict:
 def tool_get_file_content(file_id: str, db_session: Session) -> dict:
     """
     Tool: get_file_content
-    Fetch a file's extracted text, truncated to 10000 chars.
+    Fetch a file's content from chunks (full document) with preview fallback.
     """
     row = db_session.execute(
         text("""
-            SELECT original_name, file_extension, extracted_text, ai_summary
+            SELECT original_name, file_extension, ai_summary, extracted_text
             FROM files WHERE id = :fid
         """),
         {"fid": file_id},
@@ -142,17 +167,29 @@ def tool_get_file_content(file_id: str, db_session: Session) -> dict:
 
     original_name = row[0]
     file_extension = row[1]
-    extracted_text = row[2] or ""
-    ai_summary = row[3]
+    ai_summary = row[2]
+    preview_text = row[3] or ""
 
-    # Truncate to 10000 chars
-    if len(extracted_text) > 10000:
-        extracted_text = extracted_text[:10000] + "\n... [truncated]"
+    # Try to read full content from chunks (post-indexing)
+    chunk_rows = db_session.execute(
+        text("""
+            SELECT chunk_text FROM file_chunks
+            WHERE file_id = :fid
+            ORDER BY chunk_index ASC
+        """),
+        {"fid": file_id},
+    ).fetchall()
+
+    if chunk_rows:
+        content = _concatenate_chunks(chunk_rows, max_chars=10000)
+    else:
+        # Fallback to preview (file not yet indexed)
+        content = preview_text
 
     result = {
         "file_name": original_name,
         "file_type": file_extension,
-        "content": extracted_text,
+        "content": content,
     }
 
     if ai_summary:
@@ -306,7 +343,7 @@ def tool_find_similar(
 def prepare_compare_data(file_ids: list, db_session: Session) -> dict:
     """
     Prepare data for compare_documents tool.
-    Gets first 3000 chars from each file for comparison.
+    Reads from chunks (full document) with preview fallback, capped at 5000 chars per file.
     """
     files_data = []
 
@@ -319,14 +356,30 @@ def prepare_compare_data(file_ids: list, db_session: Session) -> dict:
             {"fid": fid},
         ).fetchone()
 
-        if row:
+        if not row:
+            continue
+
+        # Try chunks first (full document content)
+        chunk_rows = db_session.execute(
+            text("""
+                SELECT chunk_text FROM file_chunks
+                WHERE file_id = :fid
+                ORDER BY chunk_index ASC
+            """),
+            {"fid": fid},
+        ).fetchall()
+
+        if chunk_rows:
+            content = _concatenate_chunks(chunk_rows, max_chars=5000)
+        else:
             content = (row[2] or "")[:3000]
-            files_data.append({
-                "file_id": fid,
-                "file_name": row[0],
-                "file_type": row[1],
-                "content": content,
-            })
+
+        files_data.append({
+            "file_id": fid,
+            "file_name": row[0],
+            "file_type": row[1],
+            "content": content,
+        })
 
     return {"files": files_data, "file_count": len(files_data)}
 

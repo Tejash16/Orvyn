@@ -121,6 +121,8 @@ contextBridge.exposeInMainWorld('api', {
     offStreamReasoning:(cb)   => ipcRenderer.removeListener('copilot:stream-reasoning', cb),
     onIndexProgress:  (cb)    => { const fn = (_, d) => cb(d); ipcRenderer.on('copilot:index-progress', fn); return () => ipcRenderer.removeListener('copilot:index-progress', fn); },
     offIndexProgress: (cb)    => ipcRenderer.removeListener('copilot:index-progress', cb),
+    onTitleUpdate:    (cb)    => { const fn = (_, d) => cb(d); ipcRenderer.on('copilot:stream-end-title', fn); return () => ipcRenderer.removeListener('copilot:stream-end-title', fn); },
+    offTitleUpdate:   (cb)    => ipcRenderer.removeListener('copilot:stream-end-title', cb),
     getSessions:      (data)  => ipcRenderer.invoke('copilot:get-sessions', data),
     getMessages:      (data)  => ipcRenderer.invoke('copilot:get-messages', data),
     deleteSession:    (data)  => ipcRenderer.invoke('copilot:delete-session', data),

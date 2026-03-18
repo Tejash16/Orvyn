@@ -347,6 +347,94 @@ def recover_stale_indexing_jobs(db_session):
 
 ---
 
+## Full-Text Extraction & Chunk-Based Knowledge Architecture
+
+### Problem
+
+The original pipeline stored only the first 5000 characters of each document in `files.extracted_text`.
+All downstream consumers — chunking, embedding, hybrid search, tools, checksums — read from this
+truncated column. This meant **~95% of long documents were invisible** to the AI. A 50-page PDF
+produced maybe 2 chunks. The Copilot literally could not answer questions about anything past page 2-3.
+
+### Solution
+
+The indexing pipeline now **re-extracts full text from the original file on disk** during `prepare_index()`,
+instead of reading the truncated `extracted_text` from SQLite. The `files.extracted_text` column is
+reduced to a **3000-char preview** (from 5000) — it now serves only as a preview for classification
+fingerprinting, summary generation, and audit preview fallback.
+
+### What Changed
+
+| Component | Before | After |
+|-----------|--------|-------|
+| `_MAX_EXTRACTED_TEXT_LENGTH` (main.py) | 5000 | 3000 (preview-only) |
+| `prepare_index()` text source | `files.extracted_text` from DB (truncated) | Re-extracted from disk via `_extract_text()` (full text) |
+| Checksum computation | On truncated text | On full extracted text |
+| Chunk generation | From truncated text (~2 chunks for long docs) | From full text (covers entire document) |
+| `apply_index()` | Does not update `extracted_text` | Updates `extracted_text` with preview from same extraction pass |
+| `tool_get_file_content()` | Returns `extracted_text` (truncated preview) | Reads from `file_chunks` table with overlap-aware concatenation (10K cap) |
+| `prepare_compare_data()` | Returns `extracted_text[:3000]` | Reads from `file_chunks` with overlap-aware concatenation (5K cap) |
+| Memory management | None | `del extracted_text` after chunking to free large text blobs |
+| Error handling | Generic failure | Structured: `FILE_NOT_FOUND`, `EXTRACTION_ERROR: {details}` |
+
+### Overlap-Aware Chunk Concatenation
+
+When tools reconstruct document content from chunks, they use `_concatenate_chunks()` which trims
+the overlap region from each chunk after the first. Chunks have ~750 char overlap
+(`RAG_CHUNK_OVERLAP_CHARS`). The trim amount is `overlap - 50 = 700 chars` — slightly conservative
+to avoid cutting unique content at paragraph boundaries where chunk splits may not align perfectly.
+
+```python
+_OVERLAP_TRIM = int(os.getenv("RAG_CHUNK_OVERLAP_CHARS", "750")) - 50
+
+def _concatenate_chunks(chunk_rows: list, max_chars: int = 10000) -> str:
+    if not chunk_rows:
+        return ""
+    parts = [chunk_rows[0][0]]
+    for i in range(1, len(chunk_rows)):
+        chunk_text = chunk_rows[i][0]
+        if len(chunk_text) > _OVERLAP_TRIM:
+            parts.append(chunk_text[_OVERLAP_TRIM:])
+        else:
+            parts.append(chunk_text)
+    result = "\n".join(parts)
+    if len(result) > max_chars:
+        result = result[:max_chars] + "\n... [truncated]"
+    return result
+```
+
+### Memory Management
+
+A 100-page PDF can produce 500KB-1MB+ of extracted text. During sequential batch indexing (one file
+at a time, confirmed in `copilotHandlers.js`), the full text is explicitly freed after chunking:
+
+```python
+chunks = chunk_text_with_metadata(extracted_text, file_ext)
+preview_text = extracted_text[:3000]
+content_checksum = compute_content_hash(extracted_text)
+del extracted_text  # Free memory — only chunks and preview remain
+```
+
+### Electron Pass-Through
+
+The `preview_text` field flows through the indexing pipeline:
+1. `prepare-index` (Python) → returns `preview_text` in response
+2. Electron passes it through to `apply-index` request body
+3. `apply-index` (Python) → updates `files.extracted_text` with the preview
+
+Both the normal indexing flow and the crash-recovery flow in `copilotHandlers.js` pass `preview_text`.
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `python-backend/app/main.py` | `_MAX_EXTRACTED_TEXT_LENGTH`: 5000 → 3000; `ApplyIndexRequest`: added `preview_text` field |
+| `python-backend/app/services/embedding_service.py` | `prepare_index()`: re-extract from disk, memory mgmt, structured errors; `apply_index()`: accepts + writes preview_text |
+| `python-backend/app/services/copilot_tools.py` | New `_concatenate_chunks()` helper; `tool_get_file_content()` + `prepare_compare_data()`: read from file_chunks |
+| `electron/ipc/copilotHandlers.js` | Pass `preview_text` from prepare-index to apply-index (both normal + crash-recovery flows) |
+
+---
+
 ## Feature Set (V1-new feature Launch)
 
 ### CORE (Must Ship)
@@ -1619,9 +1707,17 @@ def compute_content_hash(text: str) -> str:
 PREPARE INDEX (called by Electron in the 3-step flow):
 def prepare_index(file_ids, dataroom_id, db_session) -> dict:
   For each file:
-  - Get extracted_text from SQLite
-  - Skip if empty or placeholder ("[Image: ...]")
-  - Compute content_checksum via compute_content_hash()
+  - Read original_path, file_extension, original_name from SQLite
+    (extracted_text is NOT read from DB — it's only a preview column)
+  - RE-EXTRACT full text from the original file on disk using _extract_text()
+    (lazy import from app.main to avoid circular imports)
+  - If file not found at original_path: fail the indexing_job with
+    error_message='FILE_NOT_FOUND', skip to next file
+  - If extraction fails: fail the job with error_message='EXTRACTION_ERROR: {details}',
+    skip to next file
+  - Skip if extracted text is empty or placeholder ("[Image: ...]")
+  - Capture preview_text = extracted_text[:3000] (for updating files.extracted_text)
+  - Compute content_checksum via compute_content_hash() on FULL extracted text
   - Capture file_size_bytes and file_mtime via os.stat(original_path):
       stat = os.stat(original_path)
       file_size_bytes = stat.st_size
@@ -1629,7 +1725,10 @@ def prepare_index(file_ids, dataroom_id, db_session) -> dict:
   - DUPLICATE DETECTION (Recommendation #5):
     Check if identical checksum exists for a different file with embedding_status='complete'.
     If yes: mark as duplicate, return the original_file_id.
-  - Chunk the text
+  - Chunk the FULL text (not the truncated preview)
+  - MEMORY MANAGEMENT: After chunking, free the full text: del extracted_text
+    (a 100-page PDF can be 500KB-1MB+ of text; freeing prevents memory accumulation
+    during sequential batch indexing)
   - Build metadata per chunk:
     {
       "file_id": file_id,
@@ -1647,12 +1746,14 @@ def prepare_index(file_ids, dataroom_id, db_session) -> dict:
       "embedding_model": "pending",            # Set properly in apply_index
       "embedding_status": "processing"         # Recommendation #6 — filter in ChromaDB directly
     }
-  Return: { files: [{ file_id, chunks, checksum, file_size_bytes, file_mtime, is_duplicate, duplicate_of }] }
+  Return: { files: [{ file_id, chunks, checksum, file_size_bytes, file_mtime,
+                       is_duplicate, duplicate_of, preview_text, first_2000_chars }] }
 
 APPLY INDEX (called by Electron after Express returns vectors):
 def apply_index(file_id, dataroom_id, chunks, vectors, embedding_model,
                 file_size_bytes, file_mtime,
-                user_id, chroma_path, db_session) -> dict:
+                user_id, chroma_path, db_session,
+                preview_text=None) -> dict:
   - Store in ChromaDB collection "user_{user_id}":
     ids: ["{file_id}_chunk_{i}" for each chunk]
     embeddings: vectors (from Express)
@@ -1670,6 +1771,8 @@ def apply_index(file_id, dataroom_id, chunks, vectors, embedding_model,
     embedding_model = embedding_model      # Recommendation #4
     indexed_file_size = file_size_bytes    # Recommendation #1 — triple-check
     indexed_file_mtime = file_mtime        # Recommendation #1 — triple-check
+    extracted_text = preview_text          # If preview_text provided — keeps preview
+                                           # in sync with the same extraction pass as chunks
   - Update indexing_jobs: status = 'complete'
   - Return: { chunks_indexed: N, status: "success" }
 
@@ -2081,8 +2184,14 @@ def tool_search_documents(query_vector, query_text, scope_type, scope_ids,
   - Returns formatted text of top results with source labels
 
 def tool_get_file_content(file_id, db_session):
-  - Fetch file from SQLite
-  - Return extracted_text truncated to 10000 chars
+  - Fetch file metadata from SQLite
+  - Read full content from file_chunks table (ordered by chunk_index)
+  - Concatenate chunks with overlap-aware trimming via _concatenate_chunks():
+    Chunks have ~750 char overlap. For each chunk after the first, skip the
+    leading 700 chars (RAG_CHUNK_OVERLAP_CHARS - 50) to remove duplication
+    while preserving a safety margin at paragraph boundaries.
+  - Cap at 10000 chars for tool response (token budget)
+  - Fallback to files.extracted_text preview if no chunks exist (file not yet indexed)
 
 def tool_list_files(dataroom_id, folder_id, db_session):
   - Query files in scope
@@ -2104,7 +2213,9 @@ Electron sends it to Express, Express calls Gemini. The tool implementation
 in Python just prepares the input data.
 
 def prepare_compare_data(file_ids, db_session):
-  - Get chunks from each file (first 3000 chars each)
+  - For each file: read full content from file_chunks table (ordered by chunk_index)
+  - Concatenate chunks with overlap-aware trimming via _concatenate_chunks(max_chars=5000)
+  - Fallback to files.extracted_text preview[:3000] if no chunks exist
   - Return formatted for Gemini comparison prompt
 
 def prepare_summarize_data(dataroom_id, db_session):
@@ -2309,8 +2420,12 @@ For each file:
   2. Express POST /api/v1/ai/embed with { texts: chunk_texts }
      → { vectors }
   3. Python POST /api/v1/copilot/apply-index with
-     { file_id, dataroom_id, chunks, vectors, embedding_model, chroma_path, user_id }
+     { file_id, dataroom_id, chunks, vectors, embedding_model, chroma_path,
+       user_id, preview_text }
+     (preview_text from prepare-index response — updates files.extracted_text
+      from the same extraction pass as the chunks)
   4. Express POST /api/v1/ai/extract-entities with { text: first_2000_chars }
+     (first_2000_chars = preview_text[:2000], captured during prepare-index)
      → { organizations, people, monetary_values, dates, locations, key_terms }
   5. Python POST /api/v1/copilot/apply-entities with { file_id, dataroom_id, entities }
   6. Express POST /api/v1/ai/summarize-file with { text: first_2000_chars }

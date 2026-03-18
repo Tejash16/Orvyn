@@ -220,6 +220,18 @@ const copilotSlice = createSlice({
     updateIndexProgress(state, action) {
       state.indexProgress = action.payload;
     },
+    updateSessionTitle(state, action) {
+      const { session_id, session_title } = action.payload;
+      if (session_id) state.activeSessionId = session_id;
+      if (session_title) {
+        const session = state.sessions.find((s) => s.id === session_id);
+        if (session) {
+          session.title = session_title;
+        } else {
+          state.sessions.unshift({ id: session_id, title: session_title });
+        }
+      }
+    },
     startNewSession(state, action) {
       const { scopeType, scopeIds, scopeName } = action.payload;
       state.messages = [];
@@ -235,10 +247,11 @@ const copilotSlice = createSlice({
   extraReducers: (builder) => {
     // sendMessage
     builder
-      .addCase(sendMessage.pending, (state) => {
+      .addCase(sendMessage.pending, (state, action) => {
         state.isLoading = true;
         state.error = null;
         // Add user message to messages array immediately
+        state.messages.push({ role: 'user', content: action.meta.arg.message });
       })
       .addCase(sendMessage.fulfilled, (state, action) => {
         state.isLoading = false;
@@ -403,6 +416,7 @@ export const {
   appendStreamChunk,
   finalizeStreamMessage,
   updateIndexProgress,
+  updateSessionTitle,
   startNewSession,
 } = copilotSlice.actions;
 

@@ -257,11 +257,13 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
     """
     files_data = []
 
+    from app.main import _extract_text
+
     for file_id in file_ids:
         row = db_session.execute(
             text("""
                 SELECT id, original_name, original_path, file_extension,
-                       extracted_text, folder_id, mime_type
+                       folder_id, mime_type
                 FROM files WHERE id = :fid
             """),
             {"fid": file_id},
@@ -271,7 +273,52 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
             logger.warning(f"prepare_index: file {file_id} not found, skipping")
             continue
 
-        extracted_text = row[4] or ""
+        original_path = row[2]
+        file_ext = row[3]
+        original_name = row[1]
+
+        # Re-extract full text from original file on disk
+        if not os.path.exists(original_path):
+            logger.warning(f"prepare_index: file not found at {original_path}, failing job")
+            db_session.execute(
+                text("""
+                    UPDATE indexing_jobs
+                    SET status = 'failed',
+                        error_message = 'FILE_NOT_FOUND',
+                        attempts = attempts + 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE file_id = :fid AND status IN ('pending', 'processing')
+                """),
+                {"fid": file_id},
+            )
+            db_session.commit()
+            files_data.append({
+                "file_id": file_id, "chunks": [], "skipped": True,
+                "skip_reason": "file_not_found",
+            })
+            continue
+
+        try:
+            extracted_text = _extract_text(original_path, file_ext, original_name)
+        except Exception as exc:
+            logger.error(f"prepare_index: extraction failed for {file_id}: {exc}")
+            db_session.execute(
+                text("""
+                    UPDATE indexing_jobs
+                    SET status = 'failed',
+                        error_message = :err,
+                        attempts = attempts + 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE file_id = :fid AND status IN ('pending', 'processing')
+                """),
+                {"fid": file_id, "err": f"EXTRACTION_ERROR: {exc}"},
+            )
+            db_session.commit()
+            files_data.append({
+                "file_id": file_id, "chunks": [], "skipped": True,
+                "skip_reason": "extraction_error",
+            })
+            continue
 
         # Skip empty or image-only files
         if not extracted_text.strip() or extracted_text.startswith("[Image:"):
@@ -307,11 +354,13 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
             })
             continue
 
-        # Compute content checksum
+        # Capture preview text before any mutation
+        preview_text = extracted_text[:3000]
+
+        # Compute content checksum on FULL text
         content_checksum = compute_content_hash(extracted_text)
 
         # Get file stats (size + mtime)
-        original_path = row[2]
         file_size_bytes = None
         file_mtime = None
         try:
@@ -349,12 +398,13 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
             continue
 
         # Chunk the text
-        file_ext = row[3]
         chunks = chunk_text_with_metadata(extracted_text, file_ext)
 
+        # Free memory — full text no longer needed, only chunks and preview remain
+        del extracted_text
+
         # Build metadata per chunk
-        folder_id = row[5] or "unclassified"
-        original_name = row[1]
+        folder_id = row[4] or "unclassified"
 
         chunks_with_meta = []
         for chunk in chunks:
@@ -426,7 +476,8 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
             "duplicate_of": None,
             "skipped": False,
             "already_claimed": False,
-            "first_2000_chars": extracted_text[:2000],
+            "first_2000_chars": preview_text[:2000],
+            "preview_text": preview_text,
         })
 
     db_session.commit()
@@ -440,7 +491,8 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
 def apply_index(file_id: str, dataroom_id: str, chunks: list, vectors: list,
                 embedding_model: str, content_checksum: str,
                 file_size_bytes: int, file_mtime: float,
-                user_id: str, chroma_path: str, db_session) -> dict:
+                user_id: str, chroma_path: str, db_session,
+                preview_text: str = None) -> dict:
     """
     Store vectors in ChromaDB and chunks in file_chunks (FTS5 syncs via triggers).
     Update files table with embedding metadata.
@@ -499,25 +551,42 @@ def apply_index(file_id: str, dataroom_id: str, chunks: list, vectors: list,
             },
         )
 
-    # Update files table
-    db_session.execute(
-        text("""
-            UPDATE files SET
-                embedding_status = 'complete',
-                content_checksum = :checksum,
-                embedding_model = :model,
-                indexed_file_size = :fsize,
-                indexed_file_mtime = :fmtime
-            WHERE id = :fid
-        """),
-        {
-            "checksum": content_checksum,
-            "model": embedding_model,
-            "fsize": file_size_bytes,
-            "fmtime": file_mtime,
-            "fid": file_id,
-        },
-    )
+    # Update files table (including preview text from same extraction pass)
+    update_params = {
+        "checksum": content_checksum,
+        "model": embedding_model,
+        "fsize": file_size_bytes,
+        "fmtime": file_mtime,
+        "fid": file_id,
+    }
+
+    if preview_text is not None:
+        db_session.execute(
+            text("""
+                UPDATE files SET
+                    embedding_status = 'complete',
+                    content_checksum = :checksum,
+                    embedding_model = :model,
+                    indexed_file_size = :fsize,
+                    indexed_file_mtime = :fmtime,
+                    extracted_text = :preview
+                WHERE id = :fid
+            """),
+            {**update_params, "preview": preview_text},
+        )
+    else:
+        db_session.execute(
+            text("""
+                UPDATE files SET
+                    embedding_status = 'complete',
+                    content_checksum = :checksum,
+                    embedding_model = :model,
+                    indexed_file_size = :fsize,
+                    indexed_file_mtime = :fmtime
+                WHERE id = :fid
+            """),
+            update_params,
+        )
 
     # Update indexing_jobs: status = 'complete'
     db_session.execute(

@@ -9,6 +9,7 @@ import os
 import datetime
 import uuid
 import hashlib
+import json
 import logging
 import logging.handlers
 import mimetypes
@@ -55,7 +56,7 @@ _ALLOWED_EXTENSIONS = {".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".csv", ".png"
 _MAX_FILES_PER_REQUEST = 100
 
 # Max characters stored in extracted_text column.
-_MAX_EXTRACTED_TEXT_LENGTH = 5000
+_MAX_EXTRACTED_TEXT_LENGTH = 3000
 
 # ---------------------------------------------------------------------------
 # SQLAlchemy ORM — schema defined and owned exclusively by this Python backend.
@@ -1686,6 +1687,7 @@ class ApplyIndexRequest(BaseModel):
     file_mtime: Optional[float] = None
     user_id: str
     chroma_path: str
+    preview_text: Optional[str] = None
 
 class ApplyEntitiesRequest(BaseModel):
     file_id: str
@@ -1762,6 +1764,7 @@ def copilot_apply_index(request: ApplyIndexRequest):
             user_id=request.user_id,
             chroma_path=request.chroma_path,
             db_session=session,
+            preview_text=request.preview_text,
         )
         return result
 
@@ -2115,8 +2118,8 @@ def get_chat_messages(session_id: str):
                     "id": m[0],
                     "role": m[1],
                     "content": m[2],
-                    "sources": m[3],
-                    "tool_calls": m[4],
+                    "sources": json.loads(m[3]) if m[3] else [],
+                    "tool_calls": json.loads(m[4]) if m[4] else [],
                     "created_at": m[5].isoformat() if m[5] else None,
                 }
                 for m in messages

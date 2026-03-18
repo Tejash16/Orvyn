@@ -26,8 +26,8 @@ async function classify(req, res, next) {
       return res.status(400).json({ success: false, error: 'folder_ids array is required and must not be empty.' });
     }
 
-    if (fingerprints.length > 50) {
-      return res.status(400).json({ success: false, error: 'Maximum 50 files per classification request.' });
+    if (fingerprints.length > 100) {
+      return res.status(400).json({ success: false, error: 'Maximum 100 files per classification request.' });
     }
 
     const results = await geminiService.classifyFiles(fingerprints, folder_tree, folder_ids);
@@ -52,8 +52,8 @@ async function generateDataroom(req, res, next) {
       return res.status(400).json({ success: false, error: 'fingerprints array is required and must not be empty.' });
     }
 
-    if (fingerprints.length > 50) {
-      return res.status(400).json({ success: false, error: 'Maximum 50 files per generation request.' });
+    if (fingerprints.length > 100) {
+      return res.status(400).json({ success: false, error: 'Maximum 100 files per generation request.' });
     }
 
     const geminiResult = await geminiService.generateDataroom(

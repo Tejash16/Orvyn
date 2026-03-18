@@ -20,7 +20,7 @@
 - Drag-and-drop upload with recursive folder scanning
 - Virtual file system — stores paths only, files stay on disk
 - File registration with text extraction (PDF, DOCX, XLSX, PPTX, TXT, CSV, images)
-- Max 50 files per classification batch
+- Max 100 files per classification batch
 - File operations: open, open with, copy path, copy to clipboard, rename, relocate
 - Remove from Orvyn (DB only) and Delete from System (DB + disk)
 - Confidence scoring with color indicators (green/yellow/orange)

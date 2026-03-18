@@ -8,7 +8,7 @@ import {
   navigateDirect,
   refreshCurrentView,
   setViewMode,
-  setSortBy,
+  setSortBy, 
   setSortOrder,
   setSearchQuery,
   setSelectedItems,
@@ -1380,11 +1380,11 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
           <IconDataRoom />
           <span className={styles.emptyTitle}>No DataRooms yet</span>
           <span className={styles.emptyHint}>Create your first DataRoom to start organizing documents.</span>
-          <div className={styles.emptyAction}>
+          {/* <div className={styles.emptyAction}>
             <button className={styles.toolBtn} onClick={() => onCreateDataroom && onCreateDataroom()} type="button">
               <IconPlus /> New DataRoom
             </button>
-          </div>
+          </div> */}
         </div>
       );
     }
