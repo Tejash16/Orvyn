@@ -5,6 +5,10 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 export const sendMessage = createAsyncThunk(
   'copilot/sendMessage',
   async ({ message, sessionId }, { getState, rejectWithValue }) => {
+    const { isOnline } = getState().ui;
+    if (!isOnline) {
+      return rejectWithValue('No internet connection.');
+    }
     const { copilot } = getState();
     const result = await window.api.copilot.sendMessage({
       message,

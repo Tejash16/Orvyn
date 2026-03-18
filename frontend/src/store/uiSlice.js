@@ -51,11 +51,17 @@ const uiSlice = createSlice({
       state.pendingViewDataroomId = null;
     },
     addToast(state, action) {
+      const { message, type } = action.payload;
+
+      // Deduplicate: skip if the most recent toast has the same message
+      const last = state.toasts[state.toasts.length - 1];
+      if (last && last.message === message) return;
+
       state.toastCounter += 1;
       state.toasts.push({
         id: state.toastCounter,
-        message: action.payload.message,
-        type: action.payload.type || 'info', // 'info' | 'success' | 'error' | 'warning'
+        message,
+        type: type || 'info',
       });
       // Max 3 visible — remove oldest when exceeding
       while (state.toasts.length > 3) {

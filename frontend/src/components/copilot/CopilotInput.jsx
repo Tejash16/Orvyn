@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { sendMessage, startStreaming } from '../../store/copilotSlice';
+import { useRequireOnline } from '../../hooks/useRequireOnline';
 import styles from './CopilotPanel.module.css';
 
 /* ── Send icon ───────────────────────────────────────────── */
@@ -20,6 +21,7 @@ function CopilotInput({ onSend }) {
   const dispatch = useDispatch();
   const isStreaming = useSelector((s) => s.copilot.isStreaming);
   const isLoading = useSelector((s) => s.copilot.isLoading);
+  const { isOnline, requireOnline } = useRequireOnline();
   const [text, setText] = useState('');
   const textareaRef = useRef(null);
 
@@ -28,6 +30,7 @@ function CopilotInput({ onSend }) {
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
+    if (!requireOnline('use Copilot')) return;
 
     if (onSend) {
       // Let the parent intercept (e.g. multi-DR detection)
@@ -43,7 +46,7 @@ function CopilotInput({ onSend }) {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [text, disabled, dispatch, onSend]);
+  }, [text, disabled, dispatch, onSend, requireOnline]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -78,7 +81,7 @@ function CopilotInput({ onSend }) {
       <button
         className={styles.sendBtn}
         onClick={handleSend}
-        disabled={disabled || !text.trim()}
+        disabled={disabled || !text.trim() || !isOnline}
         title="Send message (Enter)"
         aria-label="Send message"
       >

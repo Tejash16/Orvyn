@@ -6,6 +6,7 @@ import fileExplorerReducer from './fileExplorerSlice';
 import fileReducer from './fileSlice';
 import folderReducer from './folderSlice';
 import copilotReducer from './copilotSlice';
+import { offlineGuardMiddleware } from './offlineGuardMiddleware';
 
 const store = configureStore({
   reducer: {
@@ -17,6 +18,9 @@ const store = configureStore({
     folder: folderReducer,
     copilot: copilotReducer,
   },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat(offlineGuardMiddleware),
 });
 
 export default store;
+

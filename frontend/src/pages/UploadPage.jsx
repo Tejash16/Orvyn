@@ -14,6 +14,7 @@ import {
   setPendingViewDataroomId,
   addToast,
 } from '../store/uiSlice';
+import { useRequireOnline } from '../hooks/useRequireOnline';
 
 import DropZone from '../components/upload/DropZone';
 import FileList from '../components/upload/FileList';
@@ -38,6 +39,7 @@ function UploadPage() {
   const uploadModal = useSelector((s) => s.file.uploadModal);
   const uploadInitialFiles = useSelector((s) => s.ui.uploadInitialFiles);
   const uploadPreselectedDataroomId = useSelector((s) => s.ui.uploadPreselectedDataroomId);
+  const { isOnline, requireOnline } = useRequireOnline();
 
   // ── Local state ──
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -257,6 +259,8 @@ function UploadPage() {
   // ── Classify / Generate ──
 
   async function handleClassify() {
+    if (!requireOnline('classify files')) return;
+
     const validFiles = selectedFiles.filter((f) => f.valid);
     if (validFiles.length === 0) return;
 
@@ -486,7 +490,7 @@ function UploadPage() {
                   <button
                     className={styles.btnPrimary}
                     onClick={handleClassify}
-                    disabled={!canClassify}
+                    disabled={!canClassify || !isOnline}
                     type="button"
                   >
                     Classify {validCount} file{validCount !== 1 ? 's' : ''}
@@ -501,9 +505,11 @@ function UploadPage() {
                   <line x1="12" y1="16" x2="12" y2="12" />
                   <line x1="12" y1="8" x2="12.01" y2="8" />
                 </svg>
-                {validCount === 0
-                  ? 'Upload files using the upload zone above to get started'
-                  : `${validCount} file${validCount !== 1 ? 's' : ''} ready for ${mode === 'ai' ? 'AI organization' : 'classification'}`
+                {!isOnline && validCount > 0
+                  ? '⚠ Classification requires an internet connection'
+                  : validCount === 0
+                    ? 'Upload files using the upload zone above to get started'
+                    : `${validCount} file${validCount !== 1 ? 's' : ''} ready for ${mode === 'ai' ? 'AI organization' : 'classification'}`
                 }
               </div>
             </div>

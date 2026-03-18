@@ -3,6 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { sendMessage, startStreaming, fetchSuggestions } from '../../store/copilotSlice';
+import { useRequireOnline } from '../../hooks/useRequireOnline';
 import CopilotMessage from './CopilotMessage';
 import CopilotReasoningSteps from './CopilotReasoningSteps';
 import styles from './CopilotPanel.module.css';
@@ -30,6 +31,7 @@ const IconArrowRight = () => (
 
 function CopilotChat() {
   const dispatch = useDispatch();
+  const { requireOnline } = useRequireOnline();
   const messages = useSelector((s) => s.copilot.messages);
   const isStreaming = useSelector((s) => s.copilot.isStreaming);
   const isLoading = useSelector((s) => s.copilot.isLoading);
@@ -57,6 +59,7 @@ function CopilotChat() {
   }, [messages, streamingMessage]);
 
   const handleSuggestionClick = (text) => {
+    if (!requireOnline('use Copilot')) return;
     dispatch(startStreaming());
     dispatch(sendMessage({ message: text }));
   };

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { loginSuccess, restoreComplete, logout } from './store/authSlice';
-import { setTheme, setOnline } from './store/uiSlice';
+import { setTheme, setOnline, addToast } from './store/uiSlice';
 import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
 import SettingsPage from './pages/setting';
@@ -44,6 +44,9 @@ function App() {
   useEffect(() => {
     const cleanup = window.api.app.onOfflineStatus((online) => {
       dispatch(setOnline(online));
+      if (online) {
+        dispatch(addToast({ message: "You're back online.", type: 'info' }));
+      }
     });
     return cleanup;
   }, [dispatch]);
