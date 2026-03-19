@@ -7,12 +7,14 @@
  */
 
 const geminiService = require('../services/geminiService');
+const usageService  = require('../services/usageService');
+const logger        = require('../services/logger');
 
 // ── Classify files into existing folders ─────────────────
 
 async function classify(req, res, next) {
   try {
-    const { fingerprints, folder_tree, folder_ids } = req.body;
+    const { fingerprints, folder_tree, folder_ids, requestId } = req.body;
 
     if (!fingerprints || !Array.isArray(fingerprints) || fingerprints.length === 0) {
       return res.status(400).json({ success: false, error: 'fingerprints array is required and must not be empty.' });
@@ -30,7 +32,32 @@ async function classify(req, res, next) {
       return res.status(400).json({ success: false, error: 'Maximum 100 files per classification request.' });
     }
 
-    const results = await geminiService.classifyFiles(fingerprints, folder_tree, folder_ids);
+    // ── Usage enforcement: reserve file capacity (atomic) ──
+    const fileCount = fingerprints.length;
+    const reservation = await usageService.reserveFiles(req.user.userId, fileCount, requestId);
+
+    if (!reservation.reserved && !reservation.idempotent) {
+      return res.status(429).json({
+        success: false,
+        error: `Monthly file upload limit reached (${reservation.limit}). Resets ${reservation.resetsAt?.toISOString()}.`,
+        current: reservation.current,
+        limit: reservation.limit,
+        remaining: reservation.remaining,
+        resetsAt: reservation.resetsAt,
+      });
+    }
+
+    // ── Call Gemini — rollback reservation on failure ──────
+    let results;
+    try {
+      results = await geminiService.classifyFiles(fingerprints, folder_tree, folder_ids);
+    } catch (geminiErr) {
+      // Rollback: classification failed, don't count these files
+      if (reservation.reserved) {
+        await usageService.rollbackFiles(req.user.userId, fileCount, requestId);
+      }
+      throw geminiErr;
+    }
 
     return res.status(200).json({ success: true, results });
   } catch (err) {
@@ -42,7 +69,7 @@ async function classify(req, res, next) {
 
 async function generateDataroom(req, res, next) {
   try {
-    const { dataroom_name, dataroom_description, fingerprints } = req.body;
+    const { dataroom_name, dataroom_description, fingerprints, requestId } = req.body;
 
     if (!dataroom_name || typeof dataroom_name !== 'string' || !dataroom_name.trim()) {
       return res.status(400).json({ success: false, error: 'dataroom_name is required.' });
@@ -56,11 +83,35 @@ async function generateDataroom(req, res, next) {
       return res.status(400).json({ success: false, error: 'Maximum 100 files per generation request.' });
     }
 
-    const geminiResult = await geminiService.generateDataroom(
-      dataroom_name.trim(),
-      dataroom_description || '',
-      fingerprints,
-    );
+    // ── Usage enforcement: reserve file capacity (atomic) ──
+    const fileCount = fingerprints.length;
+    const reservation = await usageService.reserveFiles(req.user.userId, fileCount, requestId);
+
+    if (!reservation.reserved && !reservation.idempotent) {
+      return res.status(429).json({
+        success: false,
+        error: `Monthly file upload limit reached (${reservation.limit}). Resets ${reservation.resetsAt?.toISOString()}.`,
+        current: reservation.current,
+        limit: reservation.limit,
+        remaining: reservation.remaining,
+        resetsAt: reservation.resetsAt,
+      });
+    }
+
+    // ── Call Gemini — rollback reservation on failure ──────
+    let geminiResult;
+    try {
+      geminiResult = await geminiService.generateDataroom(
+        dataroom_name.trim(),
+        dataroom_description || '',
+        fingerprints,
+      );
+    } catch (geminiErr) {
+      if (reservation.reserved) {
+        await usageService.rollbackFiles(req.user.userId, fileCount, requestId);
+      }
+      throw geminiErr;
+    }
 
     return res.status(200).json({ success: true, gemini_result: geminiResult });
   } catch (err) {
@@ -217,7 +268,7 @@ const COPILOT_TOOL_DECLARATIONS = [
  */
 async function chatStream(req, res, next) {
   try {
-    const { system_prompt, messages, tools_enabled, tool_round } = req.body;
+    const { system_prompt, messages, tools_enabled, tool_round, requestId } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ success: false, error: 'messages array is required.' });
@@ -227,6 +278,25 @@ async function chatStream(req, res, next) {
     const currentRound = tool_round || 0;
     if (currentRound >= 3) {
       return res.status(400).json({ success: false, error: 'Maximum tool call rounds (3) exceeded.' });
+    }
+
+    // ── Usage enforcement: check + increment message count ─
+    // Only count on round 0 (the initial user message, not tool-call follow-ups)
+    if (currentRound === 0) {
+      const msgCheck = await usageService.checkMessageLimit(req.user.userId);
+      if (!msgCheck.allowed) {
+        return res.status(429).json({
+          success: false,
+          error: `Daily copilot message limit reached (${msgCheck.limit}). Resets ${msgCheck.resetsAt?.toISOString()}.`,
+          current: msgCheck.current,
+          limit: msgCheck.limit,
+          remaining: msgCheck.remaining,
+          resetsAt: msgCheck.resetsAt,
+        });
+      }
+
+      // Increment BEFORE LLM call (charge-on-entry)
+      await usageService.incrementMessages(req.user.userId, requestId);
     }
 
     // Set SSE headers
@@ -266,11 +336,27 @@ async function chatStream(req, res, next) {
  */
 async function chat(req, res, next) {
   try {
-    const { system_prompt, messages, tools_enabled } = req.body;
+    const { system_prompt, messages, tools_enabled, requestId } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ success: false, error: 'messages array is required.' });
     }
+
+    // ── Usage enforcement: check + increment message count ─
+    const msgCheck = await usageService.checkMessageLimit(req.user.userId);
+    if (!msgCheck.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: `Daily copilot message limit reached (${msgCheck.limit}). Resets ${msgCheck.resetsAt?.toISOString()}.`,
+        current: msgCheck.current,
+        limit: msgCheck.limit,
+        remaining: msgCheck.remaining,
+        resetsAt: msgCheck.resetsAt,
+      });
+    }
+
+    // Increment BEFORE LLM call (charge-on-entry)
+    await usageService.incrementMessages(req.user.userId, requestId);
 
     const tools = tools_enabled !== false ? COPILOT_TOOL_DECLARATIONS : null;
 

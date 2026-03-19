@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('api', {
   // Settings bridge — theme persisted via Electron → Python → SQLite.
   settings: {
     setTheme: (theme) => ipcRenderer.invoke('settings:setTheme', theme),
+    getUsage: ()      => ipcRenderer.invoke('settings:getUsage'),
   },
 
   // DataRoom CRUD

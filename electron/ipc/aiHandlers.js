@@ -1,5 +1,7 @@
+const crypto         = require('crypto');
 const pythonService  = require('../services/pythonService');
 const expressService = require('../services/expressService');
+const log            = require('../services/logger');
 
 /**
  * Registers AI classification IPC handlers.
@@ -11,6 +13,11 @@ const expressService = require('../services/expressService');
  *
  * The Gemini API key never touches the desktop app.
  *
+ * Usage limits:
+ *   - Pre-check before classification (advisory, for UX)
+ *   - Hard enforcement in Express classify/generate endpoints
+ *   - requestId for idempotency (prevents double-counting on retry)
+ *
  * @param {Electron.IpcMain} ipcMain
  */
 function registerAiHandlers(ipcMain) {
@@ -18,15 +25,33 @@ function registerAiHandlers(ipcMain) {
   ipcMain.handle('ai:classify', async (_event, { dataroom_id, file_ids }) => {
     try {
       const startTime = Date.now();
+      const requestId = crypto.randomUUID();
+
+      // Pre-check: advisory file limit check (does NOT block — hard block is on Express)
+      try {
+        const check = await expressService.checkFileLimit(file_ids.length);
+        if (!check.allowed) {
+          return {
+            success: false,
+            error: `Monthly file upload limit reached (${check.remaining} remaining of ${check.limit}). Resets ${new Date(check.resetsAt).toLocaleDateString()}.`,
+            limitReached: true,
+          };
+        }
+      } catch (err) {
+        // Pre-check failed — proceed anyway, Express will hard-enforce
+        log.warn('ai:classify pre-check failed (non-blocking):', err.message);
+      }
 
       // Step 1: Python prepares fingerprints + folder tree from local DB
       const prepared = await pythonService.prepareClassify(dataroom_id, file_ids);
 
       // Step 2: Express calls Gemini with the prepared data (API key stays server-side)
+      // requestId ensures idempotent usage counting
       const results = await expressService.classifyFiles(
         prepared.fingerprints,
         prepared.folder_tree,
         prepared.folder_ids,
+        requestId,
       );
 
       // Step 3: Python applies the AI results to the local database
@@ -50,15 +75,32 @@ function registerAiHandlers(ipcMain) {
   ipcMain.handle('ai:generate-dataroom', async (_event, { dataroom_name, dataroom_description, file_ids, dataroom_id }) => {
     try {
       const startTime = Date.now();
+      const requestId = crypto.randomUUID();
+
+      // Pre-check: advisory file limit check
+      try {
+        const check = await expressService.checkFileLimit(file_ids.length);
+        if (!check.allowed) {
+          return {
+            success: false,
+            error: `Monthly file upload limit reached (${check.remaining} remaining of ${check.limit}). Resets ${new Date(check.resetsAt).toLocaleDateString()}.`,
+            limitReached: true,
+          };
+        }
+      } catch (err) {
+        log.warn('ai:generate-dataroom pre-check failed (non-blocking):', err.message);
+      }
 
       // Step 1: Python prepares file fingerprints from local DB
       const prepared = await pythonService.prepareGenerate(file_ids);
 
       // Step 2: Express calls Gemini to generate folder structure + assignments
+      // requestId ensures idempotent usage counting
       const geminiResult = await expressService.generateDataroom(
         dataroom_name,
         dataroom_description,
         prepared.fingerprints,
+        requestId,
       );
 
       // Step 3: Python creates DataRoom, folders, and assigns files in local DB
@@ -84,3 +126,4 @@ function registerAiHandlers(ipcMain) {
 }
 
 module.exports = registerAiHandlers;
+

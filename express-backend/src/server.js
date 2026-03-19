@@ -11,6 +11,7 @@ const logger = require('./services/logger');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const aiRouter   = require('./routes/ai');
+const usageRouter = require('./routes/usage');
 
 // ── Fail fast on missing required environment variables ───
 const REQUIRED_ENV = ['JWT_SECRET', 'REFRESH_TOKEN_SECRET', 'MONGO_URI', 'GEMINI_API_KEY'];
@@ -52,6 +53,7 @@ app.use(morgan(morganFormat, { stream: logger.morganStream }));
 app.use('/api/v1', healthRouter);
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/ai', aiRouter);
+app.use('/api/v1/usage', usageRouter);
 
 // ── Backward-compat aliases (unversioned → v1) ───────────
 // Keeps existing Electron builds working until they update to /api/v1/.
@@ -59,6 +61,7 @@ app.use('/api/v1/ai', aiRouter);
 app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/usage', usageRouter);
 
 // ── 404 handler ───────────────────────────────────────────
 app.use((req, res) => {

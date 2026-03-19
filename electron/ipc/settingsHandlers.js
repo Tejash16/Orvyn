@@ -1,4 +1,5 @@
-const pythonService = require('../services/pythonService');
+const pythonService  = require('../services/pythonService');
+const expressService = require('../services/expressService');
 
 /**
  * Registers settings-related IPC handlers.
@@ -15,6 +16,15 @@ function registerSettingsHandlers(ipcMain) {
     try {
       await pythonService.setTheme(theme);
       return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('settings:getUsage', async () => {
+    try {
+      const data = await expressService.getUsage();
+      return { success: true, usage: data.usage };
     } catch (err) {
       return { success: false, error: err.message };
     }

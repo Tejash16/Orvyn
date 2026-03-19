@@ -22,9 +22,10 @@ function getExpressUrl() {
  * @param {Array}    fingerprints - File fingerprint objects from Python
  * @param {string}   folderTree   - Folder tree text from Python
  * @param {string[]} folderIds    - Valid folder IDs from Python
+ * @param {string}   requestId    - Idempotency key for usage tracking
  * @returns {Promise<Array>} Classification results from Gemini
  */
-async function classifyFiles(fingerprints, folderTree, folderIds) {
+async function classifyFiles(fingerprints, folderTree, folderIds, requestId) {
   const token = authService.getToken();
   if (!token) throw new Error('No active session. Please log in.');
 
@@ -38,6 +39,7 @@ async function classifyFiles(fingerprints, folderTree, folderIds) {
       fingerprints,
       folder_tree: folderTree,
       folder_ids: folderIds,
+      requestId,
     }),
   });
 
@@ -53,9 +55,10 @@ async function classifyFiles(fingerprints, folderTree, folderIds) {
  * @param {string} name         - DataRoom name
  * @param {string} description  - DataRoom description
  * @param {Array}  fingerprints - File fingerprint objects from Python
+ * @param {string} requestId    - Idempotency key for usage tracking
  * @returns {Promise<Object>} Gemini result with folders and assignments
  */
-async function generateDataroom(name, description, fingerprints) {
+async function generateDataroom(name, description, fingerprints, requestId) {
   const token = authService.getToken();
   if (!token) throw new Error('No active session. Please log in.');
 
@@ -69,6 +72,7 @@ async function generateDataroom(name, description, fingerprints) {
       dataroom_name: name,
       dataroom_description: description,
       fingerprints,
+      requestId,
     }),
   });
 
@@ -77,4 +81,45 @@ async function generateDataroom(name, description, fingerprints) {
   return data.gemini_result;
 }
 
-module.exports = { classifyFiles, generateDataroom };
+/**
+ * Pre-check file upload capacity against usage limits.
+ * Advisory only — hard enforcement is in the classify endpoint.
+ *
+ * @param {number} count - Number of files the user wants to upload
+ * @returns {Promise<{ allowed, current, limit, remaining, resetsAt }>}
+ */
+async function checkFileLimit(count) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/usage/check-files?count=${count}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Usage check failed.');
+  return data;
+}
+
+/**
+ * Fetch full usage summary for the Settings page.
+ *
+ * @returns {Promise<{ usage: { files: {...}, messages: {...} } }>}
+ */
+async function getUsage() {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/usage`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to fetch usage.');
+  return data;
+}
+
+module.exports = { classifyFiles, generateDataroom, checkFileLimit, getUsage };
+

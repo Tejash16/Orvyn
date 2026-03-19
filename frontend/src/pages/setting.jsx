@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../store/authSlice';
 import { setTheme } from '../store/uiSlice';
@@ -26,6 +26,31 @@ function SettingsPage() {
   const [feedbackError,     setFeedbackError]     = useState('');
   const [feedbackLoading,   setFeedbackLoading]   = useState(false);
   const [feedbackSuccess,   setFeedbackSuccess]   = useState(false);
+
+  const [usageData,    setUsageData]    = useState(null);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [usageError,   setUsageError]   = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchUsage() {
+      try {
+        const result = await window.api.settings.getUsage();
+        if (cancelled) return;
+        if (result.success) {
+          setUsageData(result.usage);
+        } else {
+          setUsageError(result.error || 'Failed to load usage data.');
+        }
+      } catch {
+        if (!cancelled) setUsageError('Unable to load usage data.');
+      } finally {
+        if (!cancelled) setUsageLoading(false);
+      }
+    }
+    fetchUsage();
+    return () => { cancelled = true; };
+  }, []);
 
   async function handleThemeToggle() {
     const prevTheme = theme;
@@ -121,6 +146,28 @@ function SettingsPage() {
       })
     : '—';
 
+  function getProgressColor(used, limit) {
+    if (limit === 0) return styles.progressRed;
+    const pct = used / limit;
+    if (pct >= 0.85) return styles.progressRed;
+    if (pct >= 0.6)  return styles.progressYellow;
+    return styles.progressGreen;
+  }
+
+  function formatResetTime(resetsAt) {
+    if (!resetsAt) return '';
+    const now = new Date();
+    const reset = new Date(resetsAt);
+    const diffMs = reset.getTime() - now.getTime();
+    if (diffMs <= 0) return 'Resets soon';
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays  = Math.floor(diffHours / 24);
+    if (diffDays > 0) return `Resets in ${diffDays}d ${diffHours % 24}h`;
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    if (diffHours > 0) return `Resets in ${diffHours}h ${diffMinutes % 60}m`;
+    return `Resets in ${diffMinutes}m`;
+  }
+
   return (
     <div className={styles.page}>
       {/* Page header */}
@@ -147,6 +194,90 @@ function SettingsPage() {
             <span>Member since {formattedDate}</span>
           </div>
         </div>
+      </div>
+
+      {/* Usage & Limits */}
+      <div>
+        <div className={styles.usageSectionHeader}>
+          <svg className={styles.usageSectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20v-6M6 20V10M18 20V4" />
+          </svg>
+          <h2 className={styles.usageSectionTitle}>Usage & Limits</h2>
+        </div>
+
+        {usageLoading ? (
+          <div className={styles.usageGrid}>
+            <div className={styles.usageSkeleton} />
+            <div className={styles.usageSkeleton} />
+          </div>
+        ) : usageError ? (
+          <div className={styles.usageGrid}>
+            <div className={styles.usageCard}>
+              <p className={styles.usageError}>{usageError}</p>
+            </div>
+          </div>
+        ) : usageData ? (
+          <div className={styles.usageGrid}>
+            {/* Files card */}
+            <div className={styles.usageCard}>
+              <div className={styles.usageCardHeader}>
+                <div className={`${styles.usageCardIcon} ${styles.usageCardIconFiles}`}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                </div>
+                <div>
+                  <p className={styles.usageCardTitle}>Files uploaded</p>
+                  <p className={styles.usageCardSubtitle}>Rolling 30-day period</p>
+                </div>
+              </div>
+              <div className={styles.usageNumbers}>
+                <span className={styles.usageUsed}>{usageData.files.used}</span>
+                <span className={styles.usageTotal}>/ {usageData.files.limit}</span>
+              </div>
+              <div className={styles.progressTrack}>
+                <div
+                  className={`${styles.progressFill} ${getProgressColor(usageData.files.used, usageData.files.limit)}`}
+                  style={{ width: `${Math.min(100, (usageData.files.used / usageData.files.limit) * 100)}%` }}
+                />
+              </div>
+              <div className={styles.usageFooter}>
+                <p className={styles.usageRemaining}>{usageData.files.remaining} remaining</p>
+                <p className={styles.usageReset}>{formatResetTime(usageData.files.resetsAt)}</p>
+              </div>
+            </div>
+
+            {/* Messages card */}
+            <div className={styles.usageCard}>
+              <div className={styles.usageCardHeader}>
+                <div className={`${styles.usageCardIcon} ${styles.usageCardIconMessages}`}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className={styles.usageCardTitle}>Copilot messages</p>
+                  <p className={styles.usageCardSubtitle}>Rolling 24-hour period</p>
+                </div>
+              </div>
+              <div className={styles.usageNumbers}>
+                <span className={styles.usageUsed}>{usageData.messages.used}</span>
+                <span className={styles.usageTotal}>/ {usageData.messages.limit}</span>
+              </div>
+              <div className={styles.progressTrack}>
+                <div
+                  className={`${styles.progressFill} ${getProgressColor(usageData.messages.used, usageData.messages.limit)}`}
+                  style={{ width: `${Math.min(100, (usageData.messages.used / usageData.messages.limit) * 100)}%` }}
+                />
+              </div>
+              <div className={styles.usageFooter}>
+                <p className={styles.usageRemaining}>{usageData.messages.remaining} remaining</p>
+                <p className={styles.usageReset}>{formatResetTime(usageData.messages.resetsAt)}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* Appearance */}

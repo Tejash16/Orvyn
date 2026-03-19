@@ -413,3 +413,175 @@
   gap: 10px;
   padding-top: 4px;
 }
+
+/* ── Usage & Limits ────────────────────────────────────── */
+
+.usageGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.usageCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.usageCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.usageCardIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.usageCardIconFiles {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.usageCardIconMessages {
+  background-color: rgba(168, 85, 247, 0.1);
+  color: #a855f7;
+}
+
+.usageCardIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.usageCardTitle {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.usageCardSubtitle {
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  margin: 2px 0 0;
+}
+
+.usageNumbers {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.usageUsed {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.usageTotal {
+  font-size: 0.875rem;
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.progressTrack {
+  width: 100%;
+  height: 6px;
+  background-color: var(--border-light);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease, background-color 0.3s ease;
+  min-width: 0;
+}
+
+.progressGreen {
+  background-color: #22c55e;
+}
+
+.progressYellow {
+  background-color: #eab308;
+}
+
+.progressRed {
+  background-color: #ef4444;
+}
+
+.usageFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.usageRemaining {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.usageReset {
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.usageSectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.usageSectionIcon {
+  width: 18px;
+  height: 18px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.usageSectionTitle {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.usageError {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 24px;
+}
+
+.usageSkeleton {
+  height: 140px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, var(--border-light) 25%, var(--bg-surface) 50%, var(--border-light) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+

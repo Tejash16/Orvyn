@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const path = require('path');
 const { app } = require('electron');
 
@@ -472,6 +473,7 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
     try {
       activeStreamController = new AbortController();
       const ctx = getUserContext();
+      const requestId = crypto.randomUUID();
 
       // Step 1: Embed the user query via Express
       const embedResult = await expressPost('/api/v1/ai/embed', {
@@ -506,8 +508,11 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
         const streamResult = await streamFromExpress(event, {
           system_prompt: buildSystemPrompt(),
           messages,
+          tool_round: round,
           tools: isLastRound ? undefined : COPILOT_TOOLS,
           tool_config: isLastRound ? undefined : { mode: 'AUTO' },
+          // Only pass requestId on initial round for idempotent message counting
+          ...(round === 0 ? { requestId } : {}),
         });
 
         fullText += streamResult.text;
@@ -1020,6 +1025,8 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
       await streamFromExpress(event, {
         system_prompt: systemPrompt,
         messages,
+        // Skip message counting — compare is an internal feature, not a user chat message
+        tool_round: 1,
       });
 
       // Build source entries from compareData
