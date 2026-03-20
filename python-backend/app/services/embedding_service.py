@@ -371,31 +371,9 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
         except OSError:
             logger.warning(f"prepare_index: cannot stat file {original_path}")
 
-        # Duplicate detection (Recommendation #5)
-        existing = db_session.execute(
-            text("""
-                SELECT id FROM files
-                WHERE content_checksum = :checksum
-                AND id != :fid
-                AND embedding_status = 'complete'
-                LIMIT 1
-            """),
-            {"checksum": content_checksum, "fid": file_id},
-        ).fetchone()
-
-        if existing:
-            logger.info(f"prepare_index: file {file_id} is duplicate of {existing[0]}")
-            files_data.append({
-                "file_id": file_id,
-                "chunks": [],
-                "checksum": content_checksum,
-                "file_size_bytes": file_size_bytes,
-                "file_mtime": file_mtime,
-                "is_duplicate": True,
-                "duplicate_of": existing[0],
-                "skipped": False,
-            })
-            continue
+        # NOTE: Duplicate content detection removed — each file gets its own
+        # embeddings even if the same document exists in multiple DataRooms.
+        # Duplicate file uploads are handled at the upload stage instead.
 
         # Chunk the text
         chunks = chunk_text_with_metadata(extracted_text, file_ext)
@@ -435,17 +413,17 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
                 "metadata": meta,
             })
 
-        # Atomic job claim: update indexing_jobs pending → processing.
-        # If another worker already claimed it (rowcount == 0), skip this file.
+        # Atomic job claim: update indexing_jobs pending/processing → processing.
+        # Also claims stale 'processing' jobs from crashed workers.
         claim_result = db_session.execute(
             text("""
                 UPDATE indexing_jobs SET status = 'processing', updated_at = CURRENT_TIMESTAMP
-                WHERE file_id = :fid AND status = 'pending'
+                WHERE file_id = :fid AND status IN ('pending', 'processing')
             """),
             {"fid": file_id},
         )
         if claim_result.rowcount == 0:
-            logger.info(f"prepare_index: job for file {file_id} already claimed by another worker, skipping")
+            logger.info(f"prepare_index: no claimable job for file {file_id}, skipping")
             db_session.commit()
             files_data.append({
                 "file_id": file_id,
@@ -1075,21 +1053,22 @@ def create_indexing_job(file_id: str, dataroom_id: str, db_session):
 
 def recover_stale_indexing_jobs(db_session):
     """
-    Handle jobs stuck in 'processing' for longer than the stale threshold.
+    Handle jobs stuck in 'processing' at startup.
 
-    Jobs under the retry cap are reset to 'pending' with attempts incremented.
-    Jobs at or over the cap are set to 'failed' with an explanatory message.
+    On app startup, NO worker is actually running, so ALL 'processing' jobs are
+    stale by definition.  Jobs under the retry cap are reset to 'pending' (attempts
+    is NOT incremented — the crash/shutdown was not the job's fault).  Jobs at or
+    over the cap are set to 'failed' permanently.
 
     Called once at Python startup inside /init-db.
     """
-    # Jobs under the cap: reset to pending and increment attempts
+    # All 'processing' jobs are stale on startup — reset those under the retry cap
     result = db_session.execute(text("""
         UPDATE indexing_jobs
-        SET status = 'pending', attempts = attempts + 1, updated_at = CURRENT_TIMESTAMP
+        SET status = 'pending', updated_at = CURRENT_TIMESTAMP
         WHERE status = 'processing'
-        AND updated_at < datetime('now', '-' || :threshold || ' minutes')
         AND attempts < :max_attempts
-    """), {"threshold": _STALE_JOB_THRESHOLD_MINUTES, "max_attempts": _MAX_RETRY_ATTEMPTS})
+    """), {"max_attempts": _MAX_RETRY_ATTEMPTS})
 
     recovered_count = result.rowcount
 
@@ -1099,9 +1078,8 @@ def recover_stale_indexing_jobs(db_session):
         SET status = 'failed', updated_at = CURRENT_TIMESTAMP,
             error_message = 'Max retries exceeded'
         WHERE status = 'processing'
-        AND updated_at < datetime('now', '-' || :threshold || ' minutes')
         AND attempts >= :max_attempts
-    """), {"threshold": _STALE_JOB_THRESHOLD_MINUTES, "max_attempts": _MAX_RETRY_ATTEMPTS})
+    """), {"max_attempts": _MAX_RETRY_ATTEMPTS})
 
     failed_count = failed_result.rowcount
 

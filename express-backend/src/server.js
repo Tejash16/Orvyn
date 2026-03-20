@@ -40,7 +40,7 @@ app.use(cors({
   origin: process.env.CLIENT_URL,
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // HTTP request logging — piped through winston in all environments.
 // In dev: morgan 'dev' format to console + file. In prod: 'combined' to file only.

@@ -69,8 +69,12 @@ function CopilotChat() {
   // Index-based empty states
   const totalFiles = indexStatus?.total ?? 0;
   const completeFiles = indexStatus?.complete ?? 0;
+  const pendingFiles = indexStatus?.pending ?? 0;
+  const processingFiles = indexStatus?.processing ?? 0;
+  const failedFiles = indexStatus?.failed ?? 0;
+  const activelyIndexing = pendingFiles + processingFiles;
   const hasNoFiles = totalFiles === 0 && isEmpty;
-  const isIndexingOnly = totalFiles > 0 && completeFiles === 0 && isEmpty;
+  const isNotFullyIndexed = totalFiles > 0 && activelyIndexing > 0 && isEmpty;
 
   return (
     <div className={styles.chatArea}>
@@ -86,9 +90,13 @@ function CopilotChat() {
             <p className={styles.emptySubtitle}>
               Add files to your DataRoom to get started with Copilot.
             </p>
-          ) : isIndexingOnly ? (
+          ) : isNotFullyIndexed ? (
             <p className={styles.emptySubtitle}>
-              Files are being indexed… Copilot will be ready shortly.
+              {completeFiles}/{totalFiles} files indexed.
+              {processingFiles > 0 ? ` ${processingFiles} processing.` : ''}
+              {pendingFiles > 0 ? ` ${pendingFiles} pending.` : ''}
+              {failedFiles > 0 ? ` ${failedFiles} failed.` : ''}
+              {' '}Copilot will be ready once all files are indexed.
             </p>
           ) : (
             <>

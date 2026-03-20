@@ -11,7 +11,7 @@ const registerDataroomHandlers = require('./ipc/dataroomHandlers');
 const registerFolderHandlers   = require('./ipc/folderHandlers');
 const registerFileHandlers     = require('./ipc/fileHandlers');
 const registerAiHandlers       = require('./ipc/aiHandlers');
-const { registerCopilotHandlers, resumePendingIndexing } = require('./ipc/copilotHandlers');
+const { registerCopilotHandlers } = require('./ipc/copilotHandlers');
 const pythonProcess            = require('./services/pythonProcess');
 
 let mainWindow;
@@ -96,15 +96,9 @@ app.whenReady().then(async () => {
   await pythonProcess.start();
   createWindow();
 
-  // Startup recovery: resume pending indexing jobs from previous session.
-  // Runs in the background after the window is visible — does not block UI.
-  // The auth restore flow will call /init-db (which runs recover_stale_indexing_jobs
-  // in Python). Once a user is logged in, we check for pending jobs.
-  // We delay this check because the user context is not set until login/restore completes.
-  setTimeout(() => {
-    resumePendingIndexing(() => mainWindow)
-      .catch(err => log.warn('Startup indexing recovery skipped:', err.message));
-  }, 5000);
+  // Startup recovery of pending indexing jobs is now triggered from
+  // authHandlers after login/session-restore completes (when user context
+  // is guaranteed to be available). See auth:login and auth:restoreSession.
 });
 
 // ── Shutdown ──────────────────────────────────────────────

@@ -397,7 +397,7 @@ class InitDbRequest(BaseModel):
 
 @app.post("/init-db")
 def init_db(request: InitDbRequest):
-    global active_engine
+    global active_engine, _active_chroma_path, _active_user_id
 
     db_path = request.database_path
 
@@ -579,6 +579,8 @@ def init_db(request: InitDbRequest):
 
     # Register engine only after schema + seed succeed
     active_engine = engine
+    _active_user_id = request.mongo_user_id
+    _active_chroma_path = os.path.join(os.path.dirname(resolved), "chroma")
 
     return {
         "status": "success",
@@ -1571,20 +1573,25 @@ async def ai_apply_classify(request: ApplyClassifyRequest):
     try:
         result = apply_classify_results(engine, request.dataroom_id, request.results)
 
-        # Create indexing jobs for classified files
+        # Create indexing jobs for ALL classified files (regardless of confidence)
         try:
             from app.services.embedding_service import create_indexing_job
             classified_file_ids = [
                 r.get("file_id") for r in request.results
-                if r.get("file_id") and float(r.get("confidence", 0)) >= 0.4
+                if r.get("file_id")
             ]
+            jobs_created = 0
             with Session(engine) as session:
                 for file_id in classified_file_ids:
-                    create_indexing_job(file_id, request.dataroom_id, session)
-            if classified_file_ids:
-                logger.info(f"apply_classify: created {len(classified_file_ids)} indexing jobs")
+                    try:
+                        create_indexing_job(file_id, request.dataroom_id, session)
+                        jobs_created += 1
+                    except Exception as e:
+                        logger.warning(f"apply_classify: indexing job creation failed for {file_id}: {e}")
+            if jobs_created:
+                logger.info(f"apply_classify: created {jobs_created} indexing jobs")
         except Exception as e:
-            logger.warning(f"apply_classify: indexing job creation failed: {e}")
+            logger.warning(f"apply_classify: indexing job setup failed: {e}")
 
         return result
     except ValueError as e:
@@ -1643,22 +1650,27 @@ async def ai_apply_generate(request: ApplyGenerateRequest):
             request.dataroom_id,
         )
 
-        # Create indexing jobs for assigned files
+        # Create indexing jobs for ALL assigned files (regardless of confidence)
         try:
             from app.services.embedding_service import create_indexing_job
             dataroom_id = result.get("dataroom", {}).get("id")
             if dataroom_id:
                 assigned_file_ids = [
                     a.get("file_id") for a in request.gemini_result.get("assignments", [])
-                    if a.get("file_id") and float(a.get("confidence", 0)) >= 0.4
+                    if a.get("file_id")
                 ]
+                jobs_created = 0
                 with Session(engine) as session:
                     for file_id in assigned_file_ids:
-                        create_indexing_job(file_id, dataroom_id, session)
-                if assigned_file_ids:
-                    logger.info(f"apply_generate: created {len(assigned_file_ids)} indexing jobs")
+                        try:
+                            create_indexing_job(file_id, dataroom_id, session)
+                            jobs_created += 1
+                        except Exception as e:
+                            logger.warning(f"apply_generate: indexing job creation failed for {file_id}: {e}")
+                if jobs_created:
+                    logger.info(f"apply_generate: created {jobs_created} indexing jobs")
         except Exception as e:
-            logger.warning(f"apply_generate: indexing job creation failed: {e}")
+            logger.warning(f"apply_generate: indexing job setup failed: {e}")
 
         return result
     except ValueError as e:
@@ -1721,6 +1733,10 @@ class TriggerIndexingRequest(BaseModel):
 
 class RetryFailedRequest(BaseModel):
     dataroom_id: Optional[str] = None
+
+class MarkFailedRequest(BaseModel):
+    file_id: str
+    error_message: Optional[str] = None
 
 class CreateChatSessionRequest(BaseModel):
     scope_type: str
@@ -1994,6 +2010,34 @@ def indexing_retry_failed(request: RetryFailedRequest):
         )
         session.commit()
         return {"success": True, "jobs_reset": result.rowcount}
+
+
+@app.post("/api/v1/indexing/mark-failed")
+def indexing_mark_failed(request: MarkFailedRequest):
+    """Mark a specific file's indexing job as failed (called by Electron on pipeline error)."""
+    engine = _require_db()
+
+    with Session(engine) as session:
+        result = session.execute(
+            text("""
+                UPDATE indexing_jobs
+                SET status = 'failed',
+                    error_message = :err,
+                    attempts = attempts + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE file_id = :fid AND status IN ('pending', 'processing')
+            """),
+            {"fid": request.file_id, "err": request.error_message or "Unknown error"},
+        )
+
+        if result.rowcount > 0:
+            session.execute(
+                text("UPDATE files SET embedding_status = 'failed' WHERE id = :fid"),
+                {"fid": request.file_id},
+            )
+
+        session.commit()
+        return {"success": True, "jobs_updated": result.rowcount}
 
 
 @app.get("/api/v1/indexing/pending-files")

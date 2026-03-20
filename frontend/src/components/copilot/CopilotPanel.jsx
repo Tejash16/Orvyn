@@ -255,11 +255,30 @@ function CopilotPanel() {
 
   const scopeIds = useSelector((s) => s.copilot.scopeIds);
   const scopeType = useSelector((s) => s.copilot.scopeType);
+  const indexStatus = useSelector((s) => s.copilot.indexStatus);
   const dataroomDeleted =
     scopeType === 'dataroom' &&
     scopeIds?.length > 0 &&
     datarooms.length > 0 &&
     !datarooms.some((dr) => dr.id === scopeIds[0]);
+
+  // Block Copilot only while files are actively being indexed (pending/processing).
+  // Failed files don't block — user can retry them manually via the header button.
+  const activelyIndexing = (indexStatus?.pending ?? 0) + (indexStatus?.processing ?? 0);
+  const notFullyIndexed = activelyIndexing > 0;
+
+  // Copilot is unusable when there are no datarooms, or the current dataroom has no files
+  const items = useSelector((s) => s.fileExplorer.items);
+  const activeDataroom = useSelector((s) => s.dataroom.activeDataroom);
+  const hasNoDatarooms = datarooms.length === 0;
+  // A dataroom has no files if: no files in items AND no indexed files AND activeDataroom reports 0 files
+  const dataroomFileCount = activeDataroom?.files?.length ?? activeDataroom?.file_count ?? 0;
+  const hasFilesInItems = items.some((item) => item.type === 'file');
+  const hasIndexedFiles = (indexStatus?.total ?? 0) > 0;
+  const isDataroomEmpty = !!currentDataroomId && !hasFilesInItems && !hasIndexedFiles && dataroomFileCount === 0;
+  // At DataRoom list level, check if all DataRooms have 0 files
+  const allDataroomsEmpty = !currentDataroomId && datarooms.length > 0 && datarooms.every((dr) => (dr.file_count ?? 0) === 0);
+  const copilotUnavailable = hasNoDatarooms || isDataroomEmpty || allDataroomsEmpty;
 
   /* ── Render ──────────────────────────────────────────── */
 
@@ -269,13 +288,31 @@ function CopilotPanel() {
       style={isOpen ? { width: panelWidth } : undefined}
     >
       <CopilotHeader />
-      <CopilotTabs activeTab={activeTab} onTabChange={handleTabChange} />
+      {!copilotUnavailable && !notFullyIndexed && <CopilotTabs activeTab={activeTab} onTabChange={handleTabChange} />}
 
       <div className={styles.content}>
-        {dataroomDeleted ? (
+        {copilotUnavailable ? (
+          <div className={styles.emptyState}>
+            <div className={styles.emptyIcon}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z" />
+              </svg>
+            </div>
+            <h2 className={styles.emptyTitle}>Orvyn Copilot</h2>
+            <p className={styles.emptySubtitle}>
+              {hasNoDatarooms
+                ? 'Create a DataRoom and add files to start using Copilot.'
+                : 'Add files to your DataRoom to start using Copilot.'}
+            </p>
+          </div>
+        ) : dataroomDeleted ? (
           <div className={styles.emptyState}>
             <p className={styles.emptySubtitle}>DataRoom no longer exists</p>
           </div>
+        ) : notFullyIndexed ? (
+          <CopilotChat />
         ) : (
           <>
             {activeTab === 'chat' && <CopilotChat />}
@@ -292,8 +329,8 @@ function CopilotPanel() {
         )}
       </div>
 
-      <CopilotQuickActions onSwitchTab={handleTabChange} />
-      <CopilotInput onSend={handleSendWithMultiDRDetection} />
+      {!copilotUnavailable && !notFullyIndexed && <CopilotQuickActions onSwitchTab={handleTabChange} />}
+      <CopilotInput onSend={handleSendWithMultiDRDetection} disabled={copilotUnavailable} />
     </div>
   );
 }

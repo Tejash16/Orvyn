@@ -17,15 +17,18 @@ const IconSend = () => (
 
 /* ── CopilotInput ────────────────────────────────────────── */
 
-function CopilotInput({ onSend }) {
+function CopilotInput({ onSend, disabled: externalDisabled }) {
   const dispatch = useDispatch();
   const isStreaming = useSelector((s) => s.copilot.isStreaming);
   const isLoading = useSelector((s) => s.copilot.isLoading);
+  const indexStatus = useSelector((s) => s.copilot.indexStatus);
   const { isOnline, requireOnline } = useRequireOnline();
   const [text, setText] = useState('');
   const textareaRef = useRef(null);
 
-  const disabled = isStreaming || isLoading;
+  const activelyIndexing = (indexStatus?.pending ?? 0) + (indexStatus?.processing ?? 0);
+  const notFullyIndexed = activelyIndexing > 0;
+  const disabled = isStreaming || isLoading || notFullyIndexed || externalDisabled;
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
@@ -72,7 +75,7 @@ function CopilotInput({ onSend }) {
           value={text}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
-          placeholder="Ask about your documents…"
+          placeholder={externalDisabled ? 'Add files to use Copilot…' : notFullyIndexed ? 'Waiting for files to finish indexing…' : 'Ask about your documents…'}
           rows={1}
           disabled={disabled}
           aria-label="Message input"

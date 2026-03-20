@@ -279,6 +279,7 @@
   color: var(--accent-primary);
 }
 
+
 /* ── Explorer content row (file content + copilot side by side) ── */
 
 .explorerContentRow {
@@ -374,6 +375,8 @@
   overflow-y: auto;
   min-height: 0;
   padding: 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Grid view ──────────────────────────────────────────── */

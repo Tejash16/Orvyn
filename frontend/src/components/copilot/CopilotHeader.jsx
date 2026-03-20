@@ -71,6 +71,8 @@ function CopilotHeader() {
   const complete = indexStatus?.complete ?? 0;
   const total = indexStatus?.total ?? 0;
   const pending = indexStatus?.pending ?? 0;
+  const processing = indexStatus?.processing ?? 0;
+  const failed = indexStatus?.failed ?? 0;
   const pct = total > 0 ? Math.round((complete / total) * 100) : 0;
 
   // Scope label
@@ -90,7 +92,10 @@ function CopilotHeader() {
         {total > 0 && (
           <div className={styles.indexStatus}>
             <span>
-              {complete}/{total} indexed{pending > 0 ? ` • ${pending} pending` : ''}
+              {complete}/{total} indexed
+              {processing > 0 ? ` • ${processing} processing` : ''}
+              {failed > 0 ? ` • ${failed} failed` : ''}
+              {pending > 0 ? ` • ${pending} pending` : ''}
             </span>
             <div className={styles.indexBar}>
               <div
@@ -98,15 +103,15 @@ function CopilotHeader() {
                 style={{ width: `${pct}%` }}
               />
             </div>
-            {complete < total && (
+            {(pending > 0 || failed > 0) && (
               <button
                 className={styles.headerBtn}
                 onClick={() => dispatch(indexFiles({ dataroomId: scopeIds?.[0] }))}
-                title="Index Now"
-                aria-label="Index Now"
+                title={failed > 0 ? 'Retry Failed' : 'Index Now'}
+                aria-label={failed > 0 ? 'Retry Failed' : 'Index Now'}
                 style={{ width: 'auto', padding: '0 6px', fontSize: '10px', fontWeight: 600, color: 'var(--accent-primary)' }}
               >
-                Index Now
+                {failed > 0 ? 'Retry' : 'Index Now'}
               </button>
             )}
           </div>

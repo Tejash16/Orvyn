@@ -3,6 +3,7 @@ const userContextService     = require('../services/userContextService');
 const pythonService          = require('../services/pythonService');
 const tokenVault             = require('../services/tokenVault');
 const tokenRefreshScheduler  = require('../services/tokenRefreshScheduler');
+const { resumePendingIndexing } = require('./copilotHandlers');
 
 /**
  * Registers all auth IPC handlers.
@@ -111,6 +112,10 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
       // Step 6
       startRefreshScheduler();
 
+      // Step 7 — resume any pending indexing jobs (fire-and-forget)
+      resumePendingIndexing(getMainWindow)
+        .catch(() => { /* non-fatal */ });
+
       return { success: true, user, theme };
     } catch (err) {
       return { success: false, error: err.message };
@@ -198,6 +203,10 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
       // Step 9
       startRefreshScheduler();
+
+      // Step 10 — resume any pending indexing jobs (fire-and-forget)
+      resumePendingIndexing(getMainWindow)
+        .catch(() => { /* non-fatal */ });
 
       return { success: true, user, theme };
     } catch {

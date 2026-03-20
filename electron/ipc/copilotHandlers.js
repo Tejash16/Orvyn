@@ -621,9 +621,26 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
   // ── copilot:index-files (background indexing pipeline) ───
 
   ipcMain.handle('copilot:index-files', async (_event, { file_ids, dataroom_id }) => {
+    // Auto-resolve file_ids from pending jobs when not explicitly provided
     if (!file_ids || !Array.isArray(file_ids) || file_ids.length === 0) {
-      log.warn('copilot:index-files: no valid file_ids provided, skipping');
-      return { success: true, completed: 0, total: 0 };
+      if (dataroom_id) {
+        try {
+          const ctx = getUserContext();
+          const pendingResult = await pythonGet('/api/v1/indexing/pending-files', {
+            dataroom_id, ...ctx,
+          });
+          file_ids = (pendingResult.files || []).map(f => f.file_id);
+          if (file_ids.length > 0) {
+            log.info(`copilot:index-files: auto-resolved ${file_ids.length} pending file(s) for dataroom ${dataroom_id}`);
+          }
+        } catch (err) {
+          log.warn('copilot:index-files: failed to auto-resolve pending files:', err.message);
+        }
+      }
+      if (!file_ids || file_ids.length === 0) {
+        log.warn('copilot:index-files: no pending files found, skipping');
+        return { success: true, completed: 0, total: 0 };
+      }
     }
 
     const ctx = getUserContext();
@@ -648,17 +665,7 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
           continue;
         }
 
-        // If duplicate: skip embedding
-        if (fileData.is_duplicate) {
-          log.info(`copilot: file ${fileId} is duplicate of ${fileData.duplicate_of}, skipping embedding`);
-          completed++;
-          if (win && !win.isDestroyed()) {
-            win.webContents.send('copilot:index-progress', {
-              completed, total, current_file: fileId, status: 'duplicate',
-            });
-          }
-          continue;
-        }
+        // NOTE: Duplicate detection removed — each file gets its own embeddings.
 
         // If skipped (no text / image-only): already marked complete by Python
         if (fileData.skipped) {
@@ -751,6 +758,16 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
         }
       } catch (err) {
         log.error(`copilot: indexing failed for file ${fileId}:`, err.message);
+
+        // Mark the job as failed in Python so it doesn't stay stuck in 'processing'
+        try {
+          await pythonPost('/api/v1/indexing/mark-failed', {
+            file_id: fileId,
+            error_message: err.message,
+            ...ctx,
+          });
+        } catch { /* best-effort */ }
+
         completed++;
         if (win && !win.isDestroyed()) {
           win.webContents.send('copilot:index-progress', {
@@ -1090,8 +1107,9 @@ async function resumePendingIndexing(getMainWindow) {
     const ctx = getUserContext();
     const status = await pythonGet('/api/v1/indexing/status', ctx);
 
-    if (status.pending > 0) {
-      log.info(`copilot: resuming ${status.pending} pending indexing jobs from previous session`);
+    const resumable = (status.pending || 0) + (status.processing || 0);
+    if (resumable > 0) {
+      log.info(`copilot: resuming ${resumable} indexing jobs from previous session (pending=${status.pending || 0}, processing=${status.processing || 0})`);
 
       // Get the pending file IDs
       const pendingResult = await pythonGet('/api/v1/indexing/pending-files', ctx);
@@ -1190,7 +1208,20 @@ registerCopilotHandlers._indexFilesInternal = async function (event, { file_ids,
       }
     } catch (err) {
       log.error(`copilot: recovery indexing failed for file ${fileId}:`, err.message);
+
+      // Mark the job as failed in Python so it doesn't stay stuck in 'processing'
+      try {
+        await pythonPost('/api/v1/indexing/mark-failed', {
+          file_id: fileId,
+          error_message: err.message,
+          ...ctx,
+        });
+      } catch { /* best-effort */ }
+
       completed++;
+      if (event.sender && typeof event.sender.send === 'function') {
+        event.sender.send('copilot:index-progress', { completed, total, current_file: fileId, status: 'failed' });
+      }
     }
   }
 };
