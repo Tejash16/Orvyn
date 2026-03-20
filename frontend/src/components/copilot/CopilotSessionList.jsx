@@ -35,7 +35,7 @@ const SCOPE_LABELS = {
 
 /* ── CopilotSessionList ──────────────────────────────────── */
 
-function CopilotSessionList({ onClose }) {
+function CopilotSessionList({ onClose, showAll = true, onToggleFilter }) {
   const dispatch = useDispatch();
   const sessions = useSelector((s) => s.copilot.sessions);
   const activeSessionId = useSelector((s) => s.copilot.activeSessionId);
@@ -75,6 +75,19 @@ function CopilotSessionList({ onClose }) {
         <IconPlus />
         <span className={styles.sessionTitle}>New Chat</span>
       </button>
+
+      {onToggleFilter && (
+        <div className={styles.sessionFilterRow}>
+          <button
+            className={`${styles.sessionFilterBtn} ${showAll ? styles.sessionFilterBtnActive : ''}`}
+            onClick={() => onToggleFilter(true)}
+          >All</button>
+          <button
+            className={`${styles.sessionFilterBtn} ${!showAll ? styles.sessionFilterBtnActive : ''}`}
+            onClick={() => onToggleFilter(false)}
+          >Current Scope</button>
+        </div>
+      )}
 
       {sessions.length === 0 ? (
         <div className={styles.noSessions}>No past sessions</div>

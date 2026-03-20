@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
   toggleCopilot,
@@ -198,18 +198,27 @@ function CopilotPanel() {
     dispatch(getIndexStatus(currentDataroomId));
   }, [currentDataroomId, currentFolderId, currentPath, selectedItems, dispatch]);
 
-  /* ── Refresh index status when indexing progress completes ── */
+  /* ── Refresh index status during indexing (debounced) ── */
 
   const indexProgress = useSelector((s) => s.copilot.indexProgress);
+  const debounceRef = useRef(null);
 
   useEffect(() => {
-    if (
-      indexProgress &&
-      indexProgress.total > 0 &&
-      indexProgress.completed === indexProgress.total
-    ) {
+    if (!indexProgress || indexProgress.total === 0) return;
+
+    if (indexProgress.completed === indexProgress.total) {
+      // Completed — dispatch immediately
+      clearTimeout(debounceRef.current);
       dispatch(getIndexStatus(currentDataroomId || undefined));
+    } else {
+      // Still in progress — debounce at 2s
+      clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        dispatch(getIndexStatus(currentDataroomId || undefined));
+      }, 2000);
     }
+
+    return () => clearTimeout(debounceRef.current);
   }, [indexProgress, currentDataroomId, dispatch]);
 
   /* ── Auto-prompt on file upload ──────────────────────── */

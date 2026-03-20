@@ -71,6 +71,37 @@ def validate_message_length(message: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Session pruning
+# ---------------------------------------------------------------------------
+
+def _prune_excess_sessions(db_session: Session, max_sessions: int = 10) -> None:
+    """Delete oldest chat sessions if total count exceeds max_sessions."""
+    count_row = db_session.execute(
+        text("SELECT COUNT(*) FROM chat_sessions")
+    ).fetchone()
+    total = count_row[0] if count_row else 0
+
+    if total > max_sessions:
+        excess = total - max_sessions
+        oldest = db_session.execute(
+            text("""
+                SELECT id FROM chat_sessions
+                ORDER BY updated_at ASC
+                LIMIT :excess
+            """),
+            {"excess": excess},
+        ).fetchall()
+
+        for row in oldest:
+            db_session.execute(
+                text("DELETE FROM chat_sessions WHERE id = :sid"),
+                {"sid": row[0]},
+            )
+        db_session.commit()
+        logger.info(f"Pruned {len(oldest)} excess chat sessions (max={max_sessions})")
+
+
+# ---------------------------------------------------------------------------
 # Chat context preparation
 # ---------------------------------------------------------------------------
 
@@ -136,6 +167,9 @@ def prepare_chat_context(
         session_title = None
         effective_scope_name = scope_name
         logger.info(f"Created chat session {session_id} (scope={scope_type})")
+
+        # Prune excess sessions: keep only the newest 10
+        _prune_excess_sessions(db_session, max_sessions=10)
 
     # 2. Resolve scope filters for hybrid search
     dataroom_id = None
@@ -208,9 +242,9 @@ def prepare_chat_context(
 
     is_cross_dr = scope_type in ("global", "multi_dataroom") or len(dr_ids_in_results) > 1
 
-    # 6. Format chunks as labeled document excerpts
+    # 6. Format chunks as labeled document excerpts + build sources
     formatted_parts = []
-    sources = []
+    raw_sources = []
 
     for chunk in trimmed_chunks:
         file_name = chunk.get("file_name", "Unknown")
@@ -221,24 +255,7 @@ def prepare_chat_context(
         chunk_dr_id = chunk.get("dataroom_id")
         chunk_dr_name = dr_name_cache.get(chunk_dr_id, "")
 
-        # Build source label — include DataRoom name for cross-DR searches
-        if is_cross_dr and chunk_dr_name:
-            source_label = f"Source: 📁 {chunk_dr_name} > {file_name}"
-        else:
-            source_label = f"Source: {file_name}"
-        if page_number:
-            source_label += f", Page {page_number}"
-        elif section_number:
-            source_label += f", Section {section_number}"
-        elif section_name:
-            source_label += f", Sheet {section_name}"
-
-        formatted_parts.append(
-            f"--- [{source_label}] ---\n{chunk_text}\n--- end ---"
-        )
-
-        # Build source entry
-        sources.append({
+        raw_sources.append({
             "file_id": chunk.get("file_id"),
             "file_name": file_name,
             "dataroom_id": chunk_dr_id,
@@ -250,9 +267,66 @@ def prepare_chat_context(
             "section_name": section_name,
         })
 
+    # --- Deduplicate sources by file_id (keep highest relevance) ---
+    deduped = {}
+    for src in raw_sources:
+        fid = src.get("file_id")
+        if fid not in deduped or src.get("relevance", 0) > deduped[fid].get("relevance", 0):
+            deduped[fid] = src
+    sources = list(deduped.values())
+
+    # Assign sequential source_number (1-based)
+    for idx, src in enumerate(sources):
+        src["source_number"] = idx + 1
+
+    # Batch query for folder_id
+    file_ids_for_folder = [s["file_id"] for s in sources if s.get("file_id")]
+    if file_ids_for_folder:
+        placeholders = ", ".join(f":fid_{i}" for i in range(len(file_ids_for_folder)))
+        params = {f"fid_{i}": fid for i, fid in enumerate(file_ids_for_folder)}
+        folder_rows = db_session.execute(
+            text(f"SELECT id, folder_id FROM files WHERE id IN ({placeholders})"),
+            params,
+        ).fetchall()
+        folder_map = {row[0]: row[1] for row in folder_rows}
+        for src in sources:
+            src["folder_id"] = folder_map.get(src.get("file_id"))
+
+    # Build numbered source lookup for formatting
+    file_source_num = {s["file_id"]: s["source_number"] for s in sources}
+
+    # Build formatted_parts from trimmed_chunks using numbered labels
+    for chunk in trimmed_chunks:
+        file_name = chunk.get("file_name", "Unknown")
+        file_id = chunk.get("file_id")
+        chunk_text = chunk.get("text", "")
+        chunk_dr_id = chunk.get("dataroom_id")
+        chunk_dr_name = dr_name_cache.get(chunk_dr_id, "")
+        page_number = chunk.get("page_number")
+        section_number = chunk.get("section_number")
+        section_name = chunk.get("section_name")
+
+        num = file_source_num.get(file_id, "?")
+
+        # Build source label with number prefix
+        if is_cross_dr and chunk_dr_name:
+            source_label = f"[{num}] 📁 {chunk_dr_name} > {file_name}"
+        else:
+            source_label = f"[{num}] {file_name}"
+        if page_number:
+            source_label += f", Page {page_number}"
+        elif section_number:
+            source_label += f", Section {section_number}"
+        elif section_name:
+            source_label += f", Sheet {section_name}"
+
+        formatted_parts.append(
+            f"--- [{source_label}] ---\n{chunk_text}\n--- end ---"
+        )
+
     formatted_chunks = "\n\n".join(formatted_parts)
 
-    # 6. Fetch chat history (last N messages)
+    # 7. Fetch chat history (last N messages)
     history_rows = db_session.execute(
         text("""
             SELECT role, content FROM chat_messages

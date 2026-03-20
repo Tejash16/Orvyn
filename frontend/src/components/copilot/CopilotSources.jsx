@@ -1,20 +1,31 @@
+import { useDispatch } from 'react-redux';
+import { navigateToFile } from '../../store/fileExplorerSlice';
 import styles from './CopilotPanel.module.css';
 
 function CopilotSources({ sources: rawSources }) {
   const sources = typeof rawSources === 'string' ? JSON.parse(rawSources) : rawSources;
   if (!sources || !Array.isArray(sources) || sources.length === 0) return null;
 
+  const dispatch = useDispatch();
+
   const handleClick = (source) => {
-    // Navigate to file in explorer
-    if (window.api?.file?.openFile && source.file_id) {
-      window.api.file.openFile(source.file_id);
+    if (source.file_id && source.dataroom_id) {
+      dispatch(navigateToFile({
+        dataroomId: source.dataroom_id,
+        folderId: source.folder_id,
+        fileId: source.file_id,
+      }));
     }
   };
 
-  const handleDoubleClick = (source) => {
-    // Open in system app
-    if (window.api?.file?.openExternal && source.file_path) {
-      window.api.file.openExternal(source.file_path);
+  const handleDoubleClick = async (source) => {
+    if (source.file_id && window.api?.file?.getDetails) {
+      try {
+        const details = await window.api.file.getDetails(source.file_id);
+        if (details?.original_path && window.api?.file?.open) {
+          window.api.file.open(details.original_path);
+        }
+      } catch { /* ignore */ }
     }
   };
 
@@ -22,6 +33,8 @@ function CopilotSources({ sources: rawSources }) {
     <div className={styles.sources}>
       <span className={styles.sourcesLabel}>Sources</span>
       {sources.map((source, idx) => {
+        const num = source.source_number || (idx + 1);
+
         // Cross-DR display: show "📁 [DataRoom] > filename" when dataroom_name is present
         const displayName = source.dataroom_name
           ? `📁 ${source.dataroom_name} > ${source.file_name || 'Document'}`
@@ -30,6 +43,7 @@ function CopilotSources({ sources: rawSources }) {
         return (
           <button
             key={`${source.file_name || source.file_id}-${idx}`}
+            id={`copilot-source-${num}`}
             className={styles.sourceItem}
             onClick={() => handleClick(source)}
             onDoubleClick={() => handleDoubleClick(source)}
@@ -44,10 +58,10 @@ function CopilotSources({ sources: rawSources }) {
               </svg>
             </span>
             <span>
-              {displayName}
-              {source.page && ` (Page ${source.page})`}
-              {source.section && ` (${source.section})`}
-              {source.sheet && ` (${source.sheet})`}
+              [{num}] {displayName}
+              {source.page_number && ` (Page ${source.page_number})`}
+              {source.section_number && ` (${source.section_number})`}
+              {source.section_name && ` (${source.section_name})`}
             </span>
           </button>
         );

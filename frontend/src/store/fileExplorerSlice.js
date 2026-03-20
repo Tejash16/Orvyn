@@ -190,6 +190,21 @@ export const refreshCurrentView = createAsyncThunk(
   }
 );
 
+export const navigateToFile = createAsyncThunk(
+  'fileExplorer/navigateToFile',
+  async ({ dataroomId, folderId, fileId }, { dispatch, rejectWithValue }) => {
+    try {
+      await dispatch(navigateToDataroom(dataroomId)).unwrap();
+      if (folderId) {
+        await dispatch(navigateToFolder({ folderId, folderName: '' })).unwrap();
+      }
+      return { fileId };
+    } catch (err) {
+      return rejectWithValue(err.message || err);
+    }
+  }
+);
+
 // ── Slice ────────────────────────────────────────────────────
 
 const fileExplorerSlice = createSlice({
@@ -415,6 +430,14 @@ const fileExplorerSlice = createSlice({
       .addCase(refreshCurrentView.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
+      });
+
+    // navigateToFile
+    builder
+      .addCase(navigateToFile.fulfilled, (state, action) => {
+        if (action.payload?.fileId) {
+          state.selectedItems = [{ id: action.payload.fileId, type: 'file' }];
+        }
       });
   },
 });

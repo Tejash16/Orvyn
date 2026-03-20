@@ -53,13 +53,50 @@ function CopilotMessage({ message }) {
     ? content.slice(0, TRUNCATE_SHOW) + '…'
     : content;
 
+  // Custom paragraph renderer that parses [N] citation markers
+  const CitationText = useCallback(({ children, node, ...props }) => {
+    if (typeof children !== 'string') return <p {...props}>{children}</p>;
+    const parts = children.split(/(\[\d+\])/g);
+    if (parts.length === 1) return <p {...props}>{children}</p>;
+    return (
+      <p {...props}>
+        {parts.map((part, i) => {
+          const match = part.match(/^\[(\d+)\]$/);
+          if (match) {
+            const num = match[1];
+            return (
+              <sup
+                key={i}
+                className={styles.citationMarker}
+                onClick={() => {
+                  const el = document.getElementById(`copilot-source-${num}`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add(styles.sourceHighlighted);
+                    setTimeout(() => el.classList.remove(styles.sourceHighlighted), 1500);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                title={`Go to source ${num}`}
+              >{num}</sup>
+            );
+          }
+          return part;
+        })}
+      </p>
+    );
+  }, []);
+
+  const markdownComponents = { p: CitationText };
+
   return (
     <div className={`${styles.messageRow} ${isUser ? styles.messageRowUser : styles.messageRowAssistant}`}>
       <div className={`${styles.messageBubble} ${isUser ? styles.userBubble : styles.assistantBubble}`}>
         {isUser ? (
           content
         ) : (
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
             {displayContent}
           </ReactMarkdown>
         )}

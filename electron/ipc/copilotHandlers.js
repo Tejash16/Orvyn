@@ -132,7 +132,7 @@ academic, personal, HR, operations, engineering, research, or any other field.
 
 RULES:
 1. Answer based ONLY on the provided document excerpts. Never make up information.
-2. Always cite sources using [Source: filename] format.
+2. When referencing information from documents, cite using numbered markers like [1], [2] etc. matching the source numbers in the excerpts. Only cite sources you actually use in your answer.
 3. If you cannot find the answer, say clearly: "I couldn't find this in your documents."
 4. Be precise with numbers, dates, names — quote them exactly as they appear.
 5. Note any inconsistencies between documents.

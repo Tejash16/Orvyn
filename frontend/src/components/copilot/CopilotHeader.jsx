@@ -58,11 +58,26 @@ function CopilotHeader() {
     return () => document.removeEventListener('mousedown', handler);
   }, [showSessions]);
 
+  const [showAllSessions, setShowAllSessions] = useState(true);
+
   const handleToggleSessions = () => {
     if (!showSessions) {
-      dispatch(fetchSessions({ scopeType, scopeId: scopeIds?.[0] }));
+      if (showAllSessions) {
+        dispatch(fetchSessions({}));
+      } else {
+        dispatch(fetchSessions({ scopeType, scopeId: scopeIds?.[0] }));
+      }
     }
     setShowSessions((v) => !v);
+  };
+
+  const handleToggleFilter = (showAll) => {
+    setShowAllSessions(showAll);
+    if (showAll) {
+      dispatch(fetchSessions({}));
+    } else {
+      dispatch(fetchSessions({ scopeType, scopeId: scopeIds?.[0] }));
+    }
   };
 
   // Scope label
@@ -95,7 +110,11 @@ function CopilotHeader() {
         </button>
 
         {showSessions && (
-          <CopilotSessionList onClose={() => setShowSessions(false)} />
+          <CopilotSessionList
+            onClose={() => setShowSessions(false)}
+            showAll={showAllSessions}
+            onToggleFilter={handleToggleFilter}
+          />
         )}
 
         {/* Close button */}
