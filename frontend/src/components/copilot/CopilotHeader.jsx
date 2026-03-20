@@ -3,7 +3,6 @@ import { useSelector, useDispatch } from 'react-redux';
 import {
   closeCopilot,
   fetchSessions,
-  indexFiles,
 } from '../../store/copilotSlice';
 import CopilotSessionList from './CopilotSessionList';
 import styles from './CopilotPanel.module.css';
@@ -41,7 +40,6 @@ const IconChevronDown = () => (
 function CopilotHeader() {
   const dispatch = useDispatch();
   const scopeName = useSelector((s) => s.copilot.scopeName);
-  const indexStatus = useSelector((s) => s.copilot.indexStatus);
   const scopeType = useSelector((s) => s.copilot.scopeType);
   const scopeIds = useSelector((s) => s.copilot.scopeIds);
 
@@ -67,14 +65,6 @@ function CopilotHeader() {
     setShowSessions((v) => !v);
   };
 
-  // Index status display
-  const complete = indexStatus?.complete ?? 0;
-  const total = indexStatus?.total ?? 0;
-  const pending = indexStatus?.pending ?? 0;
-  const processing = indexStatus?.processing ?? 0;
-  const failed = indexStatus?.failed ?? 0;
-  const pct = total > 0 ? Math.round((complete / total) * 100) : 0;
-
   // Scope label
   let scopeLabel = scopeName || 'Orvyn Copilot';
   if (scopeType === 'global') {
@@ -87,35 +77,8 @@ function CopilotHeader() {
     <div className={styles.header}>
       <div className={styles.headerLeft}>
         <span className={styles.scopeLabel}>
-          {scopeLabel.length > 25 ? scopeLabel.slice(0, 25) + '...' : scopeLabel} 
+          {scopeLabel.length > 25 ? scopeLabel.slice(0, 25) + '...' : scopeLabel}
         </span>
-        {total > 0 && (
-          <div className={styles.indexStatus}>
-            <span>
-              {complete}/{total} indexed
-              {processing > 0 ? ` • ${processing} processing` : ''}
-              {failed > 0 ? ` • ${failed} failed` : ''}
-              {pending > 0 ? ` • ${pending} pending` : ''}
-            </span>
-            <div className={styles.indexBar}>
-              <div
-                className={styles.indexBarFill}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            {(pending > 0 || failed > 0) && (
-              <button
-                className={styles.headerBtn}
-                onClick={() => dispatch(indexFiles({ dataroomId: scopeIds?.[0] }))}
-                title={failed > 0 ? 'Retry Failed' : 'Index Now'}
-                aria-label={failed > 0 ? 'Retry Failed' : 'Index Now'}
-                style={{ width: 'auto', padding: '0 6px', fontSize: '10px', fontWeight: 600, color: 'var(--accent-primary)' }}
-              >
-                {failed > 0 ? 'Retry' : 'Index Now'}
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       <div className={styles.headerActions} ref={dropdownRef} style={{ position: 'relative' }}>

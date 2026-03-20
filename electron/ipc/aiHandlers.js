@@ -2,6 +2,7 @@ const crypto         = require('crypto');
 const pythonService  = require('../services/pythonService');
 const expressService = require('../services/expressService');
 const log            = require('../services/logger');
+const { resumePendingIndexing } = require('./copilotHandlers');
 
 /**
  * Registers AI classification IPC handlers.
@@ -19,8 +20,9 @@ const log            = require('../services/logger');
  *   - requestId for idempotency (prevents double-counting on retry)
  *
  * @param {Electron.IpcMain} ipcMain
+ * @param {() => Electron.BrowserWindow | null} getMainWindow
  */
-function registerAiHandlers(ipcMain) {
+function registerAiHandlers(ipcMain, getMainWindow) {
 
   ipcMain.handle('ai:classify', async (_event, { dataroom_id, file_ids }) => {
     try {
@@ -56,6 +58,11 @@ function registerAiHandlers(ipcMain) {
 
       // Step 3: Python applies the AI results to the local database
       const applied = await pythonService.applyClassifyResults(dataroom_id, results);
+
+      // Step 4: Trigger background indexing for newly classified files (fire-and-forget)
+      resumePendingIndexing(getMainWindow).catch(err =>
+        log.warn('ai:classify post-classify indexing trigger failed (non-fatal):', err.message)
+      );
 
       return {
         success: true,
@@ -110,6 +117,11 @@ function registerAiHandlers(ipcMain) {
         geminiResult,
         file_ids,
         dataroom_id,
+      );
+
+      // Step 4: Trigger background indexing for newly classified files (fire-and-forget)
+      resumePendingIndexing(getMainWindow).catch(err =>
+        log.warn('ai:generate-dataroom post-generate indexing trigger failed (non-fatal):', err.message)
       );
 
       return {

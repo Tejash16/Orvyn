@@ -104,12 +104,14 @@ export const generateInsights = createAsyncThunk(
 
 export const indexFiles = createAsyncThunk(
   'copilot/indexFiles',
-  async ({ fileIds, dataroomId }, { rejectWithValue }) => {
+  async ({ fileIds, dataroomId }, { dispatch, rejectWithValue }) => {
     const result = await window.api.copilot.indexFiles({
       file_ids: fileIds,
       dataroom_id: dataroomId,
     });
     if (!result.success) return rejectWithValue(result.error);
+    // Refresh index status so UI updates immediately after indexing completes
+    dispatch(getIndexStatus(dataroomId));
     return result;
   }
 );
@@ -147,6 +149,7 @@ const copilotSlice = createSlice({
     scopeName: '',
     selectedFileIds: [],
     isLoading: false,
+    isSessionsLoading: false,
     isStreaming: false,
     streamingMessage: '',
     isAuditing: false,
@@ -190,6 +193,11 @@ const copilotSlice = createSlice({
       state.scopeType = scopeType;
       state.scopeIds = scopeIds;
       state.scopeName = scopeName;
+      // Clear suggestions when scope changes so stale ones aren't shown
+      state.suggestions = [];
+    },
+    setSuggestions(state, action) {
+      state.suggestions = action.payload;
     },
     setSelectedFiles(state, action) {
       state.selectedFileIds = action.payload;
@@ -213,6 +221,7 @@ const copilotSlice = createSlice({
         sources: sources || [],
       });
       state.isStreaming = false;
+      state.isLoading = false; // Safety net: ensure input re-enables after stream ends
       state.streamingMessage = '';
       if (session_id) state.activeSessionId = session_id;
       if (session_title) {
@@ -269,32 +278,32 @@ const copilotSlice = createSlice({
         state.error = action.payload;
       });
 
-    // fetchSessions
+    // fetchSessions — uses isSessionsLoading to avoid blocking chat input
     builder
       .addCase(fetchSessions.pending, (state) => {
-        state.isLoading = true;
+        state.isSessionsLoading = true;
       })
       .addCase(fetchSessions.fulfilled, (state, action) => {
-        state.isLoading = false;
+        state.isSessionsLoading = false;
         state.sessions = action.payload || [];
       })
       .addCase(fetchSessions.rejected, (state, action) => {
-        state.isLoading = false;
+        state.isSessionsLoading = false;
         state.error = action.payload;
       });
 
-    // loadSession
+    // loadSession — uses isSessionsLoading to avoid blocking chat input
     builder
       .addCase(loadSession.pending, (state) => {
-        state.isLoading = true;
+        state.isSessionsLoading = true;
       })
       .addCase(loadSession.fulfilled, (state, action) => {
-        state.isLoading = false;
+        state.isSessionsLoading = false;
         state.activeSessionId = action.payload.sessionId;
         state.messages = action.payload.messages || [];
       })
       .addCase(loadSession.rejected, (state, action) => {
-        state.isLoading = false;
+        state.isSessionsLoading = false;
         state.error = action.payload;
       });
 
@@ -415,6 +424,7 @@ export const {
   clearSimulation,
   clearError,
   setCopilotScope,
+  setSuggestions,
   setSelectedFiles,
   startStreaming,
   appendStreamChunk,

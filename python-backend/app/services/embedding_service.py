@@ -883,6 +883,8 @@ def sync_file_removed(file_id: str, user_id: str, dataroom_id: str,
         text("UPDATE dataroom_insights SET stale = 1 WHERE dataroom_id = :did"),
         {"did": dataroom_id},
     )
+    # Reclaim FTS5 shadow table space after deletion
+    db_session.execute(text("INSERT INTO file_chunks_fts(file_chunks_fts) VALUES('optimize')"))
     db_session.commit()
     logger.info(f"sync_file_removed: cleaned up copilot data for file {file_id}")
 
@@ -960,6 +962,8 @@ def sync_dataroom_deleted(dataroom_id: str, user_id: str, chroma_path: str, db_s
         WHERE scope_type IN ('dataroom', 'multi_dataroom')
         AND EXISTS (SELECT 1 FROM json_each(scope_ids) WHERE json_each.value = :did)
     """), {"did": dataroom_id})
+    # Reclaim FTS5 shadow table space after bulk deletion
+    db_session.execute(text("INSERT INTO file_chunks_fts(file_chunks_fts) VALUES('optimize')"))
     db_session.commit()
     logger.info(f"sync_dataroom_deleted: cleaned up all copilot data for dataroom {dataroom_id}")
 

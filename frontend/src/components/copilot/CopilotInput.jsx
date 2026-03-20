@@ -26,8 +26,11 @@ function CopilotInput({ onSend, disabled: externalDisabled }) {
   const [text, setText] = useState('');
   const textareaRef = useRef(null);
 
+  const scopeType = useSelector((s) => s.copilot.scopeType);
   const activelyIndexing = (indexStatus?.pending ?? 0) + (indexStatus?.processing ?? 0);
-  const notFullyIndexed = activelyIndexing > 0;
+  // In global scope, don't block input for indexing — search only returns indexed chunks.
+  // User can still query datarooms that are already indexed.
+  const notFullyIndexed = scopeType !== 'global' && activelyIndexing > 0;
   const disabled = isStreaming || isLoading || notFullyIndexed || externalDisabled;
 
   const handleSend = useCallback(() => {

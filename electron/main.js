@@ -69,7 +69,7 @@ registerSettingsHandlers(ipcMain);
 registerDataroomHandlers(ipcMain);
 registerFolderHandlers(ipcMain);
 registerFileHandlers(ipcMain, () => mainWindow);
-registerAiHandlers(ipcMain);
+registerAiHandlers(ipcMain, () => mainWindow);
 registerCopilotHandlers(ipcMain, () => mainWindow);
 
 // Runtime config — sourced from electron/.env, never from renderer

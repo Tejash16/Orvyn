@@ -752,10 +752,11 @@ def apply_insights(
         {"did": dataroom_id},
     ).fetchone()
     if not dr_exists:
-        raise ValueError(
-            f"apply_insights: dataroom_id '{dataroom_id}' does not exist in datarooms table. "
-            "A file_id or scope_id may have been passed instead of a dataroom_id."
+        logger.warning(
+            f"apply_insights: dataroom_id '{dataroom_id}' no longer exists — "
+            "likely deleted while insights were being generated. Skipping."
         )
+        return {"stored": 0, "skipped_reason": "dataroom_deleted"}
 
     # Mark old insights as stale
     db_session.execute(

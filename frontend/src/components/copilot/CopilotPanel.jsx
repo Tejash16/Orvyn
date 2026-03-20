@@ -152,6 +152,8 @@ function CopilotPanel() {
         scopeIds: [],
         scopeName: 'All DataRooms',
       }));
+      // Fetch global index status (no dataroom_id = all DataRooms)
+      dispatch(getIndexStatus());
       return;
     }
 
@@ -195,6 +197,20 @@ function CopilotPanel() {
     }
     dispatch(getIndexStatus(currentDataroomId));
   }, [currentDataroomId, currentFolderId, currentPath, selectedItems, dispatch]);
+
+  /* ── Refresh index status when indexing progress completes ── */
+
+  const indexProgress = useSelector((s) => s.copilot.indexProgress);
+
+  useEffect(() => {
+    if (
+      indexProgress &&
+      indexProgress.total > 0 &&
+      indexProgress.completed === indexProgress.total
+    ) {
+      dispatch(getIndexStatus(currentDataroomId || undefined));
+    }
+  }, [indexProgress, currentDataroomId, dispatch]);
 
   /* ── Auto-prompt on file upload ──────────────────────── */
 
@@ -263,9 +279,14 @@ function CopilotPanel() {
     !datarooms.some((dr) => dr.id === scopeIds[0]);
 
   // Block Copilot only while files are actively being indexed (pending/processing).
-  // Failed files don't block — user can retry them manually via the header button.
+  // Failed files don't block — user can retry them manually via the button in chat area.
+  // Global scope is never blocked — search only returns indexed chunks, so users can
+  // still query datarooms that are already indexed while others are still processing.
   const activelyIndexing = (indexStatus?.pending ?? 0) + (indexStatus?.processing ?? 0);
-  const notFullyIndexed = activelyIndexing > 0;
+  const notFullyIndexed = scopeType !== 'global' && activelyIndexing > 0;
+
+  // Global scope — chat only, no tabs/quick actions
+  const isGlobalScope = scopeType === 'global';
 
   // Copilot is unusable when there are no datarooms, or the current dataroom has no files
   const items = useSelector((s) => s.fileExplorer.items);
@@ -280,6 +301,10 @@ function CopilotPanel() {
   const allDataroomsEmpty = !currentDataroomId && datarooms.length > 0 && datarooms.every((dr) => (dr.file_count ?? 0) === 0);
   const copilotUnavailable = hasNoDatarooms || isDataroomEmpty || allDataroomsEmpty;
 
+  // In global scope, disable chat only if all DataRooms are empty.
+  // Indexing in some DataRooms should NOT block queries — search only returns indexed chunks.
+  const globalChatDisabled = isGlobalScope && allDataroomsEmpty;
+
   /* ── Render ──────────────────────────────────────────── */
 
   return (
@@ -288,7 +313,7 @@ function CopilotPanel() {
       style={isOpen ? { width: panelWidth } : undefined}
     >
       <CopilotHeader />
-      {!copilotUnavailable && !notFullyIndexed && <CopilotTabs activeTab={activeTab} onTabChange={handleTabChange} />}
+      {!copilotUnavailable && !notFullyIndexed && !isGlobalScope && <CopilotTabs activeTab={activeTab} onTabChange={handleTabChange} />}
 
       <div className={styles.content}>
         {copilotUnavailable ? (
@@ -313,6 +338,8 @@ function CopilotPanel() {
           </div>
         ) : notFullyIndexed ? (
           <CopilotChat />
+        ) : isGlobalScope ? (
+          <CopilotChat />
         ) : (
           <>
             {activeTab === 'chat' && <CopilotChat />}
@@ -329,8 +356,8 @@ function CopilotPanel() {
         )}
       </div>
 
-      {!copilotUnavailable && !notFullyIndexed && <CopilotQuickActions onSwitchTab={handleTabChange} />}
-      <CopilotInput onSend={handleSendWithMultiDRDetection} disabled={copilotUnavailable} />
+      {!copilotUnavailable && !notFullyIndexed && !isGlobalScope && <CopilotQuickActions onSwitchTab={handleTabChange} />}
+      <CopilotInput onSend={handleSendWithMultiDRDetection} disabled={copilotUnavailable || globalChatDisabled} />
     </div>
   );
 }
