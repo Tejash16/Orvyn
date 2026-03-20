@@ -211,13 +211,16 @@ function UploadPage() {
 
   // ── Cleanup helper — rollback registered files / created dataroom ──
 
-  async function performCleanup() {
+  async function performCleanup(overrideMode, overrideDataroomId, overrideFileIds) {
+    const cleanupMode = overrideMode ?? mode;
+    const cleanupDataroomId = overrideDataroomId ?? createdDataroomId;
+    const cleanupFileIds = overrideFileIds ?? registeredFileIds;
     try {
-      if (mode === 'ai' && createdDataroomId) {
-        await window.api.dataroom.delete(createdDataroomId);
-      } else if (registeredFileIds.length > 0) {
+      if (cleanupMode === 'ai' && cleanupDataroomId) {
+        await window.api.dataroom.delete(cleanupDataroomId);
+      } else if (cleanupFileIds.length > 0) {
         await Promise.all(
-          registeredFileIds.map((id) => window.api.file.removeFromOrvyn(id))
+          cleanupFileIds.map((id) => window.api.file.removeFromOrvyn(id))
         );
       }
     } catch (_) {
@@ -273,8 +276,10 @@ function UploadPage() {
 
     const filePaths = validFiles.map((f) => f.path);
 
+    let dataroomId;
+    let registeredIds = [];
+
     try {
-      let dataroomId;
       let regResult;
 
       if (mode === 'custom') {
@@ -306,7 +311,7 @@ function UploadPage() {
 
       setProgressStep('classifying');
 
-      const registeredIds = regResult.registered.map((f) => f.id);
+      registeredIds = regResult.registered.map((f) => f.id);
       setRegisteredFileIds(registeredIds);
       cleanupRef.current.registeredFileIds = registeredIds;
 
@@ -341,7 +346,8 @@ function UploadPage() {
       dispatch(refreshCurrentView());
     } catch (err) {
       setLocalError(typeof err === 'string' ? err : err?.message || 'An error occurred.');
-      await performCleanup();
+      // Pass local variables — React state hasn't flushed yet, so closures see stale values
+      await performCleanup(mode, mode === 'ai' ? dataroomId : undefined, registeredIds);
       setRegisteredFileIds([]);
       setCreatedDataroomId(null);
       cleanupRef.current = { registeredFileIds: [], createdDataroomId: null, mode, step: 'select' };
