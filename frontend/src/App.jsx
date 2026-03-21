@@ -10,6 +10,7 @@ import UploadPage from './pages/UploadPage';
 import AuthPage from './pages/AuthPage';
 import ResetPassword from './pages/ResetPassword';
 import ToastContainer from './components/common/Toast';
+import logoSrc from './assets/logo.png';
 import './App.css';
 
 function App() {
@@ -65,9 +66,12 @@ function App() {
         <ResetPassword />
       ) : isRestoring ? (
         <div className="app-loading" aria-label="Loading">
-          <span className="app-loading-dot" />
-          <span className="app-loading-dot" />
-          <span className="app-loading-dot" />
+          <img src={logoSrc} alt="Orvyn" className="app-loading-logo" />
+          <div className="app-loading-dots">
+            <span className="app-loading-dot" />
+            <span className="app-loading-dot" />
+            <span className="app-loading-dot" />
+          </div>
         </div>
       ) : isAuthenticated ? (
         <div className="app-body">

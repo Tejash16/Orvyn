@@ -1,21 +1,24 @@
 {
-  "name": "electron",
+  "name": "orvyn",
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-builder --config electron-builder.config.js",
+    "build:dir": "electron-builder --config electron-builder.config.js --dir"
   },
   "keywords": [],
-  "author": "",
+  "author": "Orvyn",
   "license": "ISC",
-  "description": "",
+  "description": "Intelligent document management for Windows",
   "dependencies": {
     "dotenv": "^17.3.1",
     "electron": "^40.6.0",
     "electron-log": "^5.4.3"
   },
   "devDependencies": {
+    "electron-builder": "^26.8.1",
     "electronmon": "^2.0.4"
   }
 }

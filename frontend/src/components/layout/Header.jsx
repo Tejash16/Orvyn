@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import styles from './Header.module.css';
+import logoSrc from '../../assets/logo.png';
 
 function Header() {
   const [isMaximized, setIsMaximized] = useState(false);
@@ -18,14 +19,7 @@ function Header() {
       {/* Drag region — covers the full header except window control buttons */}
       <div className={styles.dragRegion}>
         <div className={styles.brandGroup}>
-          <div className={styles.logoMark}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M4 4h7v7H4V4zm9 0h7v7h-7V4zm-9 9h7v7H4v-7zm12 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
-                fill="currentColor" opacity="0.9"
-              />
-            </svg>
-          </div>
+          <img src={logoSrc} alt="Orvyn" width="32" height="32" className={styles.logoMark} />
           <span className={styles.appTitle}>Orvyn</span>
         </div>
       </div>
