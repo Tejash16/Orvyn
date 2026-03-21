@@ -39,7 +39,7 @@ import {
   deleteFromSystem,
 } from '../../store/fileSlice';
 import { addToast } from '../../store/uiSlice';
-import { openCopilot, toggleCopilot, sendMessage, startStreaming, indexFiles } from '../../store/copilotSlice';
+import { toggleCopilot, indexFiles } from '../../store/copilotSlice';
 import CopilotPanel from '../copilot/CopilotPanel';
 import ContextMenu from '../common/ContextMenu';
 import MoveMarkedFilesModal from './MoveMarkedFilesModal';
@@ -1085,66 +1085,6 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
     );
   }
 
-  // ── Render: selection bar ──
-
-  function renderSelectionBar() {
-    if (selectedItems.length === 0) return null;
-
-    const selectedFiles = selectedItems.filter((s) => s.type === 'file');
-    const selectedFileNames = selectedFiles
-      .map((s) => items.find((it) => it.id === s.id)?.name || s.id)
-      .filter(Boolean);
-
-    const handleCompare = () => {
-      dispatch(openCopilot());
-      dispatch(startStreaming());
-      // Use structured compare pipeline (Python fetches content → Express AI stream)
-      if (window.api?.copilot?.compareDocuments) {
-        window.api.copilot.compareDocuments({
-          file_ids: selectedFiles.map((s) => s.id),
-          scope_ids: [currentDataroomId],
-          scope_name: selectedFileNames.join(', '),
-        });
-      } else {
-        // Fallback: plain chat prompt
-        dispatch(sendMessage({
-          message: `Compare these documents:\n${selectedFileNames.join('\n')}`,
-        }));
-      }
-    };
-
-    return (
-      <div className={styles.selectionBar}>
-        <span className={styles.selectionCount}>{selectedItems.length} selected</span>
-        <button className={styles.selectionBtn} onClick={() => dispatch(selectAll())} type="button">Select All</button>
-        <button className={styles.selectionBtn} onClick={() => dispatch(clearSelection())} type="button">Clear</button>
-        <div className={styles.selectionActions}>
-          {selectedFiles.length >= 2 && (
-            <button
-              className={`${styles.selectionBtn} ${styles.selectionBtnPrimary}`}
-              onClick={handleCompare}
-              type="button"
-              title="Open Copilot and compare selected files"
-            >
-              Compare with Copilot
-            </button>
-          )}
-          <button
-            className={`${styles.selectionBtn} ${styles.selectionBtnDanger}`}
-            onClick={() => {
-              selectedItems.forEach((s) => {
-                if (s.type === 'file') dispatch(removeFromOrvyn(s.id));
-              });
-              dispatch(clearSelection());
-            }}
-            type="button"
-          >
-            <IconTrash /> Remove
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   // ── Render: new folder modal ──
   // (rendered in the main return below)
@@ -1462,7 +1402,6 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
     >
       {renderNavBar()}
       {renderToolbar()}
-      {!isDataroomListMode && renderSelectionBar()}
 
       <div className={styles.explorerContentRow}>
         <div className={styles.explorerMain}>
