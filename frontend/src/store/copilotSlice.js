@@ -115,6 +115,9 @@ const copilotSlice = createSlice({
     closeCopilot(state) {
       state.isOpen = false;
     },
+    setPanelWidth(state, action) {
+      state.panelWidth = action.payload;
+    },
     clearMessages(state) {
       state.messages = [];
       state.activeSessionId = null;
@@ -296,6 +299,7 @@ export const {
   updateIndexProgress,
   updateSessionTitle,
   startNewSession,
+  setPanelWidth,
 } = copilotSlice.actions;
 
 export default copilotSlice.reducer;

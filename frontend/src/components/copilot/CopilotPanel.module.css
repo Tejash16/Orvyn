@@ -1,6 +1,7 @@
 /* ── Copilot Panel — Right-side sliding panel ─────────── */
 
 .panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 380px;
@@ -12,6 +13,46 @@
   border-left: 1px solid var(--border-light);
   overflow: hidden;
   transition: width 200ms ease, opacity 200ms ease, transform 200ms ease;
+}
+
+.noTransition {
+  transition: none !important;
+}
+
+/* ── Resize handle (left edge drag) ─────────────────── */
+
+.resizeHandle {
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+/* Theme-aware custom col-resize cursors */
+[data-theme="light"] .resizeHandle {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M8 2 L4 6 L7 6 L7 18 L4 18 L8 22 L12 18 L9 18 L9 6 L12 6 Z' fill='%23111111' stroke='%23ffffff' stroke-width='1'/%3E%3Cpath d='M16 2 L20 6 L17 6 L17 18 L20 18 L16 22 L12 18 L15 18 L15 6 L12 6 Z' fill='%23111111' stroke='%23ffffff' stroke-width='1'/%3E%3C/svg%3E") 12 12, col-resize;
+}
+
+[data-theme="dark"] .resizeHandle {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M8 2 L4 6 L7 6 L7 18 L4 18 L8 22 L12 18 L9 18 L9 6 L12 6 Z' fill='%23ffffff' stroke='%23111111' stroke-width='1'/%3E%3Cpath d='M16 2 L20 6 L17 6 L17 18 L20 18 L16 22 L12 18 L15 18 L15 6 L12 6 Z' fill='%23ffffff' stroke='%23111111' stroke-width='1'/%3E%3C/svg%3E") 12 12, col-resize;
+}
+
+.resizeHandle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 2px;
+  width: 2px;
+  height: 100%;
+  background-color: transparent;
+  transition: background-color 150ms ease;
+}
+
+.resizeHandle:hover::after {
+  background-color: var(--accent-primary);
 }
 
 .panelHidden {

@@ -13,6 +13,7 @@ import {
   setCopilotScope,
   setSelectedFiles,
   getIndexStatus,
+  setPanelWidth,
 } from '../../store/copilotSlice';
 import { addToast } from '../../store/uiSlice';
 import CopilotHeader from './CopilotHeader';
@@ -27,6 +28,66 @@ function CopilotPanel() {
   const dispatch = useDispatch();
   const isOpen = useSelector((s) => s.copilot.isOpen);
   const panelWidth = useSelector((s) => s.copilot.panelWidth);
+
+  /* ── Resize (drag left edge) ────────────────────────── */
+
+  const panelRef = useRef(null);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const theme = useSelector((s) => s.ui.theme);
+
+  const getThemedCursor = useCallback(() => {
+    const fill = theme === 'dark' ? '%23ffffff' : '%23111111';
+    const stroke = theme === 'dark' ? '%23111111' : '%23ffffff';
+    return `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M8 2 L4 6 L7 6 L7 18 L4 18 L8 22 L12 18 L9 18 L9 6 L12 6 Z' fill='${fill}' stroke='${stroke}' stroke-width='1'/%3E%3Cpath d='M16 2 L20 6 L17 6 L17 18 L20 18 L16 22 L12 18 L15 18 L15 6 L12 6 Z' fill='${fill}' stroke='${stroke}' stroke-width='1'/%3E%3C/svg%3E") 12 12, col-resize`;
+  }, [theme]);
+
+  const handleResizeStart = useCallback((e) => {
+    e.preventDefault();
+    isDragging.current = true;
+    startX.current = e.clientX;
+    startWidth.current = panelRef.current?.offsetWidth || panelWidth;
+    setIsResizing(true);
+    document.body.style.cursor = getThemedCursor();
+    document.body.style.userSelect = 'none';
+  }, [panelWidth, getThemedCursor]);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e) => {
+      if (!isDragging.current) return;
+      const vw = window.innerWidth;
+      const minW = Math.max(280, Math.round(vw * 0.2));
+      const maxW = Math.min(900, Math.round(vw * 0.45));
+      const delta = startX.current - e.clientX;
+      const newWidth = Math.min(maxW, Math.max(minW, startWidth.current + delta));
+      if (panelRef.current) {
+        panelRef.current.style.width = `${newWidth}px`;
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      setIsResizing(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      const finalWidth = panelRef.current?.offsetWidth || panelWidth;
+      dispatch(setPanelWidth(finalWidth));
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, dispatch, panelWidth]);
 
   // File explorer state for context auto-switch
   const currentDataroomId = useSelector((s) => s.fileExplorer.currentDataroomId);
@@ -276,9 +337,16 @@ function CopilotPanel() {
 
   return (
     <div
-      className={`${styles.panel} ${!isOpen ? styles.panelHidden : ''}`}
+      ref={panelRef}
+      className={`${styles.panel} ${!isOpen ? styles.panelHidden : ''} ${isResizing ? styles.noTransition : ''}`}
       style={isOpen ? { width: panelWidth } : undefined}
     >
+      {isOpen && (
+        <div
+          className={styles.resizeHandle}
+          onMouseDown={handleResizeStart}
+        />
+      )}
       <CopilotHeader />
 
       <div className={styles.content}>
