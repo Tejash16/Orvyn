@@ -879,10 +879,6 @@ def sync_file_removed(file_id: str, user_id: str, dataroom_id: str,
     db_session.execute(text("DELETE FROM file_chunks WHERE file_id = :fid"), {"fid": file_id})
     db_session.execute(text("DELETE FROM file_entities WHERE file_id = :fid"), {"fid": file_id})
     db_session.execute(text("DELETE FROM indexing_jobs WHERE file_id = :fid"), {"fid": file_id})
-    db_session.execute(
-        text("UPDATE dataroom_insights SET stale = 1 WHERE dataroom_id = :did"),
-        {"did": dataroom_id},
-    )
     # Reclaim FTS5 shadow table space after deletion
     db_session.execute(text("INSERT INTO file_chunks_fts(file_chunks_fts) VALUES('optimize')"))
     db_session.commit()
@@ -903,10 +899,6 @@ def sync_file_moved_folder(file_id: str, new_folder_id: str, user_id: str,
     except Exception as e:
         logger.error(f"sync_file_moved_folder error for file {file_id}: {e}")
 
-    db_session.execute(
-        text("UPDATE dataroom_insights SET stale = 1 WHERE dataroom_id = :did"),
-        {"did": dataroom_id},
-    )
     db_session.commit()
 
 
@@ -934,10 +926,6 @@ def sync_file_moved_dataroom(file_id: str, old_dataroom_id: str, new_dataroom_id
         text("UPDATE file_entities SET dataroom_id = :new WHERE file_id = :fid"),
         {"new": new_dataroom_id, "fid": file_id},
     )
-    db_session.execute(
-        text("UPDATE dataroom_insights SET stale = 1 WHERE dataroom_id IN (:old, :new)"),
-        {"old": old_dataroom_id, "new": new_dataroom_id},
-    )
     db_session.commit()
 
 
@@ -954,7 +942,6 @@ def sync_dataroom_deleted(dataroom_id: str, user_id: str, chroma_path: str, db_s
     delete_dataroom_embeddings(dataroom_id, user_id, chroma_path)
     db_session.execute(text("DELETE FROM file_chunks WHERE dataroom_id = :did"), {"did": dataroom_id})
     db_session.execute(text("DELETE FROM file_entities WHERE dataroom_id = :did"), {"did": dataroom_id})
-    db_session.execute(text("DELETE FROM dataroom_insights WHERE dataroom_id = :did"), {"did": dataroom_id})
     db_session.execute(text("DELETE FROM indexing_jobs WHERE dataroom_id = :did"), {"did": dataroom_id})
     # Use json_each() for exact matching — avoids substring false-match with LIKE
     db_session.execute(text("""

@@ -217,18 +217,6 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
-class DataroomInsight(Base):
-    __tablename__ = "dataroom_insights"
-
-    id = Column(String, primary_key=True, default=_generate_uuid)
-    dataroom_id = Column(String, ForeignKey("datarooms.id", ondelete="CASCADE"), nullable=False)
-    insight_type = Column(String, nullable=False)
-    content = Column(Text, nullable=False)
-    generated_at = Column(DateTime, default=datetime.datetime.utcnow)
-    stale = Column(Boolean, default=False)
-    content_hash = Column(String, nullable=True)
-
-
 class FileEntity(Base):
     __tablename__ = "file_entities"
 
@@ -493,19 +481,6 @@ def init_db(request: InitDbRequest):
                 if col_name not in columns:
                     conn.execute(text(f"ALTER TABLE files ADD COLUMN {col_name} {col_type}"))
             conn.commit()
-
-    # Schema migration: add content_hash column to dataroom_insights if missing
-    with engine.connect() as conn:
-        result = conn.execute(text(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='dataroom_insights'"
-        ))
-        if result.fetchone():
-            columns = [
-                row[1] for row in conn.execute(text("PRAGMA table_info(dataroom_insights)"))
-            ]
-            if "content_hash" not in columns:
-                conn.execute(text("ALTER TABLE dataroom_insights ADD COLUMN content_hash TEXT"))
-                conn.commit()
 
     Base.metadata.create_all(engine)
 
@@ -2231,24 +2206,6 @@ class ToolPrepareExtractRequest(BaseModel):
     user_id: str
     chroma_path: str
 
-class PrepareAuditRequest(BaseModel):
-    dataroom_id: str
-    audit_type: str = "general"
-
-class ApplyAuditRequest(BaseModel):
-    dataroom_id: str
-    audit_result: str
-    audit_type: str = "general"
-    session_id: Optional[str] = None
-
-class PrepareInsightsRequest(BaseModel):
-    dataroom_id: str
-
-class ApplyInsightsRequest(BaseModel):
-    dataroom_id: str
-    insights_data: dict
-    content_hash: Optional[str] = None
-
 class UpdateSessionTitleRequest(BaseModel):
     session_id: str
     title: str
@@ -2365,34 +2322,6 @@ def copilot_tool_prepare_extract(request: ToolPrepareExtractRequest):
         )
 
 
-# -- Audit endpoints --
-
-@app.post("/api/v1/copilot/prepare-audit")
-def copilot_prepare_audit(request: PrepareAuditRequest):
-    """Prepare complete DataRoom data for Gemini audit."""
-    from app.services.copilot_tools import prepare_audit_data
-
-    engine = _require_db()
-    with Session(engine) as session:
-        return prepare_audit_data(request.dataroom_id, request.audit_type, session)
-
-
-@app.post("/api/v1/copilot/apply-audit")
-def copilot_apply_audit(request: ApplyAuditRequest):
-    """Store audit result as a chat session."""
-    from app.services.copilot_tools import apply_audit_result
-
-    engine = _require_db()
-    with Session(engine) as session:
-        return apply_audit_result(
-            dataroom_id=request.dataroom_id,
-            audit_result=request.audit_result,
-            audit_type=request.audit_type,
-            session_id=request.session_id,
-            db_session=session,
-        )
-
-
 # -- Document comparison --
 
 class PrepareCompareRequest(BaseModel):
@@ -2435,69 +2364,6 @@ def copilot_check_file_changed(request: CheckFileChangedRequest):
 
         changed = has_file_changed(file_record, file_record.original_path)
         return {"changed": changed}
-
-
-# -- Insights endpoints --
-
-@app.post("/api/v1/copilot/prepare-insights")
-def copilot_prepare_insights(request: PrepareInsightsRequest):
-    """Prepare DataRoom data for Gemini insights generation."""
-    from app.services.copilot_tools import prepare_insights_data
-
-    engine = _require_db()
-    with Session(engine) as session:
-        return prepare_insights_data(request.dataroom_id, session)
-
-
-@app.post("/api/v1/copilot/apply-insights")
-def copilot_apply_insights(request: ApplyInsightsRequest):
-    """Store generated insights in dataroom_insights table."""
-    from app.services.copilot_tools import apply_insights
-
-    engine = _require_db()
-    with Session(engine) as session:
-        return apply_insights(request.dataroom_id, request.insights_data, session, request.content_hash)
-
-
-# -- Chat suggestions and insights query endpoints --
-
-@app.get("/api/v1/chat/suggestions")
-def chat_suggestions(dataroom_id: str = Query(...)):
-    """Get suggested questions for a DataRoom (cached or data for generation)."""
-    from app.services.copilot_tools import get_suggestions
-
-    engine = _require_db()
-    with Session(engine) as session:
-        return get_suggestions(dataroom_id, session)
-
-
-@app.get("/api/v1/chat/insights")
-def chat_insights(dataroom_id: str = Query(...)):
-    """Get DataRoom insights (all non-stale insights)."""
-    engine = _require_db()
-
-    with Session(engine) as session:
-        rows = session.execute(
-            text("""
-                SELECT id, insight_type, content, generated_at, stale
-                FROM dataroom_insights
-                WHERE dataroom_id = :did
-                ORDER BY generated_at DESC
-            """),
-            {"did": dataroom_id},
-        ).fetchall()
-
-        insights = []
-        for row in rows:
-            insights.append({
-                "id": row[0],
-                "insight_type": row[1],
-                "content": row[2],
-                "generated_at": row[3].isoformat() if row[3] else None,
-                "stale": bool(row[4]),
-            })
-
-        return {"dataroom_id": dataroom_id, "insights": insights}
 
 
 # -- Chat context preparation endpoint (Phase C2) --

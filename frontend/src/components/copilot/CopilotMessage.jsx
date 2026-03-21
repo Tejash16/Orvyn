@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import CopilotSources from './CopilotSources';
@@ -52,6 +52,17 @@ function CopilotMessage({ message }) {
   const displayContent = isLong && !expanded
     ? content.slice(0, TRUNCATE_SHOW) + '…'
     : content;
+
+  // Filter sources to only those actually cited in the response text
+  const filteredSources = useMemo(() => {
+    if (isUser || !message.sources || message.sources.length === 0) return [];
+    const refs = new Set();
+    let m;
+    const re = /\[(\d+)\]/g;
+    while ((m = re.exec(content)) !== null) refs.add(parseInt(m[1], 10));
+    if (refs.size === 0) return message.sources; // fallback: show all if no citations
+    return message.sources.filter((s, i) => refs.has(s.source_number || (i + 1)));
+  }, [isUser, content, message.sources]);
 
   // Custom paragraph renderer that parses [N] citation markers
   const CitationText = useCallback(({ children, node, ...props }) => {
@@ -122,9 +133,9 @@ function CopilotMessage({ message }) {
         </button>
       </div>
 
-      {/* Source citations for assistant messages */}
-      {!isUser && message.sources && message.sources.length > 0 && (
-        <CopilotSources sources={message.sources} />
+      {/* Source citations for assistant messages — filtered to only referenced sources */}
+      {filteredSources.length > 0 && (
+        <CopilotSources sources={filteredSources} />
       )}
     </div>
   );

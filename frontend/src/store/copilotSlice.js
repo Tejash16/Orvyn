@@ -50,58 +50,6 @@ export const deleteSession = createAsyncThunk(
   }
 );
 
-export const auditDataroom = createAsyncThunk(
-  'copilot/auditDataroom',
-  async ({ dataroomId, auditType }, { rejectWithValue }) => {
-    const result = await window.api.copilot.auditDataroom({
-      dataroom_id: dataroomId,
-      audit_type: auditType,
-    });
-    if (!result.success) return rejectWithValue(result.error);
-    return result;
-  }
-);
-
-export const simulateReview = createAsyncThunk(
-  'copilot/simulateReview',
-  async ({ dataroomId, simulationType, customRole }, { rejectWithValue }) => {
-    const result = await window.api.copilot.simulateReview({
-      dataroom_id: dataroomId,
-      simulation_type: simulationType,
-      custom_role: customRole,
-    });
-    if (!result.success) return rejectWithValue(result.error);
-    return result;
-  }
-);
-
-export const fetchSuggestions = createAsyncThunk(
-  'copilot/fetchSuggestions',
-  async (dataroomId, { rejectWithValue }) => {
-    const result = await window.api.copilot.getSuggestions({ dataroom_id: dataroomId });
-    if (!result.success) return rejectWithValue(result.error);
-    return result.suggestions;
-  }
-);
-
-export const fetchInsights = createAsyncThunk(
-  'copilot/fetchInsights',
-  async (dataroomId, { rejectWithValue }) => {
-    const result = await window.api.copilot.getInsights({ dataroom_id: dataroomId });
-    if (!result.success) return rejectWithValue(result.error);
-    return result.insights;
-  }
-);
-
-export const generateInsights = createAsyncThunk(
-  'copilot/generateInsights',
-  async (dataroomId, { rejectWithValue }) => {
-    const result = await window.api.copilot.generateInsights({ dataroom_id: dataroomId });
-    if (!result.success) return rejectWithValue(result.error);
-    return result.insights;
-  }
-);
-
 export const indexFiles = createAsyncThunk(
   'copilot/indexFiles',
   async ({ fileIds, dataroomId }, { dispatch, rejectWithValue }) => {
@@ -152,15 +100,9 @@ const copilotSlice = createSlice({
     isSessionsLoading: false,
     isStreaming: false,
     streamingMessage: '',
-    isAuditing: false,
-    isSimulating: false,
     isIndexing: false,
     indexStatus: null,
     indexProgress: null,
-    suggestions: [],
-    insights: null,
-    auditResult: null,
-    simulationResult: null,
     error: null,
   },
   reducers: {
@@ -179,12 +121,6 @@ const copilotSlice = createSlice({
       state.streamingMessage = '';
       state.isStreaming = false;
     },
-    clearAudit(state) {
-      state.auditResult = null;
-    },
-    clearSimulation(state) {
-      state.simulationResult = null;
-    },
     clearError(state) {
       state.error = null;
     },
@@ -193,11 +129,6 @@ const copilotSlice = createSlice({
       state.scopeType = scopeType;
       state.scopeIds = scopeIds;
       state.scopeName = scopeName;
-      // Clear suggestions when scope changes so stale ones aren't shown
-      state.suggestions = [];
-    },
-    setSuggestions(state, action) {
-      state.suggestions = action.payload;
     },
     setSelectedFiles(state, action) {
       state.selectedFileIds = action.payload;
@@ -320,70 +251,6 @@ const copilotSlice = createSlice({
         state.error = action.payload;
       });
 
-    // auditDataroom
-    builder
-      .addCase(auditDataroom.pending, (state) => {
-        state.isAuditing = true;
-        state.auditResult = null;
-        state.error = null;
-      })
-      .addCase(auditDataroom.fulfilled, (state, action) => {
-        state.isAuditing = false;
-        state.auditResult = action.payload.audit_result;
-      })
-      .addCase(auditDataroom.rejected, (state, action) => {
-        state.isAuditing = false;
-        state.error = action.payload;
-      });
-
-    // simulateReview
-    builder
-      .addCase(simulateReview.pending, (state) => {
-        state.isSimulating = true;
-        state.simulationResult = null;
-        state.error = null;
-      })
-      .addCase(simulateReview.fulfilled, (state, action) => {
-        state.isSimulating = false;
-        state.simulationResult = action.payload.simulation_result;
-      })
-      .addCase(simulateReview.rejected, (state, action) => {
-        state.isSimulating = false;
-        state.error = action.payload;
-      });
-
-    // fetchSuggestions
-    builder
-      .addCase(fetchSuggestions.fulfilled, (state, action) => {
-        state.suggestions = action.payload || [];
-      })
-      .addCase(fetchSuggestions.rejected, (state, action) => {
-        state.error = action.payload;
-      });
-
-    // fetchInsights
-    builder
-      .addCase(fetchInsights.fulfilled, (state, action) => {
-        state.insights = action.payload;
-      })
-      .addCase(fetchInsights.rejected, (state, action) => {
-        state.error = action.payload;
-      });
-
-    // generateInsights
-    builder
-      .addCase(generateInsights.pending, (state) => {
-        state.isLoading = true;
-      })
-      .addCase(generateInsights.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.insights = action.payload;
-      })
-      .addCase(generateInsights.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload;
-      });
-
     // indexFiles
     builder
       .addCase(indexFiles.pending, (state) => {
@@ -420,11 +287,8 @@ export const {
   openCopilot,
   closeCopilot,
   clearMessages,
-  clearAudit,
-  clearSimulation,
   clearError,
   setCopilotScope,
-  setSuggestions,
   setSelectedFiles,
   startStreaming,
   appendStreamChunk,

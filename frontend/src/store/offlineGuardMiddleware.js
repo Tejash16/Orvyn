@@ -18,9 +18,6 @@ const GUARDED_THUNKS = new Set([
   'file/generateDataroom',
   'file/generateNewDataroom',
   'copilot/sendMessage',
-  'copilot/auditDataroom',
-  'copilot/simulateReview',
-  'copilot/generateInsights',
   'copilot/indexFiles',
 ]);
 

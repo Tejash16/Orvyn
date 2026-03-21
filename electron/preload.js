@@ -108,7 +108,7 @@ contextBridge.exposeInMainWorld('api', {
     generateDataroom: (name, description, fileIds, dataroomId) => ipcRenderer.invoke('ai:generate-dataroom', { dataroom_name: name, dataroom_description: description, file_ids: fileIds, dataroom_id: dataroomId }),
   },
 
-  // Copilot — chat, indexing, audit, insights
+  // Copilot — chat, indexing
   copilot: {
     sendMessage:      (data)  => ipcRenderer.invoke('copilot:send-message', data),
     cancelStream:     ()      => ipcRenderer.invoke('copilot:cancel-stream'),
@@ -127,11 +127,6 @@ contextBridge.exposeInMainWorld('api', {
     getSessions:      (data)  => ipcRenderer.invoke('copilot:get-sessions', data),
     getMessages:      (data)  => ipcRenderer.invoke('copilot:get-messages', data),
     deleteSession:    (data)  => ipcRenderer.invoke('copilot:delete-session', data),
-    auditDataroom:    (data)  => ipcRenderer.invoke('copilot:audit-dataroom', data),
-    simulateReview:   (data)  => ipcRenderer.invoke('copilot:simulate-review', data),
-    getSuggestions:   (data)  => ipcRenderer.invoke('copilot:get-suggestions', data),
-    getInsights:      (data)  => ipcRenderer.invoke('copilot:get-insights', data),
-    generateInsights: (data)  => ipcRenderer.invoke('copilot:generate-insights', data),
     indexFiles:       (data)  => ipcRenderer.invoke('copilot:index-files', data),
     getIndexStatus:   (data)  => ipcRenderer.invoke('copilot:get-index-status', data),
     retryIndexing:    (data)  => ipcRenderer.invoke('copilot:retry-indexing', data),

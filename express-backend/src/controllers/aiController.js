@@ -373,97 +373,6 @@ async function chat(req, res, next) {
   }
 }
 
-/**
- * POST /api/v1/ai/audit
- * Run a DataRoom audit via Gemini.
- */
-async function auditDataroom(req, res, next) {
-  try {
-    const { audit_data, audit_type, custom_prompt } = req.body;
-
-    if (!audit_data || typeof audit_data !== 'object') {
-      return res.status(400).json({ success: false, error: 'audit_data object is required.' });
-    }
-
-    const result = await geminiService.audit(
-      audit_data,
-      audit_type || 'general',
-      custom_prompt,
-    );
-
-    return res.status(200).json({ success: true, result });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * POST /api/v1/ai/simulate
- * Run a role simulation via Gemini.
- */
-async function simulateRole(req, res, next) {
-  try {
-    const { simulation_data, simulation_type, custom_role } = req.body;
-
-    if (!simulation_data || typeof simulation_data !== 'object') {
-      return res.status(400).json({ success: false, error: 'simulation_data object is required.' });
-    }
-
-    const result = await geminiService.simulate(
-      simulation_data,
-      simulation_type || 'critical_reviewer',
-      custom_role,
-    );
-
-    return res.status(200).json({ success: true, result });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * POST /api/v1/ai/generate-insights
- * Generate DataRoom insights via Gemini.
- */
-async function insightsGenerate(req, res, next) {
-  try {
-    const { insights_data } = req.body;
-
-    if (!insights_data || typeof insights_data !== 'object') {
-      return res.status(400).json({ success: false, error: 'insights_data object is required.' });
-    }
-
-    const result = await geminiService.generateInsights(insights_data);
-
-    return res.status(200).json({ success: true, insights: result });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/**
- * POST /api/v1/ai/generate-suggestions
- * Generate context-aware suggested questions via Gemini.
- */
-async function suggestionsGenerate(req, res, next) {
-  try {
-    const { file_names, folder_names } = req.body;
-
-    if (!file_names || !Array.isArray(file_names)) {
-      return res.status(400).json({ success: false, error: 'file_names array is required.' });
-    }
-
-    const result = await geminiService.generateSuggestions(
-      file_names,
-      folder_names || [],
-    );
-
-    return res.status(200).json({ success: true, suggestions: result });
-  } catch (err) {
-    next(err);
-  }
-}
-
 module.exports = {
   classify,
   generateDataroom,
@@ -471,11 +380,6 @@ module.exports = {
   extractEntities,
   summarizeFile,
   generateTitle,
-  // Phase C2
   chatStream,
   chat,
-  auditDataroom,
-  simulateRole,
-  insightsGenerate,
-  suggestionsGenerate,
 };

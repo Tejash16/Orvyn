@@ -25,24 +25,6 @@ const IconCompare = () => (
   </svg>
 );
 
-const IconAudit = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2"
-    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M9 11l3 3L22 4" />
-    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-  </svg>
-);
-
-const IconSimilar = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2"
-    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-
 const IconCheck = () => (
   <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="3"
@@ -53,7 +35,7 @@ const IconCheck = () => (
 
 /* ── CopilotQuickActions ─────────────────────────────────── */
 
-function CopilotQuickActions({ onSwitchTab }) {
+function CopilotQuickActions() {
   const dispatch = useDispatch();
   const selectedItems = useSelector((s) => s.fileExplorer.selectedItems);
   const explorerItems = useSelector((s) => s.fileExplorer.items);
@@ -178,24 +160,6 @@ function CopilotQuickActions({ onSwitchTab }) {
           </div>
         )}
       </div>
-
-      <button
-        className={styles.quickBtn}
-        onClick={() => onSwitchTab('audit')}
-        title="Run audit"
-      >
-        <span className={styles.quickBtnIcon}><IconAudit /></span>
-        Audit
-      </button>
-
-      <button
-        className={styles.quickBtn}
-        onClick={() => quickSend('Find similar or duplicate documents in this DataRoom')}
-        title="Find similar documents"
-      >
-        <span className={styles.quickBtnIcon}><IconSimilar /></span>
-        Similar
-      </button>
     </div>
   );
 }

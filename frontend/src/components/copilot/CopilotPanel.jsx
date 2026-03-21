@@ -16,11 +16,7 @@ import {
 } from '../../store/copilotSlice';
 import { addToast } from '../../store/uiSlice';
 import CopilotHeader from './CopilotHeader';
-import CopilotTabs from './CopilotTabs';
 import CopilotChat from './CopilotChat';
-import CopilotInsights from './CopilotInsights';
-import CopilotAudit from './CopilotAudit';
-import CopilotSimulate from './CopilotSimulate';
 import CopilotQuickActions from './CopilotQuickActions';
 import CopilotInput from './CopilotInput';
 import styles from './CopilotPanel.module.css';
@@ -31,7 +27,6 @@ function CopilotPanel() {
   const dispatch = useDispatch();
   const isOpen = useSelector((s) => s.copilot.isOpen);
   const panelWidth = useSelector((s) => s.copilot.panelWidth);
-  const [activeTab, setActiveTab] = useState('chat');
 
   // File explorer state for context auto-switch
   const currentDataroomId = useSelector((s) => s.fileExplorer.currentDataroomId);
@@ -41,9 +36,6 @@ function CopilotPanel() {
 
   // DataRoom list — for deleted-DR detection AND multi-DR auto-detection
   const datarooms = useSelector((s) => s.dataroom.datarooms);
-
-  // dataroomNameMap is computed inline from the stable `datarooms` array reference
-  // to avoid returning a new object on every render (which triggers unnecessary re-renders).
 
   /* ── IPC stream listeners ────────────────────────────── */
 
@@ -113,7 +105,6 @@ function CopilotPanel() {
   /* ── Keyboard shortcuts ──────────────────────────────── */
 
   useEffect(() => {
-    const TABS = ['chat', 'insights', 'audit', 'simulate'];
     const handler = (e) => {
       // Ctrl+J → toggle
       if (e.ctrlKey && e.key === 'j') {
@@ -125,16 +116,6 @@ function CopilotPanel() {
       if (e.key === 'Escape' && isOpen) {
         dispatch(closeCopilot());
         return;
-      }
-      // Tab → cycle tabs (only if panel is open and not in an input)
-      if (e.key === 'Tab' && isOpen && !e.ctrlKey && !e.shiftKey) {
-        const tag = document.activeElement?.tagName;
-        if (tag === 'TEXTAREA' || tag === 'INPUT') return;
-        e.preventDefault();
-        setActiveTab((prev) => {
-          const idx = TABS.indexOf(prev);
-          return TABS[(idx + 1) % TABS.length];
-        });
       }
     };
     window.addEventListener('keydown', handler);
@@ -230,7 +211,6 @@ function CopilotPanel() {
       const drName = data?.dataroom_name || '';
       if (count > 0) {
         dispatch(openCopilot());
-        setActiveTab('chat');
         // Add a system-style prompt as if the assistant said it
         dispatch(finalizeStreamMessage({
           sources: [],
@@ -241,22 +221,7 @@ function CopilotPanel() {
     return cleanup;
   }, [dispatch]);
 
-  /* ── Tab switching helpers ───────────────────────────── */
-
-  const handleTabChange = useCallback((tab) => {
-    setActiveTab(tab);
-  }, []);
-
-  const handleEntitySearch = useCallback((entity) => {
-    setActiveTab('chat');
-    dispatch(startStreaming());
-    dispatch(sendMessage({ message: `Tell me about "${entity}"` }));
-  }, [dispatch]);
-
   /* ── Multi-DataRoom auto-detection ──────────────────────── */
-  // Intercepts outgoing messages: if the text mentions 2+ known DataRoom names,
-  // scope is auto-set to multi_dataroom before the message goes to Copilot.
-  // Does NOT override a manually set multi_dataroom scope.
 
   const handleSendWithMultiDRDetection = useCallback((messageText) => {
     if (datarooms && datarooms.length >= 2) {
@@ -288,30 +253,23 @@ function CopilotPanel() {
     !datarooms.some((dr) => dr.id === scopeIds[0]);
 
   // Block Copilot only while files are actively being indexed (pending/processing).
-  // Failed files don't block — user can retry them manually via the button in chat area.
-  // Global scope is never blocked — search only returns indexed chunks, so users can
-  // still query datarooms that are already indexed while others are still processing.
   const activelyIndexing = (indexStatus?.pending ?? 0) + (indexStatus?.processing ?? 0);
   const notFullyIndexed = scopeType !== 'global' && activelyIndexing > 0;
 
-  // Global scope — chat only, no tabs/quick actions
+  // Global scope — chat only, no quick actions
   const isGlobalScope = scopeType === 'global';
 
   // Copilot is unusable when there are no datarooms, or the current dataroom has no files
   const items = useSelector((s) => s.fileExplorer.items);
   const activeDataroom = useSelector((s) => s.dataroom.activeDataroom);
   const hasNoDatarooms = datarooms.length === 0;
-  // A dataroom has no files if: no files in items AND no indexed files AND activeDataroom reports 0 files
   const dataroomFileCount = activeDataroom?.files?.length ?? activeDataroom?.file_count ?? 0;
   const hasFilesInItems = items.some((item) => item.type === 'file');
   const hasIndexedFiles = (indexStatus?.total ?? 0) > 0;
   const isDataroomEmpty = !!currentDataroomId && !hasFilesInItems && !hasIndexedFiles && dataroomFileCount === 0;
-  // At DataRoom list level, check if all DataRooms have 0 files
   const allDataroomsEmpty = !currentDataroomId && datarooms.length > 0 && datarooms.every((dr) => (dr.file_count ?? 0) === 0);
   const copilotUnavailable = hasNoDatarooms || isDataroomEmpty || allDataroomsEmpty;
 
-  // In global scope, disable chat only if all DataRooms are empty.
-  // Indexing in some DataRooms should NOT block queries — search only returns indexed chunks.
   const globalChatDisabled = isGlobalScope && allDataroomsEmpty;
 
   /* ── Render ──────────────────────────────────────────── */
@@ -322,7 +280,6 @@ function CopilotPanel() {
       style={isOpen ? { width: panelWidth } : undefined}
     >
       <CopilotHeader />
-      {!copilotUnavailable && !notFullyIndexed && !isGlobalScope && <CopilotTabs activeTab={activeTab} onTabChange={handleTabChange} />}
 
       <div className={styles.content}>
         {copilotUnavailable ? (
@@ -345,27 +302,12 @@ function CopilotPanel() {
           <div className={styles.emptyState}>
             <p className={styles.emptySubtitle}>DataRoom no longer exists</p>
           </div>
-        ) : notFullyIndexed ? (
-          <CopilotChat />
-        ) : isGlobalScope ? (
-          <CopilotChat />
         ) : (
-          <>
-            {activeTab === 'chat' && <CopilotChat />}
-            {activeTab === 'insights' && (
-              <CopilotInsights onEntitySearch={handleEntitySearch} />
-            )}
-            {activeTab === 'audit' && (
-              <CopilotAudit onSwitchTab={handleTabChange} />
-            )}
-            {activeTab === 'simulate' && (
-              <CopilotSimulate onSwitchTab={handleTabChange} />
-            )}
-          </>
+          <CopilotChat />
         )}
       </div>
 
-      {!copilotUnavailable && !notFullyIndexed && !isGlobalScope && <CopilotQuickActions onSwitchTab={handleTabChange} />}
+      {!copilotUnavailable && !notFullyIndexed && !isGlobalScope && <CopilotQuickActions />}
       <CopilotInput onSend={handleSendWithMultiDRDetection} disabled={copilotUnavailable || globalChatDisabled} />
     </div>
   );
