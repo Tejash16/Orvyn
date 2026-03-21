@@ -6,8 +6,9 @@ const jwt         = require('jsonwebtoken');
 const validator   = require('validator');
 const nodemailer  = require('nodemailer');
 
-const User        = require('../models/User');
-const codeService = require('./codeService');
+const User                = require('../models/User');
+const PendingRegistration = require('../models/PendingRegistration');
+const codeService         = require('./codeService');
 const logger      = require('./logger');
 const { verificationEmailTemplate, passwordResetEmailTemplate } = require('./emailTemplates');
 
@@ -126,30 +127,38 @@ async function registerUser({ name, email, password }) {
     throw err;
   }
 
-  const hashed = await bcrypt.hash(password, 12);
-
-  let user;
-  try {
-    user = await User.create({
-      name: name.trim(),
-      email: email.toLowerCase(),
-      password: hashed,
-      provider: 'local',
-      isEmailVerified: false,
-    });
-  } catch (err) {
-    if (err.code === 11000) {
-      const conflict = new Error('An account with this email already exists.');
-      conflict.statusCode = 409;
-      throw conflict;
-    }
-    throw err;
+  // Block registration if a verified (active) account already uses this email
+  const existingUser = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
+  if (existingUser) {
+    const conflict = new Error('An account with this email already exists.');
+    conflict.statusCode = 409;
+    throw conflict;
   }
 
-  const { code, cooldownSeconds } = codeService.issueCodeFresh(user, 'verification');
-  await user.save();
+  const hashed = await bcrypt.hash(password, 12);
 
-  await sendVerificationEmail(user.email, code);
+  // Upsert into PendingRegistration — replaces any previous unverified attempt
+  const pending = await PendingRegistration.findOneAndUpdate(
+    { email: email.toLowerCase() },
+    {
+      $set: {
+        name: name.trim(),
+        email: email.toLowerCase(),
+        password: hashed,
+        emailVerificationAttempts: 0,
+        emailVerificationLockedUntil: undefined,
+        emailVerificationResendCount: 0,
+        emailVerificationResendWindowStart: undefined,
+        createdAt: new Date(),           // reset TTL on re-registration
+      },
+    },
+    { upsert: true, new: true },
+  );
+
+  const { code, cooldownSeconds } = codeService.issueCodeFresh(pending, 'verification');
+  await pending.save();
+
+  await sendVerificationEmail(pending.email, code);
 
   return { cooldownSeconds };
 }
@@ -244,25 +253,27 @@ async function verifyEmail(email, code) {
     throw err;
   }
 
-  const user = await User.findOne({ email: email.toLowerCase() })
-    .select(VERIFICATION_SELECT);
-
-  if (!user) {
-    const err = new Error('No pending verification for this email.');
-    err.statusCode = 400;
-    throw err;
-  }
-
-  if (user.isEmailVerified) {
+  // Check if already verified (idempotent)
+  const existingUser = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
+  if (existingUser && existingUser.isEmailVerified) {
     const err = new Error('Email is already verified.');
     err.statusCode = 400;
     throw err;
   }
 
-  const result = codeService.verifyCode(user, 'verification', code);
+  // Look up the pending registration
+  const pending = await PendingRegistration.findOne({ email: email.toLowerCase() });
+
+  if (!pending) {
+    const err = new Error('No pending verification for this email.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const result = codeService.verifyCode(pending, 'verification', code);
 
   if (!result.valid) {
-    await user.save({ validateModifiedOnly: true });
+    await pending.save({ validateModifiedOnly: true });
     if (result.locked) {
       const msg = result.justLocked
         ? `Too many incorrect attempts. Try again in ${codeService.CODE_LOCK_MINUTES} minutes.`
@@ -289,9 +300,26 @@ async function verifyEmail(email, code) {
     throw err;
   }
 
-  user.isEmailVerified = true;
-  codeService.invalidateCode(user, 'verification');
-  await user.save({ validateModifiedOnly: true });
+  // OTP verified — create the real User record
+  try {
+    await User.create({
+      name: pending.name,
+      email: pending.email,
+      password: pending.password,
+      provider: 'local',
+      isEmailVerified: true,
+    });
+  } catch (createErr) {
+    // Race condition: concurrent verify created the user already — treat as success
+    if (createErr.code === 11000) {
+      logger.info(`Concurrent verify for ${pending.email} — user already created`);
+    } else {
+      throw createErr;
+    }
+  }
+
+  // Clean up the pending record
+  await PendingRegistration.deleteOne({ _id: pending._id });
 }
 
 /**
@@ -427,22 +455,22 @@ async function resetPassword(email, code, newPassword) {
  * @returns {{ cooldownSeconds?: number, retryAfterSeconds?: number }}
  */
 async function resendVerificationCode(email) {
-  const user = await User.findOne({ email: email.toLowerCase() })
-    .select(VERIFICATION_SELECT);
+  const pending = await PendingRegistration.findOne({ email: email.toLowerCase() });
 
-  if (!user || user.isEmailVerified || user.isDeleted) {
+  // Generic response if no pending registration — never reveals whether an email is pending
+  if (!pending) {
     return { cooldownSeconds: codeService.CODE_RESEND_COOLDOWN_SECONDS };
   }
 
-  const check = codeService.checkResend(user, 'verification');
+  const check = codeService.checkResend(pending, 'verification');
   if (!check.allowed) {
     return { retryAfterSeconds: check.retryAfterSeconds };
   }
 
-  const { code, cooldownSeconds } = codeService.issueReplacementCode(user, 'verification');
-  await user.save({ validateModifiedOnly: true });
+  const { code, cooldownSeconds } = codeService.issueReplacementCode(pending, 'verification');
+  await pending.save({ validateModifiedOnly: true });
 
-  await sendVerificationEmail(user.email, code);
+  await sendVerificationEmail(pending.email, code);
 
   return { cooldownSeconds };
 }
