@@ -16,6 +16,22 @@ const pythonProcess            = require('./services/pythonProcess');
 
 let mainWindow;
 
+// ── Single Instance Lock ─────────────────────────────────
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // Another instance is already running — quit immediately
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // Someone tried to open a second instance — focus the existing window
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
