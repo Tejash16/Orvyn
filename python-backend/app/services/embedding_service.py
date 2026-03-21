@@ -263,7 +263,7 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
         row = db_session.execute(
             text("""
                 SELECT id, original_name, original_path, file_extension,
-                       folder_id, mime_type
+                       folder_id, mime_type, extracted_text
                 FROM files WHERE id = :fid
             """),
             {"fid": file_id},
@@ -276,49 +276,55 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
         original_path = row[2]
         file_ext = row[3]
         original_name = row[1]
+        stored_extracted_text = row[6]  # extracted_text from DB (may contain OCR text for images)
 
-        # Re-extract full text from original file on disk
-        if not os.path.exists(original_path):
-            logger.warning(f"prepare_index: file not found at {original_path}, failing job")
-            db_session.execute(
-                text("""
-                    UPDATE indexing_jobs
-                    SET status = 'failed',
-                        error_message = 'FILE_NOT_FOUND',
-                        attempts = attempts + 1,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE file_id = :fid AND status IN ('pending', 'processing')
-                """),
-                {"fid": file_id},
-            )
-            db_session.commit()
-            files_data.append({
-                "file_id": file_id, "chunks": [], "skipped": True,
-                "skip_reason": "file_not_found",
-            })
-            continue
+        # For image files, use the stored extracted_text (from OCR) instead of re-extracting
+        _image_exts = {".png", ".jpg", ".jpeg"}
+        if file_ext in _image_exts and stored_extracted_text and not stored_extracted_text.startswith("[Image:"):
+            extracted_text = stored_extracted_text
+        else:
+            # Re-extract full text from original file on disk
+            if not os.path.exists(original_path):
+                logger.warning(f"prepare_index: file not found at {original_path}, failing job")
+                db_session.execute(
+                    text("""
+                        UPDATE indexing_jobs
+                        SET status = 'failed',
+                            error_message = 'FILE_NOT_FOUND',
+                            attempts = attempts + 1,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE file_id = :fid AND status IN ('pending', 'processing')
+                    """),
+                    {"fid": file_id},
+                )
+                db_session.commit()
+                files_data.append({
+                    "file_id": file_id, "chunks": [], "skipped": True,
+                    "skip_reason": "file_not_found",
+                })
+                continue
 
-        try:
-            extracted_text = _extract_text(original_path, file_ext, original_name)
-        except Exception as exc:
-            logger.error(f"prepare_index: extraction failed for {file_id}: {exc}")
-            db_session.execute(
-                text("""
-                    UPDATE indexing_jobs
-                    SET status = 'failed',
-                        error_message = :err,
-                        attempts = attempts + 1,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE file_id = :fid AND status IN ('pending', 'processing')
-                """),
-                {"fid": file_id, "err": f"EXTRACTION_ERROR: {exc}"},
-            )
-            db_session.commit()
-            files_data.append({
-                "file_id": file_id, "chunks": [], "skipped": True,
-                "skip_reason": "extraction_error",
-            })
-            continue
+            try:
+                extracted_text = _extract_text(original_path, file_ext, original_name)
+            except Exception as exc:
+                logger.error(f"prepare_index: extraction failed for {file_id}: {exc}")
+                db_session.execute(
+                    text("""
+                        UPDATE indexing_jobs
+                        SET status = 'failed',
+                            error_message = :err,
+                            attempts = attempts + 1,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE file_id = :fid AND status IN ('pending', 'processing')
+                    """),
+                    {"fid": file_id, "err": f"EXTRACTION_ERROR: {exc}"},
+                )
+                db_session.commit()
+                files_data.append({
+                    "file_id": file_id, "chunks": [], "skipped": True,
+                    "skip_reason": "extraction_error",
+                })
+                continue
 
         # Skip empty or image-only files
         if not extracted_text.strip() or extracted_text.startswith("[Image:"):

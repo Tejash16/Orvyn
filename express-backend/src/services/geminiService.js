@@ -280,6 +280,54 @@ async function summarizeFile(text) {
   throw new Error(`Summarize failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
 }
 
+// ── OCR via Gemini Vision ─────────────────────────────────
+
+const OCR_SYSTEM_PROMPT =
+  'You are an OCR engine. Extract all visible text from images accurately. ' +
+  'Preserve paragraph structure and reading order. Do not add commentary or interpretation. ' +
+  'Return ONLY the extracted text.';
+
+/**
+ * Extract text from an image using Gemini Vision (multimodal).
+ *
+ * @param {string} imageBase64 - Base64-encoded image bytes
+ * @param {string} mimeType    - Image MIME type (image/png, image/jpeg)
+ * @param {string} filename    - Original filename (for context)
+ * @returns {Promise<string>} Extracted text
+ */
+async function extractTextFromImage(imageBase64, mimeType, filename) {
+  const genAI = _getClient();
+  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
+  const model = genAI.getGenerativeModel({
+    model: chatModel,
+    systemInstruction: OCR_SYSTEM_PROMPT,
+    generationConfig: { temperature: 0.1 },
+  });
+
+  const parts = [
+    { inlineData: { mimeType, data: imageBase64 } },
+    {
+      text: `Extract ALL text visible in this image (${filename}). ` +
+        'Return ONLY the extracted text, preserving layout where possible. ' +
+        'If no text is visible, return "[No text detected]".',
+    },
+  ];
+
+  let lastError;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const result = await model.generateContent({ contents: [{ role: 'user', parts }] });
+      return result.response.text().trim();
+    } catch (e) {
+      lastError = e;
+      if (attempt < MAX_RETRIES - 1) {
+        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
+      }
+    }
+  }
+  throw new Error(`OCR failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+}
+
 // ── Chat title generation (V1 Copilot) ───────────────────
 
 const TITLE_SYSTEM_PROMPT =
@@ -496,6 +544,7 @@ module.exports = {
   generateDataroom,
   embedTexts,
   extractEntities,
+  extractTextFromImage,
   summarizeFile,
   generateTitle,
   chatStream,

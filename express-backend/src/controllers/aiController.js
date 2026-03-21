@@ -194,6 +194,41 @@ async function generateTitle(req, res, next) {
 
 
 
+// ── OCR via Gemini Vision ────────────────────────────────
+
+const VALID_OCR_MIME_TYPES = new Set(['image/png', 'image/jpeg']);
+
+async function ocrImage(req, res, next) {
+  try {
+    const { image_base64, mime_type, filename } = req.body;
+
+    if (!image_base64 || typeof image_base64 !== 'string') {
+      return res.status(400).json({ success: false, error: 'image_base64 is required.' });
+    }
+
+    if (!mime_type || !VALID_OCR_MIME_TYPES.has(mime_type)) {
+      return res.status(400).json({ success: false, error: 'mime_type must be image/png or image/jpeg.' });
+    }
+
+    // Check image size (base64 is ~33% larger than raw bytes)
+    const maxSizeMB = parseInt(process.env.GEMINI_OCR_MAX_IMAGE_SIZE_MB || '10', 10);
+    const estimatedBytes = (image_base64.length * 3) / 4;
+    if (estimatedBytes > maxSizeMB * 1024 * 1024) {
+      return res.status(400).json({ success: false, error: `Image exceeds ${maxSizeMB}MB limit.` });
+    }
+
+    const extractedText = await geminiService.extractTextFromImage(
+      image_base64,
+      mime_type,
+      filename || 'image',
+    );
+
+    return res.status(200).json({ success: true, extracted_text: extractedText });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ── Phase C2 — Copilot Chat, Audit, Simulate, Insights ──
 
 // Gemini function calling tool declarations
@@ -378,6 +413,7 @@ module.exports = {
   generateDataroom,
   embed,
   extractEntities,
+  ocrImage,
   summarizeFile,
   generateTitle,
   chatStream,

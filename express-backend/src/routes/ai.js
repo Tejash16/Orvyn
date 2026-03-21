@@ -4,6 +4,7 @@ const {
   generateDataroom,
   embed,
   extractEntities,
+  ocrImage,
   summarizeFile,
   generateTitle,
   chatStream,
@@ -17,6 +18,9 @@ const router = Router();
 // can consume Gemini API quota through the Express proxy.
 router.post('/classify', authenticate, classify);
 router.post('/generate-dataroom', authenticate, generateDataroom);
+
+// OCR via Gemini Vision
+router.post('/ocr', authenticate, ocrImage);
 
 // Copilot endpoints (V1 Copilot)
 router.post('/embed', authenticate, embed);

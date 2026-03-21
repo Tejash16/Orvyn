@@ -121,5 +121,35 @@ async function getUsage() {
   return data;
 }
 
-module.exports = { classifyFiles, generateDataroom, checkFileLimit, getUsage };
+/**
+ * Send a base64-encoded image to Express for OCR via Gemini Vision.
+ *
+ * @param {string} imageBase64 - Base64-encoded image bytes
+ * @param {string} mimeType    - Image MIME type (image/png, image/jpeg)
+ * @param {string} filename    - Original filename
+ * @returns {Promise<string>} Extracted text from the image
+ */
+async function ocrImage(imageBase64, mimeType, filename) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/ai/ocr`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      image_base64: imageBase64,
+      mime_type: mimeType,
+      filename,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'OCR failed.');
+  return data.extracted_text;
+}
+
+module.exports = { classifyFiles, generateDataroom, checkFileLimit, getUsage, ocrImage };
 

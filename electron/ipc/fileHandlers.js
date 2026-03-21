@@ -3,6 +3,7 @@ const { execFile } = require('child_process');
 const path = require('path');
 const fs   = require('fs');
 const pythonService = require('../services/pythonService');
+const expressService = require('../services/expressService');
 const log = require('../services/logger');
 
 // Supported file extensions — must match Python's _ALLOWED_EXTENSIONS.
@@ -11,6 +12,7 @@ const SUPPORTED_EXTENSIONS = new Set([
 ]);
 
 const MAX_FILES_PER_BATCH = 100;
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg']);
 
 /**
  * Registers file-related IPC handlers.
@@ -107,6 +109,41 @@ function registerFileHandlers(ipcMain, getMainWindow) {
   ipcMain.handle('file:register', async (_event, { dataroom_id, file_paths }) => {
     try {
       const data = await pythonService.registerFiles(dataroom_id, file_paths);
+
+      // OCR: extract text from registered image files via Gemini Vision
+      const imageFileIds = (data.registered || [])
+        .filter((f) => IMAGE_EXTENSIONS.has(f.file_extension))
+        .map((f) => f.id);
+
+      if (imageFileIds.length > 0) {
+        try {
+          log.info(`[fileHandlers] OCR: processing ${imageFileIds.length} image file(s)`);
+          const ocrData = await pythonService.prepareOcr(imageFileIds);
+
+          if (ocrData.files && !ocrData.skipped) {
+            for (const file of ocrData.files) {
+              if (file.error) {
+                log.warn(`[fileHandlers] OCR prepare skipped file ${file.file_id}: ${file.error}`);
+                continue;
+              }
+              try {
+                const extractedText = await expressService.ocrImage(
+                  file.image_base64,
+                  file.mime_type,
+                  file.filename,
+                );
+                await pythonService.applyOcr(file.file_id, extractedText);
+                log.info(`[fileHandlers] OCR complete for ${file.filename}`);
+              } catch (ocrErr) {
+                log.warn(`[fileHandlers] OCR failed for ${file.filename}: ${ocrErr.message}`);
+              }
+            }
+          }
+        } catch (ocrErr) {
+          log.warn(`[fileHandlers] OCR pipeline failed: ${ocrErr.message}`);
+        }
+      }
+
       return { success: true, ...data };
     } catch (err) {
       return { success: false, error: err.message };

@@ -307,6 +307,32 @@ async function renameFile(fileId, newName, newPath) {
 }
 
 // ---------------------------------------------------------------------------
+// OCR — prepare image data for Express, apply extracted text
+// ---------------------------------------------------------------------------
+
+async function prepareOcr(fileIds) {
+  const res = await fetch(`${getPythonUrl()}/api/v1/files/prepare-ocr`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_ids: fileIds }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Failed to prepare OCR data.');
+  return data;
+}
+
+async function applyOcr(fileId, extractedText) {
+  const res = await fetch(`${getPythonUrl()}/api/v1/files/apply-ocr`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_id: fileId, extracted_text: extractedText }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Failed to apply OCR results.');
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // AI data preparation & result application
 // ---------------------------------------------------------------------------
 
@@ -388,6 +414,9 @@ module.exports = {
   deleteFile,
   listFiles,
   renameFile,
+  // OCR — prepare image data for Express, apply extracted text
+  prepareOcr,
+  applyOcr,
   // AI — prepare data for Express, apply results from Express
   prepareClassify,
   applyClassifyResults,

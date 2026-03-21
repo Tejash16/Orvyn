@@ -1469,6 +1469,125 @@ def rename_file(file_id: str, request: RenameFileRequest):
         return _file_dict(file_record)
 
 
+# ---- OCR endpoints ----------------------------------------------------------
+# Gemini Vision OCR is orchestrated by Electron:
+#   Step 1: Python prepare-ocr → reads image bytes, base64-encodes
+#   Step 2: Express /api/v1/ai/ocr → calls Gemini Vision, returns text
+#   Step 3: Python apply-ocr → stores extracted text in SQLite
+
+_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
+_OCR_MAX_IMAGE_SIZE_BYTES = int(os.getenv("OCR_MAX_IMAGE_SIZE_MB", "10")) * 1024 * 1024
+
+
+class PrepareOcrRequest(BaseModel):
+    file_ids: List[str]
+
+
+@app.post("/api/v1/files/prepare-ocr")
+def prepare_ocr(request: PrepareOcrRequest):
+    """
+    Read image files from disk, base64-encode them for Gemini Vision OCR.
+    Returns encoded image data for each file so Electron can forward to Express.
+    """
+    import base64
+
+    engine = _require_db()
+
+    if not request.file_ids:
+        raise HTTPException(status_code=400, detail="file_ids list cannot be empty.")
+
+    ocr_enabled = os.getenv("OCR_ENABLED", "true").lower() == "true"
+    if not ocr_enabled:
+        return {"files": [], "skipped": True, "reason": "OCR_ENABLED is false"}
+
+    results = []
+
+    with Session(engine) as session:
+        for file_id in request.file_ids:
+            file_record = session.query(File).filter_by(id=file_id).first()
+            if not file_record:
+                results.append({"file_id": file_id, "error": "File not found."})
+                continue
+
+            if file_record.file_extension not in _IMAGE_EXTENSIONS:
+                results.append({"file_id": file_id, "error": "Not an image file."})
+                continue
+
+            file_path = file_record.original_path
+            if not os.path.exists(file_path):
+                results.append({"file_id": file_id, "error": "File not found on disk."})
+                continue
+
+            file_size = os.path.getsize(file_path)
+            if file_size > _OCR_MAX_IMAGE_SIZE_BYTES:
+                results.append({
+                    "file_id": file_id,
+                    "error": f"Image too large ({file_size // (1024*1024)}MB). Max {_OCR_MAX_IMAGE_SIZE_BYTES // (1024*1024)}MB.",
+                })
+                continue
+
+            try:
+                with open(file_path, "rb") as f:
+                    image_bytes = f.read()
+                image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+            except (OSError, PermissionError) as exc:
+                results.append({"file_id": file_id, "error": f"Cannot read file: {exc}"})
+                continue
+
+            # Determine MIME type
+            mime = file_record.mime_type or mimetypes.guess_type(file_path)[0] or "image/png"
+
+            results.append({
+                "file_id": file_id,
+                "image_base64": image_base64,
+                "mime_type": mime,
+                "filename": file_record.original_name,
+            })
+
+    return {"files": results}
+
+
+class ApplyOcrRequest(BaseModel):
+    file_id: str
+    extracted_text: str
+
+
+@app.post("/api/v1/files/apply-ocr")
+def apply_ocr(request: ApplyOcrRequest):
+    """
+    Store OCR-extracted text in the file's extracted_text column.
+    If the file was already indexed, reset embedding_status so re-indexing picks it up.
+    """
+    engine = _require_db()
+
+    with Session(engine) as session:
+        file_record = session.query(File).filter_by(id=request.file_id).first()
+        if not file_record:
+            raise HTTPException(status_code=404, detail="File not found.")
+
+        # Truncate to max length
+        text = request.extracted_text.strip()
+        if len(text) > _MAX_EXTRACTED_TEXT_LENGTH:
+            text = text[:_MAX_EXTRACTED_TEXT_LENGTH]
+
+        file_record.extracted_text = text
+        file_record.updated_at = datetime.datetime.utcnow()
+
+        # If file was already indexed (complete with 0 chunks from image skip),
+        # reset so the indexing pipeline will re-process it with real text.
+        if file_record.embedding_status in ("complete", "failed"):
+            file_record.embedding_status = "none"
+            file_record.content_checksum = None
+            # Remove any existing indexing job so a fresh one can be created
+            session.query(IndexingJob).filter_by(file_id=request.file_id).delete()
+            logger.info(f"apply_ocr: reset embedding_status for file {request.file_id}")
+
+        session.commit()
+
+    logger.info(f"apply_ocr: stored {len(text)} chars for file {request.file_id}")
+    return {"success": True, "file_id": request.file_id, "text_length": len(text)}
+
+
 # ---- AI Data Preparation & Result Application endpoints ---------------------
 # Gemini API calls have moved to the Express backend (holds the API key).
 # Python now only prepares data (fingerprints, folder trees) and applies
