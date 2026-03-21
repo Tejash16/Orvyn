@@ -8,11 +8,10 @@
  */
 
 const authService = require('./authService');
+const config      = require('../config');
 
 function getExpressUrl() {
-  const url = process.env.EXPRESS_URL;
-  if (!url) throw new Error('EXPRESS_URL is not configured in electron/.env');
-  return url;
+  return config.EXPRESS_URL;
 }
 
 /**

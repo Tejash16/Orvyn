@@ -1,6 +1,12 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+// In dev, load .env for local overrides. In packaged builds, config.js provides defaults.
+if (!app.isPackaged) {
+  require('dotenv').config({ path: path.join(__dirname, '.env') });
+}
+
+const config = require('./config');
 
 const log = require('./services/logger');
 
@@ -40,7 +46,9 @@ function createWindow() {
     minHeight: 650,
     frame: false,
     show: false,
-    icon: path.join(__dirname, 'build', 'icon.ico'),
+    icon: app.isPackaged
+      ? path.join(process.resourcesPath, 'icon.ico')
+      : path.join(__dirname, 'build', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -54,7 +62,7 @@ function createWindow() {
     mainWindow.loadURL(`http://localhost:${devPort}`);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../frontend/dist/index.html'));
+    mainWindow.loadFile(path.join(process.resourcesPath, 'frontend', 'dist', 'index.html'));
   }
 
   mainWindow.once('ready-to-show', () => {
@@ -89,10 +97,13 @@ registerFileHandlers(ipcMain, () => mainWindow);
 registerAiHandlers(ipcMain, () => mainWindow);
 registerCopilotHandlers(ipcMain, () => mainWindow);
 
-// Runtime config — sourced from electron/.env, never from renderer
+// Runtime config — sourced from config.js (dev: .env, prod: hardcoded defaults)
 ipcMain.handle('app:getConfig', () => ({
-  expressUrl: process.env.EXPRESS_URL || '',
-  pythonUrl:  process.env.PYTHON_URL  || '',
+  expressUrl: config.EXPRESS_URL,
+  pythonUrl:  process.env.PYTHON_URL || '',
+  copilotPanelDefaultWidth: config.COPILOT_PANEL_DEFAULT_WIDTH,
+  copilotPanelMinWidth:     config.COPILOT_PANEL_MIN_WIDTH,
+  copilotPanelMaxWidth:     config.COPILOT_PANEL_MAX_WIDTH,
 }));
 
 // Logs path — lets the renderer offer a "Help > Open Logs" action

@@ -11,13 +11,13 @@
  *   - Refresh token → 7-day JWT, stored encrypted in tokenVault by callers
  */
 
+const config = require('../config');
+
 let _token = null;   // Access token — in-process memory only
 let _user  = null;
 
 function getExpressUrl() {
-  const url = process.env.EXPRESS_URL;
-  if (!url) throw new Error('EXPRESS_URL is not configured in electron/.env');
-  return url;
+  return config.EXPRESS_URL;
 }
 
 // ── Registration ──────────────────────────────────────────

@@ -36,10 +36,19 @@ const PORT = process.env.PORT || 3000;
 
 // ── Middleware ────────────────────────────────────────────
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CLIENT_URL,
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Desktop app (Electron main process) sends no Origin header — allow it.
+    // Safe because all sensitive endpoints require Bearer token auth.
+    if (!origin) return callback(null, true);
+    const allowed = process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : [];
+    if (allowed.includes(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
-}));
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 
 // HTTP request logging — piped through winston in all environments.

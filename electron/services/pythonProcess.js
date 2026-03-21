@@ -19,10 +19,20 @@ const log       = require('./logger');
 
 // ── Paths ─────────────────────────────────────────────────
 
-// __dirname is electron/services/ → ../../python-backend
-const PYTHON_DIR    = path.join(__dirname, '..', '..', 'python-backend');
-const PYTHON_EXE    = path.join(PYTHON_DIR, 'venv', 'Scripts', 'python.exe');
-const PYTHON_SCRIPT = 'run.py';
+/**
+ * Returns Python executable path and spawn arguments for dev vs packaged builds.
+ *
+ * Dev:      venv/Scripts/python.exe run.py --port <port>
+ * Packaged: orvyn-backend.exe --port <port>  (PyInstaller onedir output)
+ */
+function _getPythonPaths() {
+  if (app.isPackaged) {
+    const dir = path.join(process.resourcesPath, 'python-backend');
+    return { dir, exe: path.join(dir, 'orvyn-backend.exe'), args: [] };
+  }
+  const dir = path.join(__dirname, '..', '..', 'python-backend');
+  return { dir, exe: path.join(dir, 'venv', 'Scripts', 'python.exe'), args: ['run.py'] };
+}
 
 const RESTART_DELAY_MS = 3_000;  // Wait before respawn to prevent tight loops
 const MAX_RESTARTS     = 5;      // Give up after this many consecutive rapid crashes
@@ -81,8 +91,9 @@ function _spawn() {
   // Compute logs path for Python (same %APPDATA% location as Electron logs)
   const logsPath = log.getLogsPath();
 
-  _process = spawn(PYTHON_EXE, [PYTHON_SCRIPT, '--port', String(_resolvedPort)], {
-    cwd:   PYTHON_DIR,
+  const paths = _getPythonPaths();
+  _process = spawn(paths.exe, [...paths.args, '--port', String(_resolvedPort)], {
+    cwd:   app.isPackaged ? path.dirname(paths.exe) : paths.dir,
     stdio,
     windowsHide: true,
     env: {

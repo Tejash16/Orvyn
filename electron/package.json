@@ -5,6 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "electron .",
+    "prebuild": "cd ../python-backend && venv\\Scripts\\pyinstaller orvyn.spec --distpath dist --clean",
     "build": "electron-builder --config electron-builder.config.js",
     "build:dir": "electron-builder --config electron-builder.config.js --dir"
   },

@@ -24,16 +24,13 @@ module.exports = {
       filter: ['**/*'],
     },
     {
-      from: '../python-backend',
+      from: '../python-backend/dist/orvyn-backend',
       to: 'python-backend',
-      filter: [
-        '**/*',
-        '!venv/**',
-        '!__pycache__/**',
-        '!*.pyc',
-        '!.env',
-        '!logs/**',
-      ],
+      filter: ['**/*'],
+    },
+    {
+      from: 'build/icon.ico',
+      to: 'icon.ico',
     },
   ],
 

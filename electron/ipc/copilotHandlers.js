@@ -5,6 +5,7 @@ const { app } = require('electron');
 const authService        = require('../services/authService');
 const userContextService = require('../services/userContextService');
 const log                = require('../services/logger');
+const config             = require('../config');
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -18,14 +19,12 @@ let activeStreamController = null;
 
 function getPythonUrl() {
   const url = process.env.PYTHON_URL;
-  if (!url) throw new Error('PYTHON_URL is not configured in electron/.env');
+  if (!url) throw new Error('PYTHON_URL is not configured');
   return url;
 }
 
 function getExpressUrl() {
-  const url = process.env.EXPRESS_URL;
-  if (!url) throw new Error('EXPRESS_URL is not configured in electron/.env');
-  return url;
+  return config.EXPRESS_URL;
 }
 
 function getToken() {
