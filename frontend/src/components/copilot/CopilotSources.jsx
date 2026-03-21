@@ -1,5 +1,6 @@
 import { useDispatch } from 'react-redux';
 import { navigateToFile } from '../../store/fileExplorerSlice';
+import { setActivePage } from '../../store/uiSlice';
 import styles from './CopilotPanel.module.css';
 
 function CopilotSources({ sources: rawSources }) {
@@ -10,6 +11,7 @@ function CopilotSources({ sources: rawSources }) {
 
   const handleClick = (source) => {
     if (source.file_id && source.dataroom_id) {
+      dispatch(setActivePage('dataroom'));
       dispatch(navigateToFile({
         dataroomId: source.dataroom_id,
         folderId: source.folder_id,

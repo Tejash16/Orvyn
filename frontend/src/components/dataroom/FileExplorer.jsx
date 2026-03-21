@@ -20,6 +20,7 @@ import {
   markFileContentChanged,
   clearFileContentChanged,
   resetExplorer,
+  clearNavigatingToFile,
 } from '../../store/fileExplorerSlice';
 import {
   createFolder,
@@ -283,6 +284,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
     error,
     pendingMoves,
     contentChangedIds,
+    isNavigatingToFile,
   } = useSelector((s) => s.fileExplorer);
 
   // Copilot state
@@ -357,10 +359,15 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
     if (dataroomId && dataroomId !== currentDataroomId) {
       dispatch(navigateToDataroom(dataroomId));
     }
-    if (!dataroomId && currentDataroomId) {
+    // Clear the external navigation flag once the prop has synced
+    if (dataroomId && dataroomId === currentDataroomId && isNavigatingToFile) {
+      dispatch(clearNavigatingToFile());
+    }
+    // Only reset if not in the middle of an external navigation (e.g. Copilot source click)
+    if (!dataroomId && currentDataroomId && !isNavigatingToFile) {
       dispatch(resetExplorer());
     }
-  }, [dataroomId, currentDataroomId, dispatch]);
+  }, [dataroomId, currentDataroomId, dispatch, isNavigatingToFile]);
 
   // ── Push history entry after navigation ──
   useEffect(() => {

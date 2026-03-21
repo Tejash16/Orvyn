@@ -82,6 +82,8 @@ function DataRoomList() {
   const { datarooms, isLoading } = useSelector((s) => s.dataroom);
   const pendingViewDataroomId = useSelector((s) => s.ui.pendingViewDataroomId);
 
+  const currentDataroomId = useSelector((s) => s.fileExplorer.currentDataroomId);
+
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -113,6 +115,13 @@ function DataRoomList() {
       dispatch(clearPendingViewDataroomId());
     }
   }, [pendingViewDataroomId, dispatch]);
+
+  // Sync selectedId when navigateToFile changes currentDataroomId externally
+  useEffect(() => {
+    if (currentDataroomId && currentDataroomId !== selectedId) {
+      setSelectedId(currentDataroomId);
+    }
+  }, [currentDataroomId]);
 
   // Focus rename input when it appears
   useEffect(() => {

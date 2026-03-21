@@ -223,6 +223,7 @@ const fileExplorerSlice = createSlice({
     error: null,
     pendingMoves: [],
     contentChangedIds: [],
+    isNavigatingToFile: false,
   },
   reducers: {
     setViewMode(state, action) {
@@ -308,6 +309,10 @@ const fileExplorerSlice = createSlice({
       state.selectedItems = [];
       state.searchQuery = '';
       state.error = null;
+      state.isNavigatingToFile = false;
+    },
+    clearNavigatingToFile(state) {
+      state.isNavigatingToFile = false;
     },
   },
   extraReducers: (builder) => {
@@ -434,10 +439,18 @@ const fileExplorerSlice = createSlice({
 
     // navigateToFile
     builder
+      .addCase(navigateToFile.pending, (state) => {
+        state.isNavigatingToFile = true;
+      })
       .addCase(navigateToFile.fulfilled, (state, action) => {
+        // Keep isNavigatingToFile=true until DataRoomList syncs selectedId prop
+        // FileExplorer clears it via clearNavigatingToFile once prop matches
         if (action.payload?.fileId) {
           state.selectedItems = [{ id: action.payload.fileId, type: 'file' }];
         }
+      })
+      .addCase(navigateToFile.rejected, (state) => {
+        state.isNavigatingToFile = false;
       });
   },
 });
@@ -459,6 +472,7 @@ export const {
   removePendingMoveById,
   updatePathSegmentName,
   resetExplorer,
+  clearNavigatingToFile,
   markFileContentChanged,
   clearFileContentChanged,
 } = fileExplorerSlice.actions;
