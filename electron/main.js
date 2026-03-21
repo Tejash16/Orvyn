@@ -52,7 +52,7 @@ function createWindow() {
   if (!app.isPackaged) {
     const devPort = process.env.VITE_DEV_PORT || 5173;
     mainWindow.loadURL(`http://localhost:${devPort}`);
-    // mainWindow.webContents.openDevTools({ mode: 'detach' });
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     mainWindow.loadFile(path.join(__dirname, '../frontend/dist/index.html'));
   }

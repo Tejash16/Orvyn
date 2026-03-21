@@ -9,6 +9,7 @@ const nodemailer  = require('nodemailer');
 const User        = require('../models/User');
 const codeService = require('./codeService');
 const logger      = require('./logger');
+const { verificationEmailTemplate, passwordResetEmailTemplate } = require('./emailTemplates');
 
 // ── Token constants ────────────────────────────────────────
 
@@ -49,7 +50,7 @@ function getTransporter() {
   return _transporter;
 }
 
-async function sendEmail({ to, subject, text, html }) {
+async function sendEmail({ to, subject, text, html, attachments }) {
   const transporter = getTransporter();
   if (!transporter) {
     // Dev fallback — log to file only, never expose credentials
@@ -62,26 +63,29 @@ async function sendEmail({ to, subject, text, html }) {
     subject,
     text,
     html,
+    attachments,
   });
 }
 
 // ── Email templates ────────────────────────────────────────
 
 async function sendVerificationEmail(email, code) {
+  const { html, text } = verificationEmailTemplate(code, codeService.CODE_EXPIRY_MINUTES);
   await sendEmail({
     to:      email,
     subject: 'Verify your Orvyn email',
-    text:    `Your Orvyn verification code is: ${code}\n\nIt expires in ${codeService.CODE_EXPIRY_MINUTES} minutes.`,
-    html:    `<p>Your Orvyn verification code is: <strong>${code}</strong></p><p>It expires in ${codeService.CODE_EXPIRY_MINUTES} minutes.</p>`,
+    text,
+    html,
   });
 }
 
 async function sendPasswordResetEmail(email, code) {
+  const { html, text } = passwordResetEmailTemplate(code, codeService.CODE_EXPIRY_MINUTES);
   await sendEmail({
     to:      email,
     subject: 'Reset your Orvyn password',
-    text:    `Your Orvyn password reset code is: ${code}\n\nIt expires in ${codeService.CODE_EXPIRY_MINUTES} minutes.\n\nIf you did not request this, ignore this email.`,
-    html:    `<p>Your Orvyn password reset code is: <strong>${code}</strong></p><p>It expires in ${codeService.CODE_EXPIRY_MINUTES} minutes.</p><p>If you did not request this, ignore this email.</p>`,
+    text,
+    html,
   });
 }
 
