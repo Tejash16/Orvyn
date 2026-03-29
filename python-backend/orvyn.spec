@@ -79,7 +79,6 @@ a = Analysis(
 
         # ── Misc ──────────────────────────────────────────────
         'dotenv',
-        'python_dotenv',
         'multipart',
         'python_multipart',
         'json',

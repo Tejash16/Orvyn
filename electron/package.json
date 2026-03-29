@@ -15,10 +15,10 @@
   "description": "Intelligent document management for Windows",
   "dependencies": {
     "dotenv": "^17.3.1",
-    "electron": "^40.6.0",
     "electron-log": "^5.4.3"
   },
   "devDependencies": {
+    "electron": "^40.6.0",
     "electron-builder": "^26.8.1",
     "electronmon": "^2.0.4"
   }
