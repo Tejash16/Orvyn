@@ -38,7 +38,7 @@ function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
   const [confirm,      setConfirm]      = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm,  setShowConfirm]  = useState(false);
-  const [loading,      setLoading]      = useState(false);
+  const [status,       setStatus]       = useState('idle'); // 'idle' | 'verifying' | 'confirmed'
   const [error,        setError]        = useState('');
   const [cooldown,     setCooldown]     = useState(initialCooldown);
   const inputRefs = useRef([]);
@@ -113,7 +113,7 @@ function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
       return;
     }
 
-    setLoading(true);
+    setStatus('verifying');
     setError('');
 
     try {
@@ -123,18 +123,19 @@ function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
         setDigits(Array(CODE_LENGTH).fill(''));
         setNewPassword('');
         setConfirm('');
-        onSwitchView('login');
+        setStatus('confirmed');
+        setTimeout(() => onSwitchView('login'), 800);
       } else {
         setDigits(Array(CODE_LENGTH).fill(''));
         if (result.retryAfterSeconds) {
           setCooldown(result.retryAfterSeconds);
         }
         setError(result.error || 'Password reset failed.');
+        setStatus('idle');
       }
     } catch {
       setError('An unexpected error occurred.');
-    } finally {
-      setLoading(false);
+      setStatus('idle');
     }
   }
 
@@ -153,6 +154,30 @@ function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
     } catch {
       setError('Failed to resend code. Please try again.');
     }
+  }
+
+  if (status !== 'idle') {
+    return (
+      <div className={styles.statusOverlay}>
+        {status === 'verifying' && (
+          <>
+            <span className={styles.statusSpinner} />
+            <p className={styles.statusText}>Resetting your password…</p>
+          </>
+        )}
+        {status === 'confirmed' && (
+          <>
+            <svg className={styles.statusCheckmark} viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.5"
+              strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+            <p className={styles.statusText}>Password reset!</p>
+            <p className={styles.statusHint}>Redirecting to sign in…</p>
+          </>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -230,9 +255,8 @@ function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
 
         {error && <p className={styles.error}>{error}</p>}
 
-        <button type="submit" className={styles.submit} disabled={loading}>
-          {loading && <span className={styles.spinner} />}
-          {loading ? 'Resetting…' : 'Reset password'}
+        <button type="submit" className={styles.submit}>
+          Reset password
         </button>
       </form>
 

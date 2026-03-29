@@ -13,7 +13,7 @@ const CODE_LENGTH = 6;
  */
 function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess }) {
   const [digits,   setDigits]   = useState(Array(CODE_LENGTH).fill(''));
-  const [loading,  setLoading]  = useState(false);
+  const [status,   setStatus]   = useState('idle'); // 'idle' | 'verifying' | 'confirmed'
   const [error,    setError]    = useState('');
   const [cooldown, setCooldown] = useState(initialCooldown);
   const inputRefs = useRef([]);
@@ -69,7 +69,7 @@ function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess 
       return;
     }
 
-    setLoading(true);
+    setStatus('verifying');
     setError('');
 
     try {
@@ -77,18 +77,19 @@ function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess 
 
       if (result.success) {
         setDigits(Array(CODE_LENGTH).fill(''));
-        onVerifySuccess();
+        setStatus('confirmed');
+        await onVerifySuccess();
       } else {
         setDigits(Array(CODE_LENGTH).fill(''));
         if (result.retryAfterSeconds) {
           setCooldown(result.retryAfterSeconds);
         }
         setError(result.error || 'Verification failed.');
+        setStatus('idle');
       }
     } catch {
       setError('An unexpected error occurred.');
-    } finally {
-      setLoading(false);
+      setStatus('idle');
     }
   }
 
@@ -106,6 +107,29 @@ function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess 
     } catch {
       setError('Failed to resend code. Please try again.');
     }
+  }
+
+  if (status !== 'idle') {
+    return (
+      <div className={styles.statusOverlay}>
+        {status === 'verifying' && (
+          <>
+            <span className={styles.statusSpinner} />
+            <p className={styles.statusText}>Verifying your code…</p>
+          </>
+        )}
+        {status === 'confirmed' && (
+          <>
+            <svg className={styles.statusCheckmark} viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.5"
+              strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+            <p className={styles.statusText}>Verified! Logging you in…</p>
+          </>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -139,10 +163,8 @@ function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess 
         type="button"
         className={styles.submit}
         onClick={handleVerify}
-        disabled={loading}
       >
-        {loading && <span className={styles.spinner} />}
-        {loading ? 'Verifying…' : 'Verify'}
+        Verify
       </button>
 
       <div className={styles.resendRow}>

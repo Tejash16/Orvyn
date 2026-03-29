@@ -14,7 +14,7 @@ const isDev = !app.isPackaged;
 
 // ── Production Cloud Run URL ────────────────────────────────
 // Replace this placeholder with your actual Cloud Run URL after deployment.
-const PRODUCTION_EXPRESS_URL = 'https://orvyn-express-REPLACE-ME.a.run.app';
+const PRODUCTION_EXPRESS_URL = 'https://orvyn-express-160954399633.asia-south1.run.app';
 
 module.exports = {
   EXPRESS_URL: isDev
