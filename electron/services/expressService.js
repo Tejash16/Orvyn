@@ -150,5 +150,47 @@ async function ocrImage(imageBase64, mimeType, filename) {
   return data.extracted_text;
 }
 
-module.exports = { classifyFiles, generateDataroom, checkFileLimit, getUsage, ocrImage };
+/**
+ * Fetch plan, limits, and current usage for the authenticated user.
+ *
+ * @returns {Promise<{ plan, limits: { dataroomLimit, monthlyFileLimit, dailyMessageLimit }, usage: { filesUploadedThisPeriod, messagesToday } }>}
+ */
+async function getLimits() {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
 
+  const res = await fetch(`${getExpressUrl()}/api/v1/usage/limits`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to fetch limits.');
+  return data;
+}
+
+/**
+ * Set user type (individual or enterprise) after first login.
+ *
+ * @param {string} userType - 'individual' or 'enterprise'
+ * @returns {Promise<{ success, user }>}
+ */
+async function setUserType(userType) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/set-user-type`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ userType }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to set user type.');
+  return data;
+}
+
+module.exports = { classifyFiles, generateDataroom, checkFileLimit, getUsage, ocrImage, getLimits, setUserType };

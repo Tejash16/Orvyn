@@ -18,6 +18,11 @@ const authSlice = createSlice({
     // True on every launch until the session restore attempt completes.
     // App.jsx renders a blank shell while this is true.
     isRestoring: true,
+
+    // ── Subscription / plan state (Phase 2) ────────────────
+    plan: null,        // 'free' | 'pro' | 'enterprise'
+    limits: null,      // { dataroomLimit, monthlyFileLimit, dailyMessageLimit }
+    usage: null,       // { filesUploadedThisPeriod, messagesToday }
   },
   reducers: {
     loginStart(state) {
@@ -41,11 +46,22 @@ const authSlice = createSlice({
       state.user = null;
       state.loading = false;
       state.error = null;
+      state.plan = null;
+      state.limits = null;
+      state.usage = null;
     },
     // Dispatched after the restore attempt finishes (success or failure).
     // Transitions the app from the loading shell to the real UI.
     restoreComplete(state) {
       state.isRestoring = false;
+    },
+
+    // ── Subscription state updates ──────────────────────────
+    setLimits(state, action) {
+      const { plan, limits, usage } = action.payload;
+      state.plan = plan ?? state.plan;
+      state.limits = limits ?? state.limits;
+      state.usage = usage ?? state.usage;
     },
   },
 });
@@ -56,6 +72,7 @@ export const {
   loginFailure,
   logout,
   restoreComplete,
+  setLimits,
 } = authSlice.actions;
 export default authSlice.reducer;
 
@@ -81,3 +98,23 @@ export const loginThunk = (credentials) => async (dispatch) => {
     dispatch(loginFailure(err.message));
   }
 };
+
+/**
+ * Thunk: fetches plan, limits, and usage from Express via Electron IPC.
+ * Populates the subscription state in Redux.
+ */
+export const fetchLimits = () => async (dispatch) => {
+  try {
+    const result = await window.api.usage.getLimits();
+    if (result.success) {
+      dispatch(setLimits({
+        plan: result.plan,
+        limits: result.limits,
+        usage: result.usage,
+      }));
+    }
+  } catch {
+    // Non-fatal — limits can be fetched later
+  }
+};
+

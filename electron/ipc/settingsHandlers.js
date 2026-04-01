@@ -30,6 +30,18 @@ function registerSettingsHandlers(ipcMain) {
     }
   });
 
+  // ── Usage limits (plan, limits, current usage) ────────────
+
+  ipcMain.handle('usage:getLimits', async () => {
+    try {
+      const data = await expressService.getLimits();
+      return { success: true, ...data };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
 }
 
 module.exports = registerSettingsHandlers;
+

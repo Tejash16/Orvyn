@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { loginSuccess, restoreComplete, logout } from './store/authSlice';
+import { loginSuccess, restoreComplete, logout, fetchLimits } from './store/authSlice';
 import { setTheme, setOnline, addToast } from './store/uiSlice';
 import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
@@ -28,6 +28,8 @@ function App() {
         if (result.success) {
           dispatch(loginSuccess(result.user));
           dispatch(setTheme(result.theme ?? 'light'));
+          // Hydrate plan/limits/usage after session restore
+          dispatch(fetchLimits());
         }
       } finally {
         dispatch(restoreComplete());

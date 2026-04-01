@@ -112,6 +112,11 @@ function Login({ onSwitchView, showAuthToast }) {
       if (result.success) {
         dispatch(loginSuccess(result.user));
         if (result.theme) dispatch(setTheme(result.theme));
+
+        // New users or users without a userType set — show type selection
+        if (result.isNewUser || !result.user?.userType) {
+          onSwitchView('userType');
+        }
       } else {
         showAuthToast(result.error || 'Google sign-in failed.');
       }

@@ -696,9 +696,149 @@
   to   { opacity: 0; transform: translateY(-12px); }
 }
 
+/* ── User Type Selection ─────────────────────────────────── */
+
+.userTypeWrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.userTypeSubtitle {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: -16px 0 24px;
+  line-height: 1.5;
+}
+
+.userTypeGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.userTypeCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  background-color: var(--input-bg);
+  border: 2px solid var(--input-border);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  text-align: left;
+  outline: none;
+}
+
+.userTypeCard:hover:not(:disabled) {
+  border-color: var(--border-medium);
+  background-color: var(--bg-hover);
+}
+
+.userTypeCard:focus-visible {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.userTypeCardSelected {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.userTypeCardSelected:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-soft);
+}
+
+.userTypeCard:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.userTypeCardIcon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  transition: background-color 0.2s ease;
+}
+
+.userTypeCardSelected .userTypeCardIcon {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.userTypeCardContent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.userTypeCardTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.userTypeCardDesc {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.userTypeFeatures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+}
+
+.userTypeFeatures li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.userTypeFeatures li svg {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.userTypeSelectedBadge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  background: rgba(16, 185, 129, 0.12);
+  border-radius: 20px;
+  animation: statusFadeIn 0.2s ease;
+}
+
 /* ── Responsive: hide brand panel on narrow windows ─────── */
 
 @media (max-width: 600px) {
   .brandPanel { display: none; }
   .formPanel  { padding: 24px 16px; }
 }
+

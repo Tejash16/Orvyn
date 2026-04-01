@@ -1,6 +1,7 @@
 const authService            = require('../services/authService');
 const userContextService     = require('../services/userContextService');
 const pythonService          = require('../services/pythonService');
+const expressService         = require('../services/expressService');
 const tokenVault             = require('../services/tokenVault');
 const tokenRefreshScheduler  = require('../services/tokenRefreshScheduler');
 const { resumePendingIndexing } = require('./copilotHandlers');
@@ -503,6 +504,17 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
     try {
       await authService.sendFeedback({ feedback });
       return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // ── Set User Type ─────────────────────────────────────────
+
+  ipcMain.handle('auth:setUserType', async (_event, userType) => {
+    try {
+      const result = await expressService.setUserType(userType);
+      return { success: true, user: result.user };
     } catch (err) {
       return { success: false, error: err.message };
     }

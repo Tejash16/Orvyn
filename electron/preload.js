@@ -40,6 +40,8 @@ contextBridge.exposeInMainWorld('api', {
     // Google OAuth
     initiateGoogleAuth: (mode)    => ipcRenderer.invoke('auth:initiateGoogleAuth', mode),
     linkGoogleAccount:  (payload) => ipcRenderer.invoke('auth:linkGoogleAccount', payload),
+    // User type selection (called once after first login)
+    setUserType:        (userType) => ipcRenderer.invoke('auth:setUserType', userType),
 
     // Push event: Electron notifies the renderer when the session has expired
     // and cannot be silently renewed (revoked or expired refresh token).
@@ -55,6 +57,11 @@ contextBridge.exposeInMainWorld('api', {
   settings: {
     setTheme: (theme) => ipcRenderer.invoke('settings:setTheme', theme),
     getUsage: ()      => ipcRenderer.invoke('settings:getUsage'),
+  },
+
+  // Usage limits — plan, limits, and current usage
+  usage: {
+    getLimits: () => ipcRenderer.invoke('usage:getLimits'),
   },
 
   // DataRoom CRUD

@@ -1,6 +1,6 @@
 'use strict';
 
-const jwt        = require('jsonwebtoken');
+const jwt         = require('jsonwebtoken');
 const bcrypt     = require('bcryptjs');
 const validator  = require('validator');
 
@@ -333,6 +333,48 @@ async function submitFeedback(req, res, next) {
   }
 }
 
+// ── Set User Type ─────────────────────────────────────────
+
+async function setUserType(req, res, next) {
+  try {
+    const { userType } = req.body;
+    if (!['individual', 'enterprise'].includes(userType)) {
+      return res.status(400).json({ success: false, error: 'Invalid user type. Must be "individual" or "enterprise".' });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user || user.isDeleted) {
+      return res.status(404).json({ success: false, error: 'User not found.' });
+    }
+
+    user.userType = userType;
+    await user.save();
+
+    // Create default UserLimits if not exists
+    const UserLimits = require('../models/UserLimits');
+    await UserLimits.findOneAndUpdate(
+      { userId: user._id },
+      {
+        $setOnInsert: {
+          userId: user._id,
+          plan: 'free',
+          dataroomLimit: 3,
+          monthlyFileLimit: 500,
+          dailyMessageLimit: 25,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      user: { _id: user._id, userType: user.userType },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   register,
   verifyEmail,
@@ -347,4 +389,5 @@ module.exports = {
   resendVerification,
   resendResetCode,
   submitFeedback,
+  setUserType,
 };

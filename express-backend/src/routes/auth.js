@@ -13,6 +13,7 @@ const {
   resetPassword,
   resendResetCode,
   submitFeedback,
+  setUserType,
 } = require('../controllers/authController');
 const { googleLogin, linkGoogle } = require('../controllers/googleAuthController');
 const { authenticate } = require('../middleware/authenticate');
@@ -59,5 +60,8 @@ router.post('/feedback',          authenticate, feedbackLimiter, submitFeedback)
 // Google OAuth
 router.post('/google',            googleLoginLimiter,  googleLogin);
 router.post('/google/link',       googleLoginLimiter,  linkGoogle);
+
+// User type selection (called once after first login)
+router.post('/set-user-type',     authenticate,        setUserType);
 
 module.exports = router;

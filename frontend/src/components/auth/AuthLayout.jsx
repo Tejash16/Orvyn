@@ -7,6 +7,7 @@ import Register from './Register';
 import ForgotPassword from './ForgotPassword';
 import VerifyCode from './VerifyCode';
 import ResetCode from './ResetCode';
+import UserTypeSelection from './UserTypeSelection';
 import styles from './auth.module.css';
 
 /* ── Brand panel feature icons ───────────────────────────── */
@@ -176,6 +177,13 @@ function AuthLayout() {
         if (result.success) {
           dispatch(loginSuccess(result.user));
           dispatch(setTheme(result.theme ?? 'light'));
+
+          // New signup — route to user type selection before entering app
+          if (!result.user?.userType) {
+            setActiveView('userType');
+            return;
+          }
+
           return; // navigates to app shell — AuthLayout unmounts
         }
       } catch {
@@ -253,6 +261,24 @@ function AuthLayout() {
               email={flowEmail}
               initialCooldown={cooldownSeconds}
               onSwitchView={handleSwitchView}
+              showAuthToast={showAuthToast}
+            />
+          )}
+          {activeView === 'userType'  && (
+            <UserTypeSelection
+              onComplete={(userType) => {
+                // Re-fetch the current user with updated userType
+                (async () => {
+                  try {
+                    const result = await window.api.auth.getCurrentUser();
+                    if (result.success && result.user) {
+                      dispatch(loginSuccess({ ...result.user, userType }));
+                    }
+                  } catch {
+                    // User is already authenticated, just proceed
+                  }
+                })();
+              }}
               showAuthToast={showAuthToast}
             />
           )}
