@@ -146,20 +146,27 @@ async function logoutHandler(req, res, next) {
 
 async function deleteAccount(req, res, next) {
   try {
-    const { password } = req.body;
-
-    if (!password) {
-      return res.status(400).json({ success: false, error: 'Password is required.' });
-    }
+    const { password, confirmEmail } = req.body;
 
     const user = await User.findById(req.user.userId).select('+password');
     if (!user || user.isDeleted) {
       return res.status(404).json({ success: false, error: 'User not found.' });
     }
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      return res.status(403).json({ success: false, error: 'Incorrect password.' });
+    if (user.provider === 'google') {
+      // Google-only users: verify by email confirmation (they have no password)
+      if (!confirmEmail || confirmEmail.toLowerCase() !== user.email) {
+        return res.status(400).json({ success: false, error: 'Please type your email to confirm deletion.' });
+      }
+    } else {
+      // Local and local+google users: verify by password
+      if (!password) {
+        return res.status(400).json({ success: false, error: 'Password is required.' });
+      }
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) {
+        return res.status(403).json({ success: false, error: 'Incorrect password.' });
+      }
     }
 
     user.isDeleted           = true;

@@ -18,6 +18,7 @@ function SettingsPage() {
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletePassword,  setDeletePassword]  = useState('');
+  const [deleteEmail,     setDeleteEmail]     = useState('');
   const [deleteError,     setDeleteError]     = useState('');
   const [deleteLoading,   setDeleteLoading]   = useState(false);
 
@@ -71,6 +72,7 @@ function SettingsPage() {
 
   function openDeleteModal() {
     setDeletePassword('');
+    setDeleteEmail('');
     setDeleteError('');
     setShowDeleteModal(true);
   }
@@ -79,18 +81,32 @@ function SettingsPage() {
     if (deleteLoading) return;
     setShowDeleteModal(false);
     setDeletePassword('');
+    setDeleteEmail('');
     setDeleteError('');
   }
 
   async function handleDeleteConfirm() {
-    if (!deletePassword) {
-      setDeleteError('Password is required.');
-      return;
+    const isGoogleOnly = user?.provider === 'google';
+
+    if (isGoogleOnly) {
+      if (!deleteEmail) {
+        setDeleteError('Email is required.');
+        return;
+      }
+    } else {
+      if (!deletePassword) {
+        setDeleteError('Password is required.');
+        return;
+      }
     }
+
     setDeleteLoading(true);
     setDeleteError('');
     try {
-      const result = await window.api.auth.deleteAccount(deletePassword);
+      const payload = isGoogleOnly
+        ? { confirmEmail: deleteEmail }
+        : { password: deletePassword };
+      const result = await window.api.auth.deleteAccount(payload);
       if (result.success) {
         dispatch(logout());
       } else {
@@ -179,7 +195,16 @@ function SettingsPage() {
       {/* Profile card */}
       <div className={styles.profileCard}>
         <div className={styles.avatar}>
-          <span className={styles.avatarInitials}>{getInitials(user?.name)}</span>
+          {user?.profilePicture ? (
+            <img
+              src={user.profilePicture}
+              alt={user.name}
+              className={styles.avatarImage}
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <span className={styles.avatarInitials}>{getInitials(user?.name)}</span>
+          )}
         </div>
         <div className={styles.profileInfo}>
           <p className={styles.profileName}>{user?.name ?? '—'}</p>
@@ -442,19 +467,39 @@ function SettingsPage() {
             <p className={styles.modalWarning}>
               This permanently deletes your account and all local data on this device. This action cannot be undone.
             </p>
-            <label className={styles.modalLabel} htmlFor="delete-password">
-              Confirm your password
-            </label>
-            <input
-              id="delete-password"
-              type="password"
-              className={styles.modalInput}
-              value={deletePassword}
-              onChange={(e) => setDeletePassword(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !deleteLoading) handleDeleteConfirm(); }}
-              autoComplete="current-password"
-              autoFocus
-            />
+            {user?.provider === 'google' ? (
+              <>
+                <label className={styles.modalLabel} htmlFor="delete-email">
+                  Type your email to confirm
+                </label>
+                <input
+                  id="delete-email"
+                  type="email"
+                  className={styles.modalInput}
+                  value={deleteEmail}
+                  onChange={(e) => setDeleteEmail(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !deleteLoading) handleDeleteConfirm(); }}
+                  placeholder={user.email}
+                  autoFocus
+                />
+              </>
+            ) : (
+              <>
+                <label className={styles.modalLabel} htmlFor="delete-password">
+                  Confirm your password
+                </label>
+                <input
+                  id="delete-password"
+                  type="password"
+                  className={styles.modalInput}
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !deleteLoading) handleDeleteConfirm(); }}
+                  autoComplete="current-password"
+                  autoFocus
+                />
+              </>
+            )}
             {deleteError && <p className={styles.modalError}>{deleteError}</p>}
             <div className={styles.modalActions}>
               <button

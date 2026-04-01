@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
 const userSchema = new mongoose.Schema(
   {
@@ -23,7 +24,28 @@ const userSchema = new mongoose.Schema(
     },
     provider: {
       type: String,
+      enum: ['local', 'google', 'local+google'],
       default: 'local',
+    },
+    googleId: {
+      type: String,
+      sparse: true,
+      unique: true,
+      default: null,
+    },
+    profilePicture: {
+      type: String,
+      default: null,
+    },
+    userType: {
+      type: String,
+      enum: ['individual', 'enterprise'],
+      default: 'individual',
+    },
+    activeOrganizationId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Organization',
+      default: null,
     },
     isEmailVerified: {
       type: Boolean,

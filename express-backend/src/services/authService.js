@@ -130,6 +130,11 @@ async function registerUser({ name, email, password }) {
   // Block registration if a verified (active) account already uses this email
   const existingUser = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
   if (existingUser) {
+    if (existingUser.provider === 'google' || existingUser.provider === 'local+google') {
+      const conflict = new Error('This email is registered via Google. Please sign in with Google.');
+      conflict.statusCode = 409;
+      throw conflict;
+    }
     const conflict = new Error('An account with this email already exists.');
     conflict.statusCode = 409;
     throw conflict;
@@ -193,8 +198,8 @@ async function loginUser(email, password) {
     throw err;
   }
 
-  if (user.provider !== 'local') {
-    const err = new Error('This account uses a different sign-in method.');
+  if (user.provider !== 'local' && user.provider !== 'local+google') {
+    const err = new Error('This account uses Google sign-in. Please click "Sign in with Google" instead.');
     err.statusCode = 401;
     throw err;
   }
@@ -332,6 +337,11 @@ async function requestPasswordReset(email) {
     .select(RESET_SELECT);
 
   if (!user || user.isDeleted) {
+    return { cooldownSeconds: codeService.CODE_RESEND_COOLDOWN_SECONDS };
+  }
+
+  // Google-only users cannot reset password — return generic success to prevent email enumeration
+  if (user.provider === 'google') {
     return { cooldownSeconds: codeService.CODE_RESEND_COOLDOWN_SECONDS };
   }
 

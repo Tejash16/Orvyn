@@ -241,17 +241,17 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
   // ── Delete Account ────────────────────────────────────────
   //
-  // Step 1: Express validates password + soft-deletes (sets isDeleted, clears refresh token).
+  // Step 1: Express validates password/email + soft-deletes (sets isDeleted, clears refresh token).
   //         If this throws, local state is untouched — full rollback by default.
   // Step 2: Cancel scheduler before any state mutation.
   // Step 3: Delete local user data directory (best-effort; account gone server-side).
   // Step 4: Remove refresh token from vault.
   // Step 5: Clear in-memory access token and user context.
 
-  ipcMain.handle('auth:deleteAccount', async (_event, { password }) => {
+  ipcMain.handle('auth:deleteAccount', async (_event, { password, confirmEmail }) => {
     try {
       // Step 1 — if server rejects, throw propagates to catch and nothing local is changed
-      await authService.deleteAccount({ password });
+      await authService.deleteAccount({ password, confirmEmail });
 
       // Step 2 — cancel before touching any state
       tokenRefreshScheduler.cancel();
@@ -271,6 +271,125 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message };
+    }
+  });
+
+  // ── Google OAuth: Initiate ────────────────────────────────
+  //
+  // Step 1: Start loopback server + open browser → get auth code
+  // Step 2: Exchange code via Express → get tokens or requiresLinking
+  // Step 3–7: Same as local login (init dir, init DB, theme, tokens, scheduler)
+
+  ipcMain.handle('auth:initiateGoogleAuth', async (_event, mode) => {
+    try {
+      const { code, redirectUri } = await authService.initiateGoogleAuth();
+      const result = await authService.googleLogin(code, redirectUri, mode);
+
+      if (result.noAccount) {
+        return { success: false, noAccount: true, error: result.error };
+      }
+
+      if (result.alreadyExists) {
+        return { success: false, alreadyExists: true, error: result.error };
+      }
+
+      if (result.requiresLinking) {
+        // Notify renderer to show password dialog
+        return {
+          success: false,
+          requiresLinking: true,
+          email: result.email,
+          googleId: result.googleId,
+          picture: result.picture,
+        };
+      }
+
+      // Same login sequence as email login
+      const user = result.user;
+      await userContextService.initializeUserDirectory(String(user._id));
+      const databasePath = userContextService.getActiveDatabasePath();
+
+      try {
+        await pythonService.initDb(databasePath, String(user._id));
+      } catch (err) {
+        authService.logout();
+        userContextService.clear();
+        throw new Error(`Database initialisation failed: ${err.message}`);
+      }
+
+      let theme;
+      try {
+        theme = await pythonService.getTheme();
+      } catch (err) {
+        authService.logout();
+        userContextService.clear();
+        throw new Error(`Theme fetch failed: ${err.message}`);
+      }
+
+      // Store tokens
+      try {
+        tokenVault.store(result.refreshToken);
+      } catch { /* non-fatal */ }
+
+      // Set in-memory session state
+      authService.setSession(result.accessToken, user);
+
+      startRefreshScheduler();
+
+      // Resume pending indexing (fire-and-forget)
+      resumePendingIndexing(getMainWindow)
+        .catch(() => { /* non-fatal */ });
+
+      return {
+        success: true,
+        user,
+        theme,
+        isNewUser: result.isNewUser,
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ── Google OAuth: Link existing account ───────────────────
+
+  ipcMain.handle('auth:linkGoogleAccount', async (_event, { email, password, googleId, picture }) => {
+    try {
+      const result = await authService.linkGoogleAccount(email, password, googleId, picture);
+
+      // Same login sequence
+      const user = result.user;
+      await userContextService.initializeUserDirectory(String(user._id));
+      const databasePath = userContextService.getActiveDatabasePath();
+
+      try {
+        await pythonService.initDb(databasePath, String(user._id));
+      } catch (err) {
+        authService.logout();
+        userContextService.clear();
+        throw new Error(`Database initialisation failed: ${err.message}`);
+      }
+
+      let theme;
+      try {
+        theme = await pythonService.getTheme();
+      } catch (err) {
+        authService.logout();
+        userContextService.clear();
+        throw new Error(`Theme fetch failed: ${err.message}`);
+      }
+
+      try {
+        tokenVault.store(result.refreshToken);
+      } catch { /* non-fatal */ }
+
+      authService.setSession(result.accessToken, user);
+
+      startRefreshScheduler();
+
+      return { success: true, user, theme };
+    } catch (error) {
+      return { success: false, error: error.message };
     }
   });
 

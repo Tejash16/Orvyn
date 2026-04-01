@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import { useDispatch } from 'react-redux';
+import { loginSuccess } from '../../store/authSlice';
+import { setTheme } from '../../store/uiSlice';
+import AccountLinkDialog from './AccountLinkDialog';
 import styles from './auth.module.css';
 
 const EyeIcon = () => (
@@ -20,6 +24,16 @@ const EyeOffIcon = () => (
   </svg>
 );
 
+/* Official Google "G" logo */
+const GoogleIcon = () => (
+  <svg className={styles.googleIcon} viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+  </svg>
+);
+
 const STRENGTH_LABELS = ['', 'Weak', 'Fair', 'Good', 'Strong'];
 
 function getStrength(pw) {
@@ -35,8 +49,13 @@ function getStrength(pw) {
 /**
  * Register — calls onRegisterSuccess({ email, password, cooldownSeconds })
  * so AuthLayout can cache credentials for the signup auto-login guard.
+ *
+ * Google signup bypasses OTP verification (Google already verified the email)
+ * and logs the user in directly via Redux dispatch.
  */
-function Register({ onSwitchView, onRegisterSuccess }) {
+function Register({ onSwitchView, onRegisterSuccess, showAuthToast }) {
+  const dispatch = useDispatch();
+
   const [name,            setName]            = useState('');
   const [email,           setEmail]           = useState('');
   const [password,        setPassword]        = useState('');
@@ -44,7 +63,10 @@ function Register({ onSwitchView, onRegisterSuccess }) {
   const [showPassword,    setShowPassword]    = useState(false);
   const [showConfirm,     setShowConfirm]     = useState(false);
   const [loading,         setLoading]         = useState(false);
-  const [error,           setError]           = useState('');
+
+  // Google OAuth state
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [linkingState,    setLinkingState]    = useState(null);
 
   const strength = getStrength(password);
 
@@ -52,22 +74,21 @@ function Register({ onSwitchView, onRegisterSuccess }) {
     e.preventDefault();
 
     if (!name || !email || !password || !confirmPassword) {
-      setError('All fields are required.');
+      showAuthToast('All fields are required.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      showAuthToast('Passwords do not match.');
       return;
     }
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+      showAuthToast('Password must be at least 8 characters.');
       return;
     }
 
     setLoading(true);
-    setError('');
 
     try {
       const result = await window.api.auth.register({ name, email, password });
@@ -79,12 +100,63 @@ function Register({ onSwitchView, onRegisterSuccess }) {
           cooldownSeconds: result.cooldownSeconds ?? 60,
         });
       } else {
-        setError(result.error || 'Registration failed. Please try again.');
+        showAuthToast(result.error || 'Registration failed. Please try again.');
       }
     } catch {
-      setError('An unexpected error occurred.');
+      showAuthToast('An unexpected error occurred.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGoogleSignUp() {
+    setIsGoogleLoading(true);
+
+    try {
+      const result = await window.api.auth.initiateGoogleAuth('signup');
+
+      if (result.alreadyExists) {
+        showAuthToast('An account with this email already exists. Please sign in instead.');
+        setIsGoogleLoading(false);
+        return;
+      }
+
+      if (result.requiresLinking) {
+        setLinkingState({
+          email: result.email,
+          googleId: result.googleId,
+          picture: result.picture,
+        });
+        setIsGoogleLoading(false);
+        return;
+      }
+
+      if (result.success) {
+        // Google signup — email already verified, skip OTP and log in directly
+        dispatch(loginSuccess(result.user));
+        if (result.theme) dispatch(setTheme(result.theme));
+      } else {
+        showAuthToast(result.error || 'Google sign-up failed.');
+      }
+    } catch {
+      showAuthToast('Google sign-up failed.');
+    }
+    setIsGoogleLoading(false);
+  }
+
+  async function handleLinkAccount(pwd) {
+    const result = await window.api.auth.linkGoogleAccount({
+      email: linkingState.email,
+      password: pwd,
+      googleId: linkingState.googleId,
+      picture: linkingState.picture,
+    });
+    if (result.success) {
+      dispatch(loginSuccess(result.user));
+      if (result.theme) dispatch(setTheme(result.theme));
+      setLinkingState(null);
+    } else {
+      throw new Error(result.error || 'Account linking failed.');
     }
   }
 
@@ -183,13 +255,26 @@ function Register({ onSwitchView, onRegisterSuccess }) {
           </div>
         </div>
 
-        {error && <p className={styles.error}>{error}</p>}
-
-        <button type="submit" className={styles.submit} disabled={loading}>
+        <button type="submit" className={styles.submit} disabled={loading || isGoogleLoading}>
           {loading && <span className={styles.spinner} />}
           {loading ? 'Creating account…' : 'Create account'}
         </button>
       </form>
+
+      {/* Divider */}
+      <div className={styles.authDivider}>
+        <span className={styles.authDividerText}>or</span>
+      </div>
+
+      {/* Google sign-up */}
+      <button
+        className={styles.googleSigninBtn}
+        onClick={handleGoogleSignUp}
+        disabled={isGoogleLoading || loading}
+      >
+        <GoogleIcon />
+        {isGoogleLoading ? 'Signing up…' : 'Sign up with Google'}
+      </button>
 
       <div className={styles.footer}>
         <span className={styles.switchText}>
@@ -203,6 +288,15 @@ function Register({ onSwitchView, onRegisterSuccess }) {
           </button>
         </span>
       </div>
+
+      {/* Account linking dialog */}
+      {linkingState && (
+        <AccountLinkDialog
+          email={linkingState.email}
+          onSubmit={handleLinkAccount}
+          onCancel={() => setLinkingState(null)}
+        />
+      )}
     </>
   );
 }

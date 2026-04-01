@@ -5,6 +5,13 @@ const authSlice = createSlice({
   name: 'auth',
   initialState: {
     isAuthenticated: false,
+    /**
+     * User object shape (set by loginSuccess):
+     *   _id, name, email, provider ('local'|'google'|'local+google'),
+     *   isEmailVerified, createdAt,
+     *   googleId?, profilePicture?, userType ('individual'|'enterprise'),
+     *   activeOrganizationId?
+     */
     user: null,
     loading: false,
     error: null,

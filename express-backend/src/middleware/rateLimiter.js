@@ -82,6 +82,16 @@ const feedbackLimiter = rateLimit({
   },
 });
 
+const googleLoginLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ success: false, error: 'Too many Google login attempts. Try again in 15 minutes.' });
+  },
+});
+
 module.exports = {
   loginLimiter,
   forgotPasswordLimiter,
@@ -91,4 +101,5 @@ module.exports = {
   verifyResetCodeLimiter,
   resendResetCodeLimiter,
   feedbackLimiter,
+  googleLoginLimiter,
 };

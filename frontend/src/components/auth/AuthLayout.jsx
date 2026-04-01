@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { loginSuccess } from '../../store/authSlice';
 import { setTheme } from '../../store/uiSlice';
@@ -37,6 +37,54 @@ const IconChat = () => (
   </svg>
 );
 
+/* ── Auth toast (local to formPanel) ─────────────────────── */
+
+const TOAST_DURATION = 4000;
+const FADE_OUT_MS = 250;
+
+function AuthToast({ toast, onRemove }) {
+  const [fading, setFading] = useState(false);
+
+  const dismiss = useCallback(() => {
+    setFading(true);
+    setTimeout(() => onRemove(toast.id), FADE_OUT_MS);
+  }, [toast.id, onRemove]);
+
+  useEffect(() => {
+    const timer = setTimeout(dismiss, TOAST_DURATION);
+    return () => clearTimeout(timer);
+  }, [dismiss]);
+
+  const typeClass = toast.type === 'success' ? styles.authToastSuccess : styles.authToastError;
+
+  return (
+    <div className={`${styles.authToast} ${typeClass} ${fading ? styles.fadeOut : ''}`}>
+      <span className={styles.authToastIcon}>
+        {toast.type === 'success' ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+        )}
+      </span>
+      <span className={styles.authToastMsg}>{toast.message}</span>
+      <button className={styles.authToastClose} onClick={dismiss} type="button">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 /**
  * AuthFlowContainer — owns all transient auth flow state.
  *
@@ -57,6 +105,32 @@ function AuthLayout() {
   const [activeView,      setActiveView]      = useState('login');
   const [flowEmail,       setFlowEmail]       = useState('');
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
+  // ── Auth toast state ───────────────────────────────────
+  const [authToasts,   setAuthToasts]   = useState([]);
+  const toastCounterRef = useRef(0);
+
+  const showAuthToast = useCallback((message, type = 'error') => {
+    toastCounterRef.current += 1;
+    const id = toastCounterRef.current;
+    setAuthToasts((prev) => {
+      // Deduplicate consecutive identical messages
+      if (prev.length > 0 && prev[prev.length - 1].message === message) return prev;
+      // Max 2 visible
+      const next = [...prev, { id, message, type }];
+      while (next.length > 2) next.shift();
+      return next;
+    });
+  }, []);
+
+  const removeAuthToast = useCallback((id) => {
+    setAuthToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // Clear toasts on view change
+  useEffect(() => {
+    setAuthToasts([]);
+  }, [activeView]);
 
   // ── Signup auto-login guards (never persisted) ─────────
   const signupSessionActive = useRef(false);
@@ -142,18 +216,28 @@ function AuthLayout() {
       </div>
 
       <div className={styles.formPanel}>
+        {/* Auth toasts — center-top of form panel */}
+        {authToasts.length > 0 && (
+          <div className={styles.authToastWrap}>
+            {authToasts.map((t) => (
+              <AuthToast key={t.id} toast={t} onRemove={removeAuthToast} />
+            ))}
+          </div>
+        )}
+
         <div className={styles.card}>
           {activeView === 'login'    && (
-            <Login onSwitchView={handleSwitchView} />
+            <Login onSwitchView={handleSwitchView} showAuthToast={showAuthToast} />
           )}
           {activeView === 'register' && (
             <Register
               onSwitchView={handleSwitchView}
               onRegisterSuccess={handleRegisterSuccess}
+              showAuthToast={showAuthToast}
             />
           )}
           {activeView === 'forgot'   && (
-            <ForgotPassword onSwitchView={handleSwitchView} />
+            <ForgotPassword onSwitchView={handleSwitchView} showAuthToast={showAuthToast} />
           )}
           {activeView === 'verify'   && (
             <VerifyCode
@@ -161,6 +245,7 @@ function AuthLayout() {
               initialCooldown={cooldownSeconds}
               onSwitchView={handleSwitchView}
               onVerifySuccess={handleVerifySuccess}
+              showAuthToast={showAuthToast}
             />
           )}
           {activeView === 'reset'    && (
@@ -168,6 +253,7 @@ function AuthLayout() {
               email={flowEmail}
               initialCooldown={cooldownSeconds}
               onSwitchView={handleSwitchView}
+              showAuthToast={showAuthToast}
             />
           )}
         </div>

@@ -25,7 +25,7 @@ contextBridge.exposeInMainWorld('api', {
     register:       (payload) => ipcRenderer.invoke('auth:register', payload),
     login:          (payload) => ipcRenderer.invoke('auth:login', payload),
     logout:         ()        => ipcRenderer.invoke('auth:logout'),
-    deleteAccount:         (password) => ipcRenderer.invoke('auth:deleteAccount', { password }),
+    deleteAccount:         (payload) => ipcRenderer.invoke('auth:deleteAccount', payload),
     verifyEmail:           (email, code)               => ipcRenderer.invoke('auth:verifyEmail', { email, code }),
     resendVerification:    (email)                    => ipcRenderer.invoke('auth:resendVerification', { email }),
     forgotPassword:        (email)                        => ipcRenderer.invoke('auth:forgotPassword', { email }),
@@ -37,6 +37,9 @@ contextBridge.exposeInMainWorld('api', {
     getLocalDbPath: ()        => ipcRenderer.invoke('auth:getLocalDbPath'),
     // Called once on app mount — Electron performs the entire restore sequence.
     restoreSession: ()        => ipcRenderer.invoke('auth:restoreSession'),
+    // Google OAuth
+    initiateGoogleAuth: (mode)    => ipcRenderer.invoke('auth:initiateGoogleAuth', mode),
+    linkGoogleAccount:  (payload) => ipcRenderer.invoke('auth:linkGoogleAccount', payload),
 
     // Push event: Electron notifies the renderer when the session has expired
     // and cannot be silently renewed (revoked or expired refresh token).

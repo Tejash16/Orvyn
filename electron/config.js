@@ -21,6 +21,8 @@ module.exports = {
     ? (process.env.EXPRESS_URL || 'http://localhost:3000')
     : PRODUCTION_EXPRESS_URL,
 
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
+
   COPILOT_PANEL_DEFAULT_WIDTH: parseInt(process.env.COPILOT_PANEL_DEFAULT_WIDTH) || 380,
   COPILOT_PANEL_MIN_WIDTH:     parseInt(process.env.COPILOT_PANEL_MIN_WIDTH)     || 320,
   COPILOT_PANEL_MAX_WIDTH:     parseInt(process.env.COPILOT_PANEL_MAX_WIDTH)     || 600,
