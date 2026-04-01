@@ -75,6 +75,35 @@ async function findOrCreateGoogleUser(profile, mode) {
     return { user, isNewUser: false, requiresLinking: false };
   }
 
+  // 2.5. Check for soft-deleted user (deleted account re-registration)
+  const deletedUser = await User.findOne({
+    email: profile.email.toLowerCase(),
+    isDeleted: true,
+  });
+
+  if (deletedUser) {
+    if (mode === 'login') {
+      return { user: null, isNewUser: false, requiresLinking: false, noAccount: true };
+    }
+
+    // Signup mode — reactivate the soft-deleted account
+    deletedUser.isDeleted = false;
+    deletedUser.deletedAt = undefined;
+    deletedUser.name = profile.name;
+    deletedUser.googleId = profile.googleId;
+    deletedUser.profilePicture = profile.picture;
+    deletedUser.provider = 'google';
+    deletedUser.isEmailVerified = true;
+    deletedUser.password = undefined;
+    deletedUser.refreshToken = undefined;
+    deletedUser.refreshTokenExpires = undefined;
+    deletedUser.failedLoginAttempts = 0;
+    deletedUser.lockUntil = undefined;
+    await deletedUser.save();
+
+    return { user: deletedUser, isNewUser: true, requiresLinking: false };
+  }
+
   // 3. New user
   if (mode === 'login') {
     // Login mode — don't auto-create, tell user to register first

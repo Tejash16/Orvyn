@@ -305,21 +305,43 @@ async function verifyEmail(email, code) {
     throw err;
   }
 
-  // OTP verified — create the real User record
-  try {
-    await User.create({
-      name: pending.name,
-      email: pending.email,
-      password: pending.password,
-      provider: 'local',
-      isEmailVerified: true,
-    });
-  } catch (createErr) {
-    // Race condition: concurrent verify created the user already — treat as success
-    if (createErr.code === 11000) {
-      logger.info(`Concurrent verify for ${pending.email} — user already created`);
-    } else {
-      throw createErr;
+  // OTP verified — create or reactivate the real User record
+  const softDeletedUser = await User.findOne({
+    email: pending.email,
+    isDeleted: true,
+  });
+
+  if (softDeletedUser) {
+    // Reactivate soft-deleted account
+    softDeletedUser.isDeleted = false;
+    softDeletedUser.deletedAt = undefined;
+    softDeletedUser.name = pending.name;
+    softDeletedUser.password = pending.password;
+    softDeletedUser.provider = 'local';
+    softDeletedUser.isEmailVerified = true;
+    softDeletedUser.googleId = undefined;
+    softDeletedUser.profilePicture = undefined;
+    softDeletedUser.refreshToken = undefined;
+    softDeletedUser.refreshTokenExpires = undefined;
+    softDeletedUser.failedLoginAttempts = 0;
+    softDeletedUser.lockUntil = undefined;
+    await softDeletedUser.save();
+  } else {
+    try {
+      await User.create({
+        name: pending.name,
+        email: pending.email,
+        password: pending.password,
+        provider: 'local',
+        isEmailVerified: true,
+      });
+    } catch (createErr) {
+      // Race condition: concurrent verify created the user already — treat as success
+      if (createErr.code === 11000) {
+        logger.info(`Concurrent verify for ${pending.email} — user already created`);
+      } else {
+        throw createErr;
+      }
     }
   }
 
