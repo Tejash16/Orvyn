@@ -160,6 +160,20 @@ contextBridge.exposeInMainWorld('api', {
     getInviteDetails: (inviteCode)             => ipcRenderer.invoke('org:getInviteDetails', { inviteCode }),
   },
 
+  // Billing / subscription management
+  billing: {
+    upgrade:        (payload) => ipcRenderer.invoke('billing:upgrade', payload),
+    getStatus:      ()        => ipcRenderer.invoke('billing:status'),
+    cancel:         ()        => ipcRenderer.invoke('billing:cancel'),
+    // Push event: Electron notifies the renderer when subscription status changes.
+    // Returns a cleanup function for useEffect.
+    onStatusUpdate: (callback) => {
+      const handler = (_event, data) => callback(data);
+      ipcRenderer.on('billing:statusUpdate', handler);
+      return () => ipcRenderer.removeListener('billing:statusUpdate', handler);
+    },
+  },
+
   // Deep link push events (invite links from emails)
   deepLink: {
     onInvite: (callback) => {

@@ -46,9 +46,42 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
   /** Full rollback of all in-memory + vault state. */
   function rollback() {
     tokenRefreshScheduler.cancel();
+    stopSubscriptionCheck();
     tokenVault.remove();
     authService.logout();
     userContextService.clear();
+  }
+
+  // ── Periodic subscription status check ───────────────────
+
+  let subscriptionCheckInterval = null;
+
+  /** Start polling subscription status every 30 minutes. */
+  function startSubscriptionCheck() {
+    if (subscriptionCheckInterval) clearInterval(subscriptionCheckInterval);
+    subscriptionCheckInterval = setInterval(async () => {
+      try {
+        const token = authService.getToken();
+        if (!token) return;
+        const res = await fetch(`${expressService.getExpressUrl()}/api/v1/billing/status`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const status = await res.json();
+        const win = getMainWindow();
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('billing:statusUpdate', status);
+        }
+      } catch { /* ignore network errors */ }
+    }, 30 * 60 * 1000); // 30 minutes
+  }
+
+  /** Stop the subscription check interval. */
+  function stopSubscriptionCheck() {
+    if (subscriptionCheckInterval) {
+      clearInterval(subscriptionCheckInterval);
+      subscriptionCheckInterval = null;
+    }
   }
 
   // ── Register ─────────────────────────────────────────────
@@ -113,7 +146,10 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
       // Step 6
       startRefreshScheduler();
 
-      // Step 7 — resume any pending indexing jobs (fire-and-forget)
+      // Step 7 — start periodic subscription check
+      startSubscriptionCheck();
+
+      // Step 8 — resume any pending indexing jobs (fire-and-forget)
       resumePendingIndexing(getMainWindow)
         .catch(() => { /* non-fatal */ });
 
@@ -205,7 +241,10 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
       // Step 9
       startRefreshScheduler();
 
-      // Step 10 — resume any pending indexing jobs (fire-and-forget)
+      // Step 10 — start periodic subscription check
+      startSubscriptionCheck();
+
+      // Step 11 — resume any pending indexing jobs (fire-and-forget)
       resumePendingIndexing(getMainWindow)
         .catch(() => { /* non-fatal */ });
 
@@ -222,6 +261,7 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
     try {
       // Cancel the refresh timer before clearing state
       tokenRefreshScheduler.cancel();
+      stopSubscriptionCheck();
 
       // Best-effort server-side revocation of the refresh token
       const storedRefreshToken = tokenVault.read();
@@ -256,6 +296,7 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
       // Step 2 — cancel before touching any state
       tokenRefreshScheduler.cancel();
+      stopSubscriptionCheck();
 
       // Step 3 — directory removal; account is already server-deleted so this is best-effort
       try {
@@ -337,6 +378,9 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
       startRefreshScheduler();
 
+      // Start periodic subscription check
+      startSubscriptionCheck();
+
       // Resume pending indexing (fire-and-forget)
       resumePendingIndexing(getMainWindow)
         .catch(() => { /* non-fatal */ });
@@ -387,6 +431,9 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
       authService.setSession(result.accessToken, user);
 
       startRefreshScheduler();
+
+      // Start periodic subscription check
+      startSubscriptionCheck();
 
       return { success: true, user, theme };
     } catch (error) {

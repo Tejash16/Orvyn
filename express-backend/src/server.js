@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const path    = require('path');
 const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
@@ -13,6 +14,7 @@ const authRouter         = require('./routes/auth');
 const aiRouter           = require('./routes/ai');
 const usageRouter        = require('./routes/usage');
 const organizationRouter = require('./routes/organization');
+const billingRouter      = require('./routes/billing');
 
 // ── Fail fast on missing required environment variables ───
 const REQUIRED_ENV = ['JWT_SECRET', 'REFRESH_TOKEN_SECRET', 'MONGO_URI', 'GEMINI_API_KEY'];
@@ -35,6 +37,11 @@ if (missingSmtp.length > 0) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ── View engine + static files for checkout pages ────────
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, '../views'));
+app.use('/static', express.static(path.join(__dirname, '../public')));
+
 // ── Middleware ────────────────────────────────────────────
 app.use(helmet());
 const corsOptions = {
@@ -50,7 +57,15 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.options('/{*path}', cors(corsOptions));
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({
+  limit: '50mb',
+  // Preserve raw body on webhook routes for signature verification
+  verify: (req, _res, buf) => {
+    if (req.originalUrl && req.originalUrl.includes('/webhook')) {
+      req.rawBody = buf.toString();
+    }
+  },
+}));
 
 // HTTP request logging — piped through winston in all environments.
 // In dev: morgan 'dev' format to console + file. In prod: 'combined' to file only.
@@ -65,6 +80,9 @@ app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/ai', aiRouter);
 app.use('/api/v1/usage', usageRouter);
 app.use('/api/v1/organizations', organizationRouter);
+app.use('/api/v1/billing', billingRouter);
+// Checkout web pages served at /billing/* (not under /api/v1/)
+app.use('/billing', billingRouter);
 
 // ── Backward-compat aliases (unversioned → v1) ───────────
 // Keeps existing Electron builds working until they update to /api/v1/.
@@ -74,6 +92,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/usage', usageRouter);
 app.use('/api/organizations', organizationRouter);
+app.use('/api/billing', billingRouter);
 
 // ── 404 handler ───────────────────────────────────────────
 app.use((req, res) => {

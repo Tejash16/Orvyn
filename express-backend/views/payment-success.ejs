@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Orvyn — Payment Successful</title>
+  <link rel="stylesheet" href="/static/css/checkout.css">
+</head>
+<body>
+  <div class="checkout-page">
+    <div class="checkout-container result-container">
+      <div class="result-icon success-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <h1 class="result-title">Payment Successful</h1>
+      <p class="result-message"><%= message %></p>
+      <p class="result-hint">Your subscription is now active. The Orvyn app will automatically detect the upgrade.</p>
+    </div>
+  </div>
+</body>
+</html>

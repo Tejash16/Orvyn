@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../store/authSlice';
 import { setTheme } from '../store/uiSlice';
+import BillingSettings from '../components/settings/BillingSettings';
 import styles from './setting.module.css';
 
 function getInitials(name) {
@@ -304,6 +305,9 @@ function SettingsPage() {
           </div>
         ) : null}
       </div>
+
+      {/* Billing & Plan */}
+      <BillingSettings />
 
       {/* Appearance */}
       <section className={styles.section}>
