@@ -45,6 +45,20 @@ For the orchestration flow, see `CLAUDE-ELECTRON.md`.
 | `POST` | `/api/v1/auth/resend-reset-code` | 3/15min | Resend password reset code |
 | `POST` | `/api/v1/auth/feedback` | 3/15min | Submit user feedback (requires Bearer token) |
 
+### Google OAuth Endpoints
+
+| Method | Path | Rate Limit | Purpose |
+|--------|------|-----------|---------|
+| `POST` | `/api/v1/auth/google` | 5/15min | Exchange Google auth code for app tokens |
+| `POST` | `/api/v1/auth/google/link` | 5/15min | Link Google identity to existing local account |
+| `POST` | `/api/v1/auth/set-user-type` | — | Set user type after first login (requires Bearer) |
+
+**Google OAuth edge cases** (enforced in `authService.js`):
+- `register()` blocks local registration if email exists as a Google account.
+- `loginUser()` blocks email/password login for `provider: 'google'` users (Google-only).
+- `forgotPassword()` silently skips code send for Google-only users (prevents enumeration).
+- `provider: 'local+google'` users can use both login methods.
+
 ### Rate Limiters (15-minute window)
 
 | Limiter | Max Requests | Applied To |
@@ -57,6 +71,9 @@ For the orchestration flow, see `CLAUDE-ELECTRON.md`.
 | `verifyResetCodeLimiter` | 5 | `/verify-reset-code` |
 | `resendResetCodeLimiter` | 3 | `/resend-reset-code` |
 | `feedbackLimiter` | 3 | `/feedback` |
+| `googleLoginLimiter` | 5 | `/google`, `/google/link` |
+| `orgCreateLimiter` | 5 | Organization creation |
+| `orgInviteLimiter` | 10 | Organization invites |
 
 ---
 
@@ -99,6 +116,88 @@ Type values: `chunk`, `tool_call`, `tool_call_stop`, `end`, `error`.
 
 ---
 
+## Organization Endpoints (require Bearer token)
+
+All routes mounted at `/api/v1/organizations/`.
+
+### Organization CRUD
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `POST` | `/` | `authenticate` + `orgCreateLimiter` | Create organization |
+| `GET` | `/:orgId` | `authenticate` + `orgAuthorize('member')` | Get organization details |
+| `PUT` | `/:orgId` | `authenticate` + `orgAuthorize('admin')` | Update organization |
+| `DELETE` | `/:orgId` | `authenticate` + `orgAuthorize('owner')` | Delete organization |
+
+### Members
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `GET` | `/:orgId/members` | `orgAuthorize('member')` | List all members (with user info) |
+| `PUT` | `/:orgId/members/:userId` | `orgAuthorize('admin')` | Update member role |
+| `DELETE` | `/:orgId/members/:userId` | `orgAuthorize('admin')` | Remove member |
+
+### Invitations
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `POST` | `/:orgId/invites` | `orgAuthorize('admin')` + `orgInviteLimiter` | Create invite |
+| `GET` | `/:orgId/invites` | `orgAuthorize('admin')` | List pending invites |
+| `DELETE` | `/:orgId/invites/:inviteId` | `orgAuthorize('admin')` | Revoke invite |
+| `GET` | `/invites/:inviteCode` | Public (no auth) | Get invite details |
+| `POST` | `/invites/:inviteCode/accept` | `authenticate` | Accept invite |
+
+### Audit Logs (Enterprise)
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `GET` | `/:orgId/audit-logs` | `orgAuthorize('admin')` | Paginated org audit log (filter by action, date range) |
+
+---
+
+## Billing Endpoints
+
+### API Routes (require Bearer token)
+
+All routes mounted at `/api/v1/billing/`.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/create-checkout-session` | Create Razorpay subscription, return checkout URL |
+| `GET` | `/status` | Get current subscription status |
+| `POST` | `/cancel` | Cancel active subscription |
+| `POST` | `/webhook` | Razorpay webhook handler (NO Bearer auth, signature-verified) |
+
+### Checkout Web Pages (served in browser, NOT API)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/billing/checkout/:token` | Razorpay checkout page (short-lived JWT token) |
+| `GET` | `/billing/checkout/success` | Post-payment success page |
+| `GET` | `/billing/checkout/failure` | Post-payment failure page |
+
+---
+
+## Sharing Endpoints (require Bearer token)
+
+All routes mounted at `/api/v1/sharing/`.
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/datarooms` | Share a DataRoom (create snapshot with access) |
+| `PUT` | `/datarooms/:shareId` | Update shared snapshot (re-share with latest data) |
+| `DELETE` | `/datarooms/:shareId` | Delete shared DataRoom |
+| `POST` | `/datarooms/:shareId/access` | Grant access to a user |
+| `DELETE` | `/datarooms/:shareId/access/:userId` | Revoke user access |
+| `GET` | `/datarooms/:shareId/access` | List who has access |
+| `GET` | `/my-shares` | List DataRooms I shared |
+| `GET` | `/received` | List DataRooms shared with me |
+| `GET` | `/received/:shareId` | Get shared DataRoom full snapshot data |
+| `GET` | `/users/search` | Search users for sharing (query param `q`) |
+| `GET` | `/me/audit-logs` | Individual user's own activity log (paginated) |
+
+---
+
 ## Health Endpoint
 
 | Method | Path | Purpose |
@@ -111,11 +210,56 @@ Type values: `chunk`, `tool_call`, `tool_call_stop`, `end`, `error`.
 
 | Model | File | Purpose |
 |-------|------|---------|
-| `User` | `src/models/User.js` | User account with auth fields (email, password hash, verified status) |
+| `User` | `src/models/User.js` | User account (email, password hash, verified status, googleId, profilePicture, userType, activeOrganizationId, provider) |
 | `PendingRegistration` | `src/models/PendingRegistration.js` | Temporary record during email verification flow |
-| `UserLimits` | `src/models/UserLimits.js` | Per-user monthly file upload limits |
-| `UserUsage` | `src/models/UserUsage.js` | Track file uploads per user per month |
+| `UserLimits` | `src/models/UserLimits.js` | Per-user monthly file upload limits, plan, dataroomLimit |
+| `UserUsage` | `src/models/UserUsage.js` | Track file uploads per user per month (lastDailyReset, lastMonthlyReset) |
 | `IdempotencyKey` | `src/models/IdempotencyKey.js` | Idempotent request deduplication for classification/generation |
+| `Organization` | `src/models/Organization.js` | Organization entity (name, owner, settings) |
+| `OrganizationMember` | `src/models/OrganizationMember.js` | User-org membership (userId, organizationId, role: owner/admin/member) |
+| `OrganizationInvite` | `src/models/OrganizationInvite.js` | Pending invitation (email, inviteCode, role, expiry) |
+| `Subscription` | `src/models/Subscription.js` | Razorpay billing state (userId, orgId, plan, status, razorpaySubscriptionId) |
+| `SharedDataRoom` | `src/models/SharedDataRoom.js` | Shared DataRoom snapshot (folder tree, files, extracted text, metadata) |
+| `SharedDataRoomAccess` | `src/models/SharedDataRoomAccess.js` | Per-user access grant (sharedDataRoomId, userId, permission) |
+| `AuditLog` | `src/models/AuditLog.js` | Enterprise audit trail (userId, action, resourceType, metadata, TTL 1 year) |
+
+---
+
+## Middleware
+
+| File | Purpose |
+|------|---------|
+| `authenticate.js` | Bearer token verification, attaches `req.user` |
+| `rateLimiter.js` | All rate limiters (auth, Google, org, feedback) |
+| `errorHandler.js` | Global error handler |
+| `orgAuthorize.js` | Organization role-based access control. Accepts minimum role ('member', 'admin', 'owner'). Verifies user is a member with sufficient role. |
+| `enforceLimits.js` | Server-side usage enforcement. Checks file, DataRoom, and message limits based on plan. Applied to AI endpoints (chat, classify, generate). |
+
+---
+
+## Services
+
+| File | Purpose |
+|------|---------|
+| `authService.js` | Registration, login, token generation, password reset, Google edge case guards |
+| `geminiService.js` | All Gemini API calls (classification, chat, embedding, OCR, etc.) |
+| `googleAuthService.js` | Google OAuth: `exchangeCodeForProfile()`, `findOrCreateGoogleUser()`, `linkGoogleToLocalAccount()` |
+| `razorpayService.js` | Razorpay SDK: create subscriptions, webhook handling, payment emails, subscription status |
+| `emailService.js` | Transactional email transport (SMTP or file-log fallback in dev) |
+| `emailTemplates.js` | HTML email templates (verification, reset, invites, payments, sharing) |
+| `auditService.js` | `logAudit(params)` — fire-and-forget audit log creation (never blocks main operation) |
+| `usageService.js` | Usage tracking, limit checks, monthly/daily reset logic |
+| `codeService.js` | Verification code generation |
+| `logger.js` | Winston logger (file rotation, Morgan HTTP log stream) |
+
+---
+
+## Config
+
+| File | Purpose |
+|------|---------|
+| `config/db.js` | MongoDB connection via Mongoose |
+| `config/planLimits.js` | Plan-to-limits mapping. `PLAN_LIMITS.free`, `.pro`, `.enterprise` with `monthlyFileLimit`, `dailyMessageLimit`, `dataroomLimit`. `-1` = unlimited. |
 
 ---
 
@@ -165,3 +309,18 @@ Also exports: `CHAT_SYSTEM_PROMPT` constant.
 | `SMTP_USER` | — | Email server username |
 | `SMTP_PASS` | — | Email server password |
 | `MAIL_FROM` | — | From address for emails |
+| `GOOGLE_CLIENT_ID` | — | Google OAuth client ID (public, also in Electron) |
+| `GOOGLE_CLIENT_SECRET` | — | Google OAuth client secret (Express only) |
+| `RAZORPAY_KEY_ID` | — | Razorpay API key |
+| `RAZORPAY_KEY_SECRET` | — | Razorpay secret |
+| `RAZORPAY_WEBHOOK_SECRET` | — | Razorpay webhook signature verification |
+| `RAZORPAY_PLAN_ID_PRO` | — | Razorpay plan ID for individual pro |
+| `RAZORPAY_PLAN_ID_ENTERPRISE` | — | Razorpay plan ID for enterprise |
+
+### Dependencies Added in V2
+
+| Package | Purpose |
+|---------|---------|
+| `google-auth-library` | Google OAuth token verification |
+| `razorpay` | Razorpay payment SDK |
+| `ejs` | Template engine for checkout web pages |

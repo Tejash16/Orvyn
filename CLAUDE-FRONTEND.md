@@ -49,14 +49,25 @@ All slices are in `frontend/src/store/`. Each slice uses Redux Toolkit's `create
 ```
 State shape:
   isAuthenticated: false     — User is logged in
-  user: null                 — Current user object
+  user: null                 — Current user object (shape below)
   loading: false             — Login in progress
   error: null                — Error message
   isRestoring: true          — True on launch until session restore completes
+  plan: null                 — 'free' | 'pro' | 'enterprise'
+  limits: null               — { dataroomLimit, monthlyFileLimit, dailyMessageLimit }
+  usage: null                — { filesUploadedThisPeriod, messagesToday }
 
-Reducers: loginStart, loginSuccess, loginFailure, logout, restoreComplete
+User object shape (set by loginSuccess):
+  _id, name, email, provider ('local'|'google'|'local+google'),
+  isEmailVerified, createdAt,
+  googleId?, profilePicture?, userType ('individual'|'enterprise'),
+  activeOrganizationId?
 
-Thunks: loginThunk(credentials) — Full login flow with theme hydration
+Reducers: loginStart, loginSuccess, loginFailure, logout, restoreComplete, setLimits
+
+Thunks:
+  loginThunk(credentials) — Full login flow with theme hydration
+  fetchLimits()           — Fetch plan, limits, usage from Express via Electron IPC
 ```
 
 ### `dataroomSlice.js` — DataRoom CRUD State
@@ -149,13 +160,15 @@ Reducers: clearFolderError
 State shape:
   sidebarCollapsed: true     — Sidebar collapsed/expanded
   theme: 'light'             — 'light' | 'dark'
-  activePage: 'dataroom'     — Current page identifier
+  activePage: 'dataroom'     — Current page identifier (see below)
   toasts: []                 — Toast notifications [{id, message, type}, ...]
   toastCounter: 0            — Auto-increment toast ID
   isOnline: true             — Express backend reachable
   uploadInitialFiles: null   — Pre-loaded files for upload page
   uploadPreselectedDataroomId: null — Pre-selected DataRoom for upload
   pendingViewDataroomId: null — After classification, navigate to this DataRoom
+
+activePage values: 'dataroom', 'upload', 'settings', 'collaboration', 'organization-settings'
 
 Reducers: toggleSidebar, toggleTheme, setTheme, setActivePage,
           setOnline, setUploadInitialFiles, setUploadPreselectedDataroomId,
@@ -202,6 +215,72 @@ Thunks: sendMessage, fetchSessions, loadSession, deleteSession,
         indexFiles, getIndexStatus, retryIndexing
 ```
 
+### `organizationSlice.js` — Organization State
+
+```
+State shape:
+  organization: null         — Current org object
+  members: []                — Array of member objects (populated with user info)
+  invites: []                — Array of pending invite objects
+  isLoading: false
+  error: null
+  auditLogs: []              — Audit log entries for current org
+  auditTotal: 0              — Total audit log count
+  auditPage: 1               — Current pagination page
+  auditTotalPages: 0         — Total pages available
+  isAuditLoading: false      — Audit log fetch in progress
+
+Reducers: orgStart, orgFailure, setOrganization, setMembers,
+          setInvites, clearOrganization, auditStart, setAuditLogs,
+          clearAuditLogs
+
+Thunks: createOrganization, fetchOrganization, fetchMembers,
+        fetchInvites, createInviteThunk, acceptInviteThunk,
+        removeMemberThunk, updateMemberRoleThunk, revokeInviteThunk,
+        deleteOrganizationThunk, fetchAuditLogs
+```
+
+### `billingSlice.js` — Billing & Subscription State
+
+```
+State shape:
+  plan: 'free'               — 'free' | 'pro' | 'enterprise'
+  status: 'active'           — 'active' | 'trialing' | 'past_due' | 'cancelled' | 'expired'
+  currentPeriodEnd: null     — Subscription period end date
+  organizationId: null       — Set when on an enterprise org plan
+  isLoading: false
+  error: null
+
+Reducers: setBillingLoading, setBillingStatus, setBillingError,
+          clearBillingError, resetBilling
+
+Thunks: fetchBillingStatus, upgradePlan({ plan, organizationId?, seats? }),
+        cancelSubscription
+```
+
+### `sharingSlice.js` — DataRoom Sharing State
+
+```
+State shape:
+  received: []               — DataRooms shared with me
+  myShares: []               — DataRooms I shared
+  searchResults: []          — User search results
+  accessList: []             — Access records for a specific share
+  isLoading: false
+  isSharing: false           — Share operation in progress
+  isImporting: false         — Import operation in progress
+  error: null
+
+Reducers: clearSharingError, clearSearchResults, clearAccessList
+
+Thunks (all createAsyncThunk):
+  fetchReceived, fetchMyShares, shareDataroom({ dataroomId, recipientEmail }),
+  importDataroom(shareId), searchUsers(query),
+  updateShare({ shareId, dataroomId }), deleteShare(shareId),
+  grantAccess({ shareId, email, permission }),
+  revokeAccess({ shareId, userId }), listAccess(shareId)
+```
+
 ---
 
 ## File Explorer Architecture
@@ -215,6 +294,8 @@ interface for browsing DataRoom contents. It mimics Windows Explorer behavior.
 - Double-clicking a file calls `file:open` (uses `shell.openPath()`).
 - If the file no longer exists at `original_path`, the UI shows a "File not found" state
   with a **Relocate** button.
+- **Shared DataRoom files** (`is_shared=true`): file operations (open, relocate, delete, rename)
+  are disabled. These files have `original_path='SHARED'` and are read-only.
 
 ### Navigation & Views
 
@@ -262,14 +343,18 @@ interface for browsing DataRoom contents. It mimics Windows Explorer behavior.
 frontend/src/components/
 ├── auth/                   # Authentication components
 │   ├── AuthLayout.jsx      # Wrapper for auth pages
-│   ├── Login.jsx           # Login form
-│   ├── Register.jsx        # Registration form
+│   ├── Login.jsx           # Login form (email/password + Google sign-in)
+│   ├── Register.jsx        # Registration form (+ Google sign-up)
 │   ├── ForgotPassword.jsx  # Password reset request
 │   ├── VerifyCode.jsx      # Email verification
-│   └── ResetCode.jsx       # Password reset with code
+│   ├── ResetCode.jsx       # Password reset with code
+│   ├── AccountLinkDialog.jsx  # [V2] Google account linking password dialog
+│   ├── UserTypeSelection.jsx  # [V2] Post-auth user type picker (individual/enterprise)
+│   ├── CreateOrganization.jsx # [V2] Organization creation form
+│   └── JoinOrganization.jsx   # [V2] Accept invite flow
 ├── layout/                 # Layout components
 │   ├── Header.jsx          # Top navigation bar
-│   └── Sidebar.jsx         # Left sidebar navigation
+│   └── Sidebar.jsx         # Left sidebar navigation (incl. Collaboration item)
 ├── dataroom/               # DataRoom browsing
 │   ├── CreateDataRoomModal.jsx
 │   ├── FileExplorer.jsx    # Main file/folder browser
@@ -292,6 +377,13 @@ frontend/src/components/
 │   ├── CopilotReasoningSteps.jsx
 │   ├── CopilotSessionList.jsx
 │   └── CopilotSources.jsx
+├── settings/               # [V2] Settings components
+│   ├── BillingSettings.jsx     # Subscription management UI
+│   └── BillingSettings.module.css
+├── sharing/                # [V2] Sharing components
+│   ├── ShareDialog.jsx     # Share DataRoom modal (user search + send)
+│   ├── SharedWithMe.jsx    # Received DataRooms grid (import action)
+│   └── MyShares.jsx        # Sent DataRooms grid (update/delete actions)
 └── common/                 # Shared utility components
     ├── ContextMenu.jsx     # Right-click context menu
     ├── FolderPicker.jsx    # Folder selection dialog
@@ -306,4 +398,17 @@ frontend/src/components/
 | DataRoom List | `pages/DataRoomList.jsx` | Main view: list datarooms, open file explorer |
 | Upload | `pages/UploadPage.jsx` | Upload files, choose classification mode |
 | Reset Password | `pages/ResetPassword.jsx` | Password reset flow |
-| Settings | `pages/setting.jsx` | User settings, theme toggle, usage stats |
+| Settings | `pages/setting.jsx` | User settings, theme toggle, usage stats, billing |
+| Collaboration | `pages/CollaborationPage.jsx` | [V2] Shared DataRooms hub (SharedWithMe + MyShares tabs) |
+| Organization Settings | `pages/OrganizationSettings.jsx` | [V2] Org management (members, invites, settings, activity log) |
+
+### Sidebar Navigation
+
+The Sidebar (`components/layout/Sidebar.jsx`) includes these navigation items:
+- **DataRooms** — `activePage: 'dataroom'`
+- **Upload** — `activePage: 'upload'`
+- **Collaboration** — `activePage: 'collaboration'` (V2)
+- **Settings** — `activePage: 'settings'`
+
+Organization Settings is accessed from within the Settings page or via the organization
+section, setting `activePage: 'organization-settings'`.

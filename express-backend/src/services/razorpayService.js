@@ -6,6 +6,7 @@ const Subscription  = require('../models/Subscription');
 const UserLimits    = require('../models/UserLimits');
 const { PLAN_LIMITS } = require('../config/planLimits');
 const logger        = require('./logger');
+const { logAudit }  = require('./auditService');
 
 // ── Razorpay SDK instance (lazy) ──────────────────────────
 
@@ -186,6 +187,20 @@ async function handleWebhookEvent(event, payload) {
           });
         }
         logger.info(`Subscription charged: ${subscriptionId}`);
+
+        // Audit log: payment success
+        if (email) {
+          await logAudit({
+            userId: sub.userId || null,
+            userName: userName,
+            userEmail: email,
+            organizationId: sub.organizationId || null,
+            action: 'billing.payment_success',
+            resourceType: 'subscription',
+            resourceId: sub._id.toString(),
+            metadata: { paymentId: paymentEntity?.id, amount: paymentEntity?.amount },
+          });
+        }
       }
       break;
     }
@@ -197,6 +212,22 @@ async function handleWebhookEvent(event, payload) {
         sub.cancelledAt = new Date();
         await sub.save();
         await downgradeToFree(sub);
+
+        // Audit log: subscription cancelled
+        const { email: cancelEmail, userName: cancelName } = await getSubscriptionOwnerDetails(sub);
+        if (cancelEmail) {
+          await logAudit({
+            userId: sub.userId || null,
+            userName: cancelName,
+            userEmail: cancelEmail,
+            organizationId: sub.organizationId || null,
+            action: 'billing.subscription_cancelled',
+            resourceType: 'subscription',
+            resourceId: sub._id.toString(),
+            metadata: {},
+          });
+        }
+
         logger.info(`Subscription cancelled: ${subscriptionId}`);
       }
       break;
@@ -257,6 +288,23 @@ async function handleWebhookEvent(event, payload) {
           });
         }
         logger.info(`Payment failed for subscription ${subscriptionId} — awaiting retry`);
+
+        // Audit log: payment failed
+        if (email) {
+          await logAudit({
+            userId: sub.userId || null,
+            userName: userName,
+            userEmail: email,
+            organizationId: sub.organizationId || null,
+            action: 'billing.payment_failed',
+            resourceType: 'subscription',
+            resourceId: sub._id.toString(),
+            metadata: {
+              paymentId: paymentEntity?.id,
+              reason: paymentEntity?.error_description || 'Payment declined',
+            },
+          });
+        }
       }
       break;
     }

@@ -8,6 +8,7 @@ const OrganizationInvite = require('../models/OrganizationInvite');
 const User               = require('../models/User');
 const { sendOrganizationInviteEmail } = require('../services/emailService');
 const logger = require('../services/logger');
+const { logAudit } = require('../services/auditService');
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -122,6 +123,24 @@ async function updateOrganization(req, res, next) {
     if (allowExternalSharing !== undefined) org.allowExternalSharing = allowExternalSharing;
 
     await org.save();
+
+    // Audit log: org settings updated
+    const updater = await User.findById(req.user.userId).select('name email');
+    if (updater) {
+      await logAudit({
+        userId: req.user.userId,
+        userName: updater.name,
+        userEmail: updater.email,
+        organizationId: org._id,
+        action: 'org.settings_updated',
+        resourceType: 'organization',
+        resourceId: org._id.toString(),
+        resourceName: org.name,
+        metadata: { name, slug, allowExternalSharing },
+        ipAddress: req.ip,
+      });
+    }
+
     return res.status(200).json({ success: true, organization: org.toJSON() });
   } catch (err) {
     next(err);
@@ -217,8 +236,25 @@ async function updateMemberRole(req, res, next) {
       return res.status(403).json({ success: false, error: 'Cannot demote yourself.' });
     }
 
+    const oldRole = targetMember.role;
     targetMember.role = role;
     await targetMember.save();
+
+    // Audit log: member role changed
+    const changer = await User.findById(req.user.userId).select('name email');
+    if (changer) {
+      await logAudit({
+        userId: req.user.userId,
+        userName: changer.name,
+        userEmail: changer.email,
+        organizationId: req.params.orgId,
+        action: 'org.member_role_changed',
+        resourceType: 'organization',
+        resourceId: req.params.orgId,
+        metadata: { targetUserId: req.params.userId, oldRole, newRole: role },
+        ipAddress: req.ip,
+      });
+    }
 
     return res.status(200).json({ success: true, member: targetMember.toJSON() });
   } catch (err) {
@@ -254,6 +290,22 @@ async function removeMember(req, res, next) {
       { _id: req.params.userId, activeOrganizationId: req.params.orgId },
       { $set: { activeOrganizationId: null } },
     );
+
+    // Audit log: member removed
+    const remover = await User.findById(req.user.userId).select('name email');
+    if (remover) {
+      await logAudit({
+        userId: req.user.userId,
+        userName: remover.name,
+        userEmail: remover.email,
+        organizationId: req.params.orgId,
+        action: 'org.member_removed',
+        resourceType: 'organization',
+        resourceId: req.params.orgId,
+        metadata: { removedUserId: req.params.userId },
+        ipAddress: req.ip,
+      });
+    }
 
     return res.status(200).json({ success: true, message: 'Member removed.' });
   } catch (err) {
@@ -348,6 +400,22 @@ async function createInvite(req, res, next) {
       role: invite.role,
       expiresAt: invite.expiresAt,
     });
+
+    // Audit log: member invited
+    if (inviter) {
+      await logAudit({
+        userId: req.user.userId,
+        userName: inviter.name,
+        userEmail: inviter.email,
+        organizationId: orgId,
+        action: 'org.member_invited',
+        resourceType: 'organization',
+        resourceId: orgId,
+        resourceName: org.name,
+        metadata: { invitedEmail: invite.email, role: invite.role },
+        ipAddress: req.ip,
+      });
+    }
 
     return res.status(201).json({
       success: true,
@@ -463,10 +531,26 @@ async function acceptInvite(req, res, next) {
     await invite.save();
 
     // Update user
-    await User.findByIdAndUpdate(req.user.userId, {
+    const joiner = await User.findByIdAndUpdate(req.user.userId, {
       userType: 'enterprise',
       activeOrganizationId: invite.organizationId,
-    });
+    }, { new: true });
+
+    // Audit log: member joined
+    if (joiner) {
+      await logAudit({
+        userId: req.user.userId,
+        userName: joiner.name,
+        userEmail: joiner.email,
+        organizationId: invite.organizationId,
+        action: 'org.member_joined',
+        resourceType: 'organization',
+        resourceId: invite.organizationId.toString(),
+        resourceName: org.name,
+        metadata: { inviteCode: req.params.inviteCode },
+        ipAddress: req.ip,
+      });
+    }
 
     return res.status(200).json({ success: true, organization: org.toJSON() });
   } catch (err) {

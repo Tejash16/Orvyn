@@ -32,4 +32,28 @@ router.get('/received/:shareId', authenticate, sharingController.getSharedDataRo
 // Search users for sharing
 router.get('/users/search', authenticate, sharingController.searchUsers);
 
+// ── User-level audit logs ────────────────────────────────
+const AuditLog = require('../models/AuditLog');
+
+/**
+ * GET /api/v1/sharing/me/audit-logs
+ * Individual user's own activity log.
+ * Query params: ?page=1&limit=50
+ */
+router.get('/me/audit-logs', authenticate, async (req, res, next) => {
+  try {
+    const { page = 1, limit = 50 } = req.query;
+    const logs = await AuditLog.find({ userId: req.user.userId })
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
+      .lean();
+
+    const total = await AuditLog.countDocuments({ userId: req.user.userId });
+    res.json({ logs, total, page: Number(page), totalPages: Math.ceil(total / limit) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

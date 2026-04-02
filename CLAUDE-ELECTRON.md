@@ -27,6 +27,9 @@ All IPC channels are defined in `electron/ipc/` handler files and exposed via
 | `auth:getCurrentUser` | `window.api.auth.getCurrentUser()` | Get current authenticated user |
 | `auth:getLocalDbPath` | `window.api.auth.getLocalDbPath()` | Get local database file path |
 | `auth:sendFeedback` | `window.api.auth.sendFeedback(feedback)` | Submit user feedback |
+| `auth:initiateGoogleAuth` | `window.api.auth.initiateGoogleAuth(mode)` | Start Google OAuth flow (loopback server + browser) |
+| `auth:linkGoogleAccount` | `window.api.auth.linkGoogleAccount(payload)` | Link Google identity to existing local account |
+| `auth:setUserType` | `window.api.auth.setUserType(userType)` | Set user type ('individual' or 'enterprise') |
 
 **Push events:**
 
@@ -41,6 +44,12 @@ All IPC channels are defined in `electron/ipc/` handler files and exposed via
 |---------|---------------|---------|
 | `settings:setTheme` | `window.api.settings.setTheme(theme)` | Set theme ('light' or 'dark') |
 | `settings:getUsage` | `window.api.settings.getUsage()` | Get file usage/quota stats |
+
+### `usage:*` — Plan & Limits
+
+| Channel | Preload Method | Purpose |
+|---------|---------------|---------|
+| `usage:getLimits` | `window.api.usage.getLimits()` | Get plan, limits, and current usage from Express |
 
 ### `window:*` — Window Controls
 
@@ -106,6 +115,70 @@ All IPC channels are defined in `electron/ipc/` handler files and exposed via
 |---------|---------------|---------|
 | `ai:classify` | `window.api.ai.classify(dataroomId, fileIds)` | Classify files into existing DataRoom folders |
 | `ai:generate-dataroom` | `window.api.ai.generateDataroom(name, description, fileIds, dataroomId)` | Create AI-generated DataRoom with folders |
+
+### `org:*` — Organization Operations
+
+Handler file: `electron/ipc/organizationHandlers.js`
+
+| Channel | Preload Method | Purpose |
+|---------|---------------|---------|
+| `org:create` | `window.api.organization.create(name)` | Create organization |
+| `org:get` | `window.api.organization.get(orgId)` | Get organization details |
+| `org:update` | `window.api.organization.update(orgId, updates)` | Update organization |
+| `org:delete` | `window.api.organization.delete(orgId)` | Delete organization |
+| `org:getMembers` | `window.api.organization.getMembers(orgId)` | List all members |
+| `org:updateMemberRole` | `window.api.organization.updateMemberRole(orgId, userId, role)` | Update member role |
+| `org:removeMember` | `window.api.organization.removeMember(orgId, userId)` | Remove member |
+| `org:createInvite` | `window.api.organization.createInvite(orgId, email, role)` | Create invite |
+| `org:listInvites` | `window.api.organization.listInvites(orgId)` | List pending invites |
+| `org:revokeInvite` | `window.api.organization.revokeInvite(orgId, inviteId)` | Revoke invite |
+| `org:acceptInvite` | `window.api.organization.acceptInvite(inviteCode)` | Accept invite |
+| `org:getInviteDetails` | `window.api.organization.getInviteDetails(inviteCode)` | Get invite details (public) |
+| `organization:getAuditLogs` | `window.api.organization.getAuditLogs(orgId, filters)` | Get org-level audit logs (paginated) |
+
+### `billing:*` — Billing & Subscriptions
+
+Handler file: `electron/ipc/billingHandlers.js`
+
+| Channel | Preload Method | Purpose |
+|---------|---------------|---------|
+| `billing:upgrade` | `window.api.billing.upgrade({ plan, organizationId?, seats? })` | Create checkout session + open in system browser |
+| `billing:status` | `window.api.billing.getStatus()` | Get current subscription status |
+| `billing:cancel` | `window.api.billing.cancel()` | Cancel active subscription |
+
+**Push events:**
+
+| Channel | Preload Listener | Purpose |
+|---------|-----------------|---------|
+| `billing:statusUpdate` | `window.api.billing.onStatusUpdate(cb)` | Subscription status changed |
+
+### `sharing:*` — DataRoom Sharing
+
+Handler file: `electron/ipc/sharingHandlers.js`
+
+| Channel | Preload Method | Purpose |
+|---------|---------------|---------|
+| `sharing:shareDataroom` | `window.api.sharing.shareDataroom({ dataroomId, recipientEmail })` | Export snapshot from Python, send to Express, grant access |
+| `sharing:getReceived` | `window.api.sharing.getReceived()` | List DataRooms shared with me |
+| `sharing:importDataroom` | `window.api.sharing.importDataroom(shareId)` | Fetch snapshot from Express, import into local SQLite |
+| `sharing:searchUsers` | `window.api.sharing.searchUsers(query)` | Search users by email/name |
+| `sharing:updateShare` | `window.api.sharing.updateShare({ shareId, dataroomId })` | Re-export + update shared snapshot |
+| `sharing:getMyShares` | `window.api.sharing.getMyShares()` | List DataRooms I shared |
+| `sharing:deleteShare` | `window.api.sharing.deleteShare(shareId)` | Delete shared DataRoom |
+| `sharing:grantAccess` | `window.api.sharing.grantAccess({ shareId, email, permission })` | Grant access to a user |
+| `sharing:revokeAccess` | `window.api.sharing.revokeAccess({ shareId, userId })` | Revoke user access |
+| `sharing:listAccess` | `window.api.sharing.listAccess(shareId)` | List who has access |
+
+### `deep-link:*` — Deep Link Protocol
+
+The `orvyn://` custom protocol is registered in `electron/main.js` for handling
+organization invite links from emails.
+
+**Push events:**
+
+| Channel | Preload Listener | Purpose |
+|---------|-----------------|---------|
+| `deep-link:invite` | `window.api.deepLink.onInvite(cb)` | Organization invite code received via deep link |
 
 ### `app:*` / `logs:*` — App-Level
 
@@ -208,6 +281,18 @@ Electron (copilotHandlers.js — copilot:index-files)
   IPC 'copilot:index-progress' { completed, total, current_file, status } after each file
 ```
 
+### Sharing Orchestration (2-Step Export/Import)
+
+```
+Share flow (sharing:shareDataroom):
+  Step 1: Python POST /api/v1/sharing/export-dataroom → DataRoom snapshot with full text
+  Step 2: Express POST /api/v1/sharing/datarooms → store snapshot + grant access
+
+Import flow (sharing:importDataroom):
+  Step 1: Express GET /api/v1/sharing/received/:shareId → full snapshot data
+  Step 2: Python POST /api/v1/sharing/import-dataroom → create local read-only DataRoom
+```
+
 ### Five Architectural Safeguards
 
 | # | Safeguard | Mechanism |
@@ -230,6 +315,16 @@ On app startup, after `/init-db` completes:
 
 ## Electron Service Layer
 
+### `authService.js` — Auth + Google OAuth
+
+| Function | Purpose |
+|----------|---------|
+| `initiateGoogleAuth()` | Start loopback OAuth server, open system browser, await auth code |
+| `googleLogin(code, redirectUri)` | Exchange auth code with Express for app tokens |
+| `linkGoogleAccount(email, password, googleId, picture)` | Link Google to existing local account via Express |
+| `setToken(token)` / `getToken()` | Store/retrieve access token in memory |
+| `setUser(user)` / `getUser()` | Store/retrieve user object in memory |
+
 ### `expressService.js` — Express API Communication
 
 | Function | Purpose |
@@ -239,6 +334,19 @@ On app startup, after `/init-db` completes:
 | `ocrImage(imageBase64, mimeType, filename)` | Send image to Express for Gemini Vision OCR |
 | `checkFileLimit(count)` | Pre-check file upload quota with Express |
 | `getUsage()` | Get full usage/quota summary from Express |
+| `createOrganization(name)` | Create organization via Express |
+| `getOrganization(orgId)` | Get organization details |
+| `updateOrganization(orgId, updates)` | Update organization |
+| `deleteOrganization(orgId)` | Delete organization |
+| `getOrgMembers(orgId)` | List members |
+| `updateMemberRole(orgId, userId, role)` | Update member role |
+| `removeOrgMember(orgId, userId)` | Remove member |
+| `createOrgInvite(orgId, email, role)` | Create invite |
+| `listOrgInvites(orgId)` | List invites |
+| `revokeOrgInvite(orgId, inviteId)` | Revoke invite |
+| `acceptOrgInvite(inviteCode)` | Accept invite |
+| `getInviteDetails(inviteCode)` | Get invite details |
+| `getExpressUrl()` | Get Express base URL |
 
 ### `pythonService.js` — Python API Communication
 
@@ -254,10 +362,14 @@ All DataRoom/folder/file CRUD functions plus:
 
 ## Electron Environment Variables
 
-### `electron/.env` (Copilot additions)
+### `electron/.env`
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
+| `EXPRESS_URL` | — | Express backend base URL |
+| `PYTHON_URL` | — | Python backend fallback URL (dynamic port overrides) |
+| `VITE_DEV_PORT` | — | Vite dev server port (dev only) |
 | `COPILOT_PANEL_DEFAULT_WIDTH` | `380` | Default panel width in pixels |
 | `COPILOT_PANEL_MIN_WIDTH` | `320` | Minimum resizable panel width |
 | `COPILOT_PANEL_MAX_WIDTH` | `600` | Maximum resizable panel width |
+| `GOOGLE_CLIENT_ID` | — | Google OAuth client ID (public; needed for constructing auth URL) |

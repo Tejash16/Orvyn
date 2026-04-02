@@ -2,6 +2,7 @@ const SharedDataRoom = require('../models/SharedDataRoom');
 const SharedDataRoomAccess = require('../models/SharedDataRoomAccess');
 const User = require('../models/User');
 const logger = require('../services/logger');
+const { logAudit } = require('../services/auditService');
 
 /**
  * POST /api/v1/sharing/datarooms
@@ -80,6 +81,20 @@ async function createSharedDataRoom(req, res, next) {
       }
     }
 
+    // Audit log: DataRoom shared
+    await logAudit({
+      userId: req.user.userId,
+      userName: user.name,
+      userEmail: user.email,
+      organizationId: user.activeOrganizationId || null,
+      action: 'dataroom.shared',
+      resourceType: 'dataroom',
+      resourceId: shared._id.toString(),
+      resourceName: name,
+      metadata: { recipientEmail, permission: 'viewer' },
+      ipAddress: req.ip,
+    });
+
     res.status(201).json({ sharedDataRoom: shared });
   } catch (error) {
     next(error);
@@ -108,6 +123,23 @@ async function updateSharedDataRoom(req, res, next) {
     shared.snapshotVersion += 1;
     shared.snapshotCreatedAt = new Date();
     await shared.save();
+
+    // Audit log: shared DataRoom updated
+    const owner = await User.findById(req.user.userId).select('name email activeOrganizationId');
+    if (owner) {
+      await logAudit({
+        userId: req.user.userId,
+        userName: owner.name,
+        userEmail: owner.email,
+        organizationId: owner.activeOrganizationId || null,
+        action: 'dataroom.share_updated',
+        resourceType: 'dataroom',
+        resourceId: shared._id.toString(),
+        resourceName: shared.sourceDataroomName,
+        metadata: { snapshotVersion: shared.snapshotVersion },
+        ipAddress: req.ip,
+      });
+    }
 
     res.json({ sharedDataRoom: shared });
   } catch (error) {
@@ -221,6 +253,23 @@ async function revokeAccess(req, res, next) {
     );
 
     if (!access) return res.status(404).json({ error: 'Access record not found' });
+
+    // Audit log: access revoked
+    const revoker = await User.findById(req.user.userId).select('name email activeOrganizationId');
+    if (revoker) {
+      await logAudit({
+        userId: req.user.userId,
+        userName: revoker.name,
+        userEmail: revoker.email,
+        organizationId: revoker.activeOrganizationId || null,
+        action: 'dataroom.share_revoked',
+        resourceType: 'dataroom',
+        resourceId: shared._id.toString(),
+        resourceName: shared.sourceDataroomName,
+        metadata: { revokedUserId: req.params.userId },
+        ipAddress: req.ip,
+      });
+    }
 
     res.json({ message: 'Access revoked', access });
   } catch (error) {
@@ -349,6 +398,23 @@ async function getSharedDataRoom(req, res, next) {
     // Update last viewed version
     access.lastViewedVersion = shared.snapshotVersion;
     await access.save();
+
+    // Audit log: shared DataRoom accessed
+    const accessor = await User.findById(req.user.userId).select('name email activeOrganizationId');
+    if (accessor) {
+      await logAudit({
+        userId: req.user.userId,
+        userName: accessor.name,
+        userEmail: accessor.email,
+        organizationId: accessor.activeOrganizationId || null,
+        action: 'dataroom.accessed',
+        resourceType: 'dataroom',
+        resourceId: shared._id.toString(),
+        resourceName: shared.sourceDataroomName,
+        metadata: {},
+        ipAddress: req.ip,
+      });
+    }
 
     res.json({ sharedDataRoom: shared });
   } catch (error) {

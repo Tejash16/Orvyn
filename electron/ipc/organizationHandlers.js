@@ -137,6 +137,26 @@ function registerOrganizationHandlers(ipcMain, getMainWindow) {
       return { success: false, error: err.message };
     }
   });
+
+  // ── Audit Logs ────────────────────────────────────────────
+
+  ipcMain.handle('organization:getAuditLogs', async (_event, { orgId, filters }) => {
+    try {
+      const authService = require('../services/authService');
+      const token = authService.getToken();
+      const params = new URLSearchParams(filters || {}).toString();
+      const url = `${process.env.EXPRESS_URL}/api/v1/organizations/${orgId}/audit-logs${params ? '?' + params : ''}`;
+      const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch audit logs.');
+      return { success: true, ...data };
+    } catch (err) {
+      log.error('organization:getAuditLogs failed:', err.message);
+      return { success: false, error: err.message };
+    }
+  });
 }
 
 module.exports = registerOrganizationHandlers;

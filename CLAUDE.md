@@ -45,21 +45,24 @@ It combines a local AI engine, a local database, and a cloud authentication laye
 ```
 Orvyn/
 ├── electron/               # Electron main process + preload
-│   ├── main.js             # App entry point, lifecycle, IPC
+│   ├── main.js             # App entry point, lifecycle, IPC, orvyn:// protocol
 │   ├── preload.js          # contextBridge API exposed to React
 │   ├── package.json        # Electron dependencies
 │   ├── ipc/                # IPC handler modules (registered in main.js)
-│   │   ├── authHandlers.js
+│   │   ├── authHandlers.js         # Auth + Google OAuth + user type IPC
 │   │   ├── settingsHandlers.js
 │   │   ├── dataroomHandlers.js
 │   │   ├── folderHandlers.js
 │   │   ├── fileHandlers.js
 │   │   ├── aiHandlers.js
 │   │   ├── copilotHandlers.js
+│   │   ├── organizationHandlers.js  # [V2] Org CRUD, members, invites, audit logs
+│   │   ├── billingHandlers.js       # [V2] Upgrade, status, cancel
+│   │   ├── sharingHandlers.js       # [V2] Share, import, access management
 │   │   └── windowControls.js
 │   ├── services/           # Electron-side service modules
-│   │   ├── authService.js          # Auth orchestration
-│   │   ├── expressService.js       # Express AI proxy communication
+│   │   ├── authService.js          # Auth orchestration + Google loopback OAuth
+│   │   ├── expressService.js       # Express API communication (incl. org, billing)
 │   │   ├── logger.js               # electron-log wrapper (file-based logging)
 │   │   ├── pythonProcess.js        # Python process lifecycle + dynamic port
 │   │   ├── pythonService.js        # Python API communication
@@ -74,11 +77,13 @@ Orvyn/
 │   │   ├── main.jsx        # React entry point
 │   │   ├── App.jsx         # Root component
 │   │   ├── components/     # Reusable UI components
-│   │   │   ├── auth/       # Authentication components (Login, Register, etc.)
+│   │   │   ├── auth/       # Authentication (Login, Register, GoogleAuth, UserType, OrgSetup)
 │   │   │   ├── layout/     # Layout components (Header, Sidebar)
 │   │   │   ├── dataroom/   # DataRoom browsing components
 │   │   │   ├── upload/     # File upload & classification components
 │   │   │   ├── copilot/    # Copilot chat panel components
+│   │   │   ├── settings/   # [V2] BillingSettings component
+│   │   │   ├── sharing/    # [V2] ShareDialog, SharedWithMe, MyShares
 │   │   │   └── common/     # Shared utility components
 │   │   ├── pages/          # Page-level components (routed views)
 │   │   ├── hooks/          # Custom React hooks
@@ -86,22 +91,57 @@ Orvyn/
 │   ├── vite.config.js      # Vite build config (dev only)
 │   └── package.json
 │
-├── express-backend/        # Cloud auth server (Node.js + Express)
+├── express-backend/        # Cloud auth + billing + org server (Node.js + Express)
 │   ├── src/
-│   │   ├── server.js       # Express app entry point
+│   │   ├── server.js       # Express app entry point (EJS views, all route mounts)
 │   │   ├── config/         # Environment and app configuration
+│   │   │   ├── db.js               # MongoDB connection
+│   │   │   └── planLimits.js       # [V2] Plan-to-limits mapping (free/pro/enterprise)
 │   │   ├── controllers/    # Route handler logic
-│   │   ├── middleware/     # Express middleware (auth, rate limiting, errors)
+│   │   │   ├── authController.js
+│   │   │   ├── aiController.js
+│   │   │   ├── usageController.js
+│   │   │   ├── googleAuthController.js   # [V2] Google OAuth endpoints
+│   │   │   ├── organizationController.js # [V2] Org CRUD, members, invites
+│   │   │   └── sharingController.js      # [V2] DataRoom sharing logic
+│   │   ├── middleware/     # Express middleware
+│   │   │   ├── authenticate.js     # Bearer token auth
+│   │   │   ├── rateLimiter.js      # Rate limiters (auth, org, Google)
+│   │   │   ├── errorHandler.js     # Global error handler
+│   │   │   ├── orgAuthorize.js     # [V2] Organization role-based access
+│   │   │   └── enforceLimits.js    # [V2] Server-side usage enforcement
 │   │   ├── models/         # MongoDB schema definitions
-│   │   ├── routes/         # Route definitions (auth, health, ai, usage)
-│   │   └── services/       # Business logic services (geminiService, logger)
+│   │   ├── routes/         # Route definitions
+│   │   │   ├── auth.js             # Auth + Google auth + user type
+│   │   │   ├── ai.js               # AI proxy endpoints
+│   │   │   ├── health.js           # Health check
+│   │   │   ├── usage.js            # Usage/quota endpoints
+│   │   │   ├── organization.js     # [V2] Org API + audit logs
+│   │   │   ├── billing.js          # [V2] Razorpay + checkout pages
+│   │   │   └── sharing.js          # [V2] Sharing API + user audit logs
+│   │   └── services/       # Business logic services
+│   │       ├── authService.js      # Auth + Google edge cases
+│   │       ├── geminiService.js    # Gemini API calls
+│   │       ├── logger.js           # Winston logger
+│   │       ├── codeService.js      # Verification code generation
+│   │       ├── usageService.js     # Usage tracking
+│   │       ├── emailService.js     # [V2] Transactional email (invites, payments)
+│   │       ├── emailTemplates.js   # [V2] HTML email templates
+│   │       ├── googleAuthService.js # [V2] Google OAuth token exchange
+│   │       ├── razorpayService.js  # [V2] Razorpay SDK integration
+│   │       └── auditService.js     # [V2] Audit log utility
+│   ├── views/              # [V2] EJS templates for checkout
+│   │   ├── checkout.ejs
+│   │   ├── payment-success.ejs
+│   │   └── payment-failure.ejs
+│   ├── public/css/          # [V2] Checkout page styles
 │   ├── .env                # Auth secrets (NOT committed)
 │   └── .env.example
 │
 ├── python-backend/         # Local AI engine (FastAPI)
 │   ├── app/
 │   │   ├── __init__.py
-│   │   ├── main.py         # FastAPI app (all endpoints)
+│   │   ├── main.py         # FastAPI app (all endpoints incl. sharing export/import)
 │   │   └── services/       # Service modules (classification, embedding, chat, tools)
 │   ├── run.py              # Startup script
 │   ├── requirements.txt    # Python dependencies
@@ -142,11 +182,16 @@ across layers without an explicit instruction from the user.
 > For Redux slices, File Explorer architecture, and component structure, see `CLAUDE-FRONTEND.md`.
 
 ### Express (`express-backend/`)
-- Handles authentication, session management, and AI API proxying (cloud-hosted).
+- Handles authentication (email/password + Google OAuth), session management, and AI API proxying (cloud-hosted).
 - Issues and validates tokens used by other layers.
 - Owns the Gemini API key — all LLM calls are routed through Express so that the
   API key never ships with the desktop application.
 - AI proxy endpoints (`/api/v1/ai/*`) require Bearer token authentication.
+- Manages organizations, memberships, and invitations (MongoDB).
+- Handles billing/subscriptions via Razorpay (plan enforcement, webhook processing, checkout pages).
+- Stores shared DataRoom snapshots (folder tree + file metadata + extracted text) for collaboration.
+- Tracks enterprise audit logs for compliance.
+- Serves EJS checkout pages at `/billing/checkout/*` for Razorpay payment flows.
 - Must not contain any document processing or file system logic.
 
 > For Express endpoints, MongoDB models, and Gemini service details, see `CLAUDE-EXPRESS.md`.

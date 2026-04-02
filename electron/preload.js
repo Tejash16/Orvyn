@@ -158,6 +158,7 @@ contextBridge.exposeInMainWorld('api', {
     revokeInvite:     (orgId, inviteId)        => ipcRenderer.invoke('org:revokeInvite', { orgId, inviteId }),
     acceptInvite:     (inviteCode)             => ipcRenderer.invoke('org:acceptInvite', { inviteCode }),
     getInviteDetails: (inviteCode)             => ipcRenderer.invoke('org:getInviteDetails', { inviteCode }),
+    getAuditLogs:     (orgId, filters)          => ipcRenderer.invoke('organization:getAuditLogs', { orgId, filters }),
   },
 
   // Billing / subscription management

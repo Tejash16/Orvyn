@@ -43,4 +43,37 @@ router.post('/:orgId/invites',              authenticate, orgAuthorize('admin'),
 router.get('/:orgId/invites',               authenticate, orgAuthorize('admin'), listInvites);
 router.delete('/:orgId/invites/:inviteId',  authenticate, orgAuthorize('admin'), revokeInvite);
 
+// ── Audit Logs (Enterprise) ──────────────────────────────
+const AuditLog = require('../models/AuditLog');
+
+/**
+ * GET /api/v1/organizations/:orgId/audit-logs
+ * Query params: ?action=dataroom.shared&page=1&limit=50&from=2026-01-01&to=2026-03-31
+ */
+router.get('/:orgId/audit-logs', authenticate, orgAuthorize('admin'), async (req, res, next) => {
+  try {
+    const { action, page = 1, limit = 50, from, to } = req.query;
+    const query = { organizationId: req.params.orgId };
+
+    if (action) query.action = action;
+    if (from || to) {
+      query.createdAt = {};
+      if (from) query.createdAt.$gte = new Date(from);
+      if (to) query.createdAt.$lte = new Date(to);
+    }
+
+    const logs = await AuditLog.find(query)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
+      .lean();
+
+    const total = await AuditLog.countDocuments(query);
+
+    res.json({ logs, total, page: Number(page), totalPages: Math.ceil(total / limit) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

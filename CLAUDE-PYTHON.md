@@ -198,6 +198,26 @@ These endpoints are planned for future features:
 - `POST /api/v1/copilot/prepare-insights` — Build dataroom metadata for insights
 - `POST /api/v1/copilot/apply-insights` — Store insights in `dataroom_insights`
 
+### Sharing Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/v1/sharing/export-dataroom` | Export DataRoom snapshot for sharing (folder tree, files, full extracted text, classifications, entities, summaries) |
+| `POST` | `/api/v1/sharing/import-dataroom` | Import a shared DataRoom snapshot into local SQLite as a read-only DataRoom |
+
+**Export (`export-dataroom`)** returns:
+- `dataroom`: `{ id, name, description }`
+- `folderTree`: nested folder structure with context descriptions
+- `files[]`: metadata + **full** extracted text (reconstructed from `file_chunks` when available, fallback to truncated `extracted_text` for unindexed files) + AI summary + classification + entities
+
+**Important**: `files.extracted_text` is truncated to 3000 chars at registration. The export endpoint pulls full text from `file_chunks` table (created during indexing) and reconstructs it by removing chunk overlaps via `_reconstruct_text_from_chunks()`.
+
+**Import (`import-dataroom`)** creates:
+- A DataRoom marked `is_shared=True` with `[Shared]` prefix in name
+- Folder structure mapped from old IDs to new UUIDs
+- File records with `original_path='SHARED'` and `is_shared=True`
+- Classification and entity records carried over from the snapshot
+
 ---
 
 ## Sync Function Rules
@@ -268,3 +288,36 @@ FTS5 (`file_chunks_fts`) uses `content='file_chunks'` mode with three SQLite tri
 | `INDEX_EXTRACT_ENTITIES` | `true` | Run entity extraction during indexing |
 | `INDEX_GENERATE_SUMMARY` | `true` | Generate AI file summary during indexing |
 | `INDEX_MAX_RETRY_ATTEMPTS` | `3` | Max indexing_job retry attempts before `failed` |
+
+---
+
+## SQLite Schema Changes (V2 — Sharing)
+
+The following columns were added to existing SQLite tables for DataRoom sharing support.
+Migration logic in the `init-db` endpoint automatically adds these columns if missing.
+
+### `datarooms` table — new columns
+
+| Column | Type | Default | Purpose |
+|--------|------|---------|---------|
+| `is_shared` | `BOOLEAN` | `0` | Whether this DataRoom was imported from a share |
+| `shared_from_user_name` | `TEXT` | `NULL` | Name of the user who shared it |
+| `shared_dataroom_cloud_id` | `TEXT` | `NULL` | MongoDB ID of the SharedDataRoom record |
+| `shared_snapshot_version` | `INTEGER` | `NULL` | Snapshot version number |
+
+### `files` table — new column
+
+| Column | Type | Default | Purpose |
+|--------|------|---------|---------|
+| `is_shared` | `BOOLEAN` | `0` | Whether this file belongs to a shared DataRoom |
+
+Shared files have `original_path='SHARED'` (not a real file path) and are **read-only**
+in the UI. File operations (open, relocate, delete from system) are disabled for shared files.
+
+### Migration Logic
+
+In the `POST /init-db` endpoint, after Copilot column migrations:
+1. Check if `datarooms` table exists → `PRAGMA table_info(datarooms)` → add missing sharing columns via `ALTER TABLE`.
+2. Check if `files` table exists → `PRAGMA table_info(files)` → add `is_shared` column if missing.
+3. `Base.metadata.create_all(engine)` handles all new tables for fresh databases.
+

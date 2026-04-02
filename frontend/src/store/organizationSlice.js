@@ -8,6 +8,12 @@ const organizationSlice = createSlice({
     invites: [],          // Array of pending invite objects
     isLoading: false,
     error: null,
+    // Audit logs
+    auditLogs: [],
+    auditTotal: 0,
+    auditPage: 1,
+    auditTotalPages: 0,
+    isAuditLoading: false,
   },
   reducers: {
     orgStart(state) {
@@ -36,6 +42,29 @@ const organizationSlice = createSlice({
       state.invites = [];
       state.isLoading = false;
       state.error = null;
+      state.auditLogs = [];
+      state.auditTotal = 0;
+      state.auditPage = 1;
+      state.auditTotalPages = 0;
+      state.isAuditLoading = false;
+    },
+    // Audit log reducers
+    auditStart(state) {
+      state.isAuditLoading = true;
+    },
+    setAuditLogs(state, action) {
+      state.auditLogs = action.payload.logs;
+      state.auditTotal = action.payload.total;
+      state.auditPage = action.payload.page;
+      state.auditTotalPages = action.payload.totalPages;
+      state.isAuditLoading = false;
+    },
+    clearAuditLogs(state) {
+      state.auditLogs = [];
+      state.auditTotal = 0;
+      state.auditPage = 1;
+      state.auditTotalPages = 0;
+      state.isAuditLoading = false;
     },
   },
 });
@@ -47,6 +76,9 @@ export const {
   setMembers,
   setInvites,
   clearOrganization,
+  auditStart,
+  setAuditLogs,
+  clearAuditLogs,
 } = organizationSlice.actions;
 
 export default organizationSlice.reducer;
@@ -184,6 +216,27 @@ export const deleteOrganizationThunk = (orgId) => async (dispatch) => {
     }
     return result;
   } catch (err) {
+    return { success: false, error: err.message };
+  }
+};
+
+export const fetchAuditLogs = (orgId, filters = {}) => async (dispatch) => {
+  dispatch(auditStart());
+  try {
+    const result = await window.api.organization.getAuditLogs(orgId, filters);
+    if (result.success) {
+      dispatch(setAuditLogs({
+        logs: result.logs,
+        total: result.total,
+        page: result.page,
+        totalPages: result.totalPages,
+      }));
+    } else {
+      dispatch(setAuditLogs({ logs: [], total: 0, page: 1, totalPages: 0 }));
+    }
+    return result;
+  } catch (err) {
+    dispatch(setAuditLogs({ logs: [], total: 0, page: 1, totalPages: 0 }));
     return { success: false, error: err.message };
   }
 };
