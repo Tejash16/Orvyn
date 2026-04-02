@@ -20,6 +20,7 @@ const registerAiHandlers       = require('./ipc/aiHandlers');
 const { registerCopilotHandlers } = require('./ipc/copilotHandlers');
 const registerOrganizationHandlers = require('./ipc/organizationHandlers');
 const { registerBillingHandlers }  = require('./ipc/billingHandlers');
+const { registerSharingHandlers }  = require('./ipc/sharingHandlers');
 const pythonProcess            = require('./services/pythonProcess');
 
 let mainWindow;
@@ -104,6 +105,7 @@ registerAiHandlers(ipcMain, () => mainWindow);
 registerCopilotHandlers(ipcMain, () => mainWindow);
 registerOrganizationHandlers(ipcMain, () => mainWindow);
 registerBillingHandlers(ipcMain, () => mainWindow);
+registerSharingHandlers(ipcMain, () => mainWindow);
 
 // ── Deep link handler ─────────────────────────────────────
 

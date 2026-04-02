@@ -15,6 +15,7 @@ import {
 } from '../store/uiSlice';
 import CreateDataRoomModal from '../components/dataroom/CreateDataRoomModal';
 import FileExplorer from '../components/dataroom/FileExplorer';
+import ShareDialog from '../components/sharing/ShareDialog';
 import styles from './DataRoomList.module.css';
 
 /* ── Icons ───────────────────────────────────────────────── */
@@ -67,6 +68,17 @@ const IconTrash = () => (
   </svg>
 );
 
+const IconShare = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+  </svg>
+);
+
 const IconEmptyBox = () => (
   <svg className={styles.emptyIcon} width="48" height="48" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -102,6 +114,9 @@ function DataRoomList() {
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // Share dialog
+  const [shareTarget, setShareTarget] = useState(null);
 
   // Fetch DataRooms on mount
   useEffect(() => {
@@ -316,6 +331,14 @@ function DataRoomList() {
                   )}
 
                   <div className={styles.drMeta}>
+                    {dr.is_shared && (
+                      <span style={{
+                        fontSize: '10px', fontWeight: 600,
+                        color: 'var(--accent-primary)',
+                        background: 'var(--accent-soft)',
+                        padding: '1px 5px', borderRadius: '4px',
+                      }}>Shared{dr.shared_from_user_name ? ` · ${dr.shared_from_user_name}` : ''}</span>
+                    )}
                     <span>{`${dr.folder_count ?? 0} folders `}</span>
                     <span>{`${dr.file_count ?? 0} files`}</span>
                   </div>
@@ -358,6 +381,15 @@ function DataRoomList() {
                     >
                       <IconPencil /> Rename
                     </button>
+                    {!dr.is_shared && (
+                      <button
+                        className={styles.dropdownItem}
+                        onClick={() => { setShareTarget(dr); setMenuOpenId(null); }}
+                        type="button"
+                      >
+                        <IconShare /> Share
+                      </button>
+                    )}
                     <button
                       className={`${styles.dropdownItem} ${styles.dropdownDanger}`}
                       onClick={() => startDelete(dr)}
@@ -452,6 +484,15 @@ function DataRoomList() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Share dialog ──────────────────────────────── */}
+      {shareTarget && (
+        <ShareDialog
+          dataroomId={shareTarget.id}
+          dataroomName={shareTarget.name}
+          onClose={() => setShareTarget(null)}
+        />
       )}
 
     </div>

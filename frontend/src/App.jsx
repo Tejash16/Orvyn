@@ -8,6 +8,7 @@ import SettingsPage from './pages/setting';
 import DataRoomList from './pages/DataRoomList';
 import UploadPage from './pages/UploadPage';
 import OrganizationSettings from './pages/OrganizationSettings';
+import CollaborationPage from './pages/CollaborationPage';
 import AuthPage from './pages/AuthPage';
 import ResetPassword from './pages/ResetPassword';
 import ToastContainer from './components/common/Toast';
@@ -83,6 +84,7 @@ function App() {
             {activePage === 'dataroom' && <DataRoomList />}
             {activePage === 'upload' && <UploadPage />}
             {activePage === 'orgSettings' && <OrganizationSettings />}
+            {activePage === 'collaboration' && <CollaborationPage />}
             {activePage === 'settings' && <SettingsPage />}
           </main>
         </div>

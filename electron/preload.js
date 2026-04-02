@@ -174,6 +174,20 @@ contextBridge.exposeInMainWorld('api', {
     },
   },
 
+  // Sharing / collaboration
+  sharing: {
+    shareDataroom:  (payload) => ipcRenderer.invoke('sharing:shareDataroom', payload),
+    getReceived:    ()        => ipcRenderer.invoke('sharing:getReceived'),
+    importDataroom: (shareId) => ipcRenderer.invoke('sharing:importDataroom', { shareId }),
+    searchUsers:    (query)   => ipcRenderer.invoke('sharing:searchUsers', { query }),
+    updateShare:    (payload) => ipcRenderer.invoke('sharing:updateShare', payload),
+    getMyShares:    ()        => ipcRenderer.invoke('sharing:getMyShares'),
+    deleteShare:    (shareId) => ipcRenderer.invoke('sharing:deleteShare', { shareId }),
+    grantAccess:    (payload) => ipcRenderer.invoke('sharing:grantAccess', payload),
+    revokeAccess:   (payload) => ipcRenderer.invoke('sharing:revokeAccess', payload),
+    listAccess:     (shareId) => ipcRenderer.invoke('sharing:listAccess', { shareId }),
+  },
+
   // Deep link push events (invite links from emails)
   deepLink: {
     onInvite: (callback) => {
