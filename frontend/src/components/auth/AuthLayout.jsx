@@ -8,6 +8,8 @@ import ForgotPassword from './ForgotPassword';
 import VerifyCode from './VerifyCode';
 import ResetCode from './ResetCode';
 import UserTypeSelection from './UserTypeSelection';
+import CreateOrganization from './CreateOrganization';
+import JoinOrganization from './JoinOrganization';
 import styles from './auth.module.css';
 
 /* ── Brand panel feature icons ───────────────────────────── */
@@ -194,6 +196,53 @@ function AuthLayout() {
     setActiveView('login');
   }
 
+  // ── Org choice sub-view (create vs join) ────────────────
+  function OrgChoiceView({ onCreateOrg, onJoinOrg, onBack }) {
+    return (
+      <div className={styles.orgFlowWrap}>
+        <button type="button" className={styles.orgFlowBackBtn} onClick={onBack}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+          </svg>
+          Back
+        </button>
+        <h1 className={styles.cardTitle}>Set up your organization</h1>
+        <p className={styles.orgFlowSubtitle}>
+          Create a new organization or join an existing one with an invite code.
+        </p>
+        <div className={styles.orgChoiceGrid}>
+          <button type="button" className={styles.orgChoiceCard} onClick={onCreateOrg}>
+            <div className={styles.orgChoiceIcon}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </div>
+            <div className={styles.orgChoiceContent}>
+              <span className={styles.orgChoiceTitle}>Create an organization</span>
+              <span className={styles.orgChoiceDesc}>Start a new workspace for your team</span>
+            </div>
+          </button>
+          <button type="button" className={styles.orgChoiceCard} onClick={onJoinOrg}>
+            <div className={styles.orgChoiceIcon}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="8.5" cy="7" r="4" />
+                <line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" />
+              </svg>
+            </div>
+            <div className={styles.orgChoiceContent}>
+              <span className={styles.orgChoiceTitle}>Join an organization</span>
+              <span className={styles.orgChoiceDesc}>Enter an invite code from your team admin</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={styles.authWrap}>
       <div className={styles.brandPanel}>
@@ -267,7 +316,12 @@ function AuthLayout() {
           {activeView === 'userType'  && (
             <UserTypeSelection
               onComplete={(userType) => {
-                // Re-fetch the current user with updated userType
+                if (userType === 'enterprise') {
+                  // Enterprise users need to create or join an org
+                  setActiveView('orgChoice');
+                  return;
+                }
+                // Individual — re-fetch user and proceed to app
                 (async () => {
                   try {
                     const result = await window.api.auth.getCurrentUser();
@@ -279,6 +333,49 @@ function AuthLayout() {
                   }
                 })();
               }}
+              showAuthToast={showAuthToast}
+            />
+          )}
+          {activeView === 'orgChoice' && (
+            <OrgChoiceView
+              onCreateOrg={() => setActiveView('createOrg')}
+              onJoinOrg={() => setActiveView('joinOrg')}
+              onBack={() => setActiveView('userType')}
+            />
+          )}
+          {activeView === 'createOrg' && (
+            <CreateOrganization
+              onComplete={(org) => {
+                (async () => {
+                  try {
+                    const result = await window.api.auth.getCurrentUser();
+                    if (result.success && result.user) {
+                      dispatch(loginSuccess(result.user));
+                    }
+                  } catch {
+                    // Already authenticated
+                  }
+                })();
+              }}
+              onBack={() => setActiveView('orgChoice')}
+              showAuthToast={showAuthToast}
+            />
+          )}
+          {activeView === 'joinOrg' && (
+            <JoinOrganization
+              onComplete={(org) => {
+                (async () => {
+                  try {
+                    const result = await window.api.auth.getCurrentUser();
+                    if (result.success && result.user) {
+                      dispatch(loginSuccess(result.user));
+                    }
+                  } catch {
+                    // Already authenticated
+                  }
+                })();
+              }}
+              onBack={() => setActiveView('orgChoice')}
               showAuthToast={showAuthToast}
             />
           )}

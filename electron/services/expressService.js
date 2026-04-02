@@ -193,4 +193,191 @@ async function setUserType(userType) {
   return data;
 }
 
-module.exports = { classifyFiles, generateDataroom, checkFileLimit, getUsage, ocrImage, getLimits, setUserType };
+// ── Organization API ──────────────────────────────────────
+
+async function createOrganization(name) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/organizations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ name }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to create organization.');
+  return data;
+}
+
+async function getOrganization(orgId) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/organizations/${orgId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to fetch organization.');
+  return data;
+}
+
+async function updateOrganization(orgId, updates) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/organizations/${orgId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(updates),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to update organization.');
+  return data;
+}
+
+async function deleteOrganization(orgId) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/organizations/${orgId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to delete organization.');
+  return data;
+}
+
+async function getOrgMembers(orgId) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/organizations/${orgId}/members`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to fetch members.');
+  return data;
+}
+
+async function updateMemberRole(orgId, userId, role) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/organizations/${orgId}/members/${userId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ role }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to update member role.');
+  return data;
+}
+
+async function removeOrgMember(orgId, userId) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/organizations/${orgId}/members/${userId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to remove member.');
+  return data;
+}
+
+async function createOrgInvite(orgId, email, role) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/organizations/${orgId}/invites`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ email, role }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to create invite.');
+  return data;
+}
+
+async function listOrgInvites(orgId) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/organizations/${orgId}/invites`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to fetch invites.');
+  return data;
+}
+
+async function revokeOrgInvite(orgId, inviteId) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/organizations/${orgId}/invites/${inviteId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to revoke invite.');
+  return data;
+}
+
+async function acceptOrgInvite(inviteCode) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/organizations/invites/${inviteCode}/accept`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to accept invite.');
+  return data;
+}
+
+async function getInviteDetails(inviteCode) {
+  // Public endpoint — no auth needed
+  const res = await fetch(`${getExpressUrl()}/api/v1/organizations/invites/${inviteCode}`);
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to fetch invite details.');
+  return data;
+}
+
+module.exports = {
+  classifyFiles,
+  generateDataroom,
+  checkFileLimit,
+  getUsage,
+  ocrImage,
+  getLimits,
+  setUserType,
+  // Organization
+  createOrganization,
+  getOrganization,
+  updateOrganization,
+  deleteOrganization,
+  getOrgMembers,
+  updateMemberRole,
+  removeOrgMember,
+  createOrgInvite,
+  listOrgInvites,
+  revokeOrgInvite,
+  acceptOrgInvite,
+  getInviteDetails,
+};

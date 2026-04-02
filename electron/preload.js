@@ -144,6 +144,31 @@ contextBridge.exposeInMainWorld('api', {
     compareDocuments: (data)  => ipcRenderer.invoke('copilot:compare-documents', data),
   },
 
+  // Organization operations
+  organization: {
+    create:           (name)                   => ipcRenderer.invoke('org:create', { name }),
+    get:              (orgId)                  => ipcRenderer.invoke('org:get', { orgId }),
+    update:           (orgId, updates)         => ipcRenderer.invoke('org:update', { orgId, updates }),
+    delete:           (orgId)                  => ipcRenderer.invoke('org:delete', { orgId }),
+    getMembers:       (orgId)                  => ipcRenderer.invoke('org:getMembers', { orgId }),
+    updateMemberRole: (orgId, userId, role)    => ipcRenderer.invoke('org:updateMemberRole', { orgId, userId, role }),
+    removeMember:     (orgId, userId)          => ipcRenderer.invoke('org:removeMember', { orgId, userId }),
+    createInvite:     (orgId, email, role)     => ipcRenderer.invoke('org:createInvite', { orgId, email, role }),
+    listInvites:      (orgId)                  => ipcRenderer.invoke('org:listInvites', { orgId }),
+    revokeInvite:     (orgId, inviteId)        => ipcRenderer.invoke('org:revokeInvite', { orgId, inviteId }),
+    acceptInvite:     (inviteCode)             => ipcRenderer.invoke('org:acceptInvite', { inviteCode }),
+    getInviteDetails: (inviteCode)             => ipcRenderer.invoke('org:getInviteDetails', { inviteCode }),
+  },
+
+  // Deep link push events (invite links from emails)
+  deepLink: {
+    onInvite: (callback) => {
+      const handler = (_event, code) => callback(code);
+      ipcRenderer.on('deep-link:invite', handler);
+      return () => ipcRenderer.removeListener('deep-link:invite', handler);
+    },
+  },
+
   // Logs — lets the UI offer a "Help > Open Logs" action
   logs: {
     getPath:    () => ipcRenderer.invoke('app:getLogsPath'),

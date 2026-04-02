@@ -4,12 +4,12 @@ const crypto      = require('crypto');
 const bcrypt      = require('bcryptjs');
 const jwt         = require('jsonwebtoken');
 const validator   = require('validator');
-const nodemailer  = require('nodemailer');
 
 const User                = require('../models/User');
 const PendingRegistration = require('../models/PendingRegistration');
 const codeService         = require('./codeService');
 const logger      = require('./logger');
+const { sendEmail }       = require('./emailService');
 const { verificationEmailTemplate, passwordResetEmailTemplate } = require('./emailTemplates');
 
 // ── Token constants ────────────────────────────────────────
@@ -30,42 +30,6 @@ function issueAccessToken(userId) {
 
 function issueRefreshToken(userId) {
   return jwt.sign({ userId }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_TTL });
-}
-
-// ── Mailer ─────────────────────────────────────────────────
-
-let _transporter = null;
-
-function getTransporter() {
-  if (_transporter) return _transporter;
-
-  const host   = process.env.SMTP_HOST;
-  const user   = process.env.SMTP_USER;
-  const pass   = process.env.SMTP_PASS;
-  const port   = parseInt(process.env.SMTP_PORT || '587', 10);
-  const secure = process.env.SMTP_SECURE === 'true';
-
-  if (!host || !user || !pass) return null; // dev fallback
-
-  _transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
-  return _transporter;
-}
-
-async function sendEmail({ to, subject, text, html, attachments }) {
-  const transporter = getTransporter();
-  if (!transporter) {
-    // Dev fallback — log to file only, never expose credentials
-    logger.info(`[DEV EMAIL] To: ${to} | Subject: ${subject} | ${text}`);
-    return;
-  }
-  await transporter.sendMail({
-    from: process.env.MAIL_FROM || process.env.SMTP_USER,
-    to,
-    subject,
-    text,
-    html,
-    attachments,
-  });
 }
 
 // ── Email templates ────────────────────────────────────────

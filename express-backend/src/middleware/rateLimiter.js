@@ -92,6 +92,26 @@ const googleLoginLimiter = rateLimit({
   },
 });
 
+const orgCreateLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ success: false, error: 'Too many organization creation attempts. Try again in 15 minutes.' });
+  },
+});
+
+const orgInviteLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ success: false, error: 'Too many invite attempts. Try again in 15 minutes.' });
+  },
+});
+
 module.exports = {
   loginLimiter,
   forgotPasswordLimiter,
@@ -102,4 +122,6 @@ module.exports = {
   resendResetCodeLimiter,
   feedbackLimiter,
   googleLoginLimiter,
+  orgCreateLimiter,
+  orgInviteLimiter,
 };

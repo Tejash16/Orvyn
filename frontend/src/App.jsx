@@ -7,6 +7,7 @@ import Sidebar from './components/layout/Sidebar';
 import SettingsPage from './pages/setting';
 import DataRoomList from './pages/DataRoomList';
 import UploadPage from './pages/UploadPage';
+import OrganizationSettings from './pages/OrganizationSettings';
 import AuthPage from './pages/AuthPage';
 import ResetPassword from './pages/ResetPassword';
 import ToastContainer from './components/common/Toast';
@@ -81,6 +82,7 @@ function App() {
           <main className="app-content">
             {activePage === 'dataroom' && <DataRoomList />}
             {activePage === 'upload' && <UploadPage />}
+            {activePage === 'orgSettings' && <OrganizationSettings />}
             {activePage === 'settings' && <SettingsPage />}
           </main>
         </div>
