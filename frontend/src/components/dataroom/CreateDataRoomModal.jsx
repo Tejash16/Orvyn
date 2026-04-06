@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { createDataroom } from '../../store/dataroomSlice';
 import { createFolder } from '../../store/folderSlice';
+import { addToast } from '../../store/uiSlice';
 import FolderTreeNode, {
   addToTree,
   editInTree,
@@ -150,7 +151,15 @@ function CreateDataRoomModal({ onClose, onCreated }) {
       setCreatedId(dataroomId);
       setIsSuccess(true);
     } catch (err) {
-      setCreateError(typeof err === 'string' ? err : err.message || 'Failed to create DataRoom.');
+      const errMsg = typeof err === 'string' ? err : err?.message || 'Failed to create DataRoom.';
+      setCreateError(errMsg);
+      if (err?.upgradeRequired) {
+        dispatch(addToast({
+          message: errMsg,
+          type: 'warning',
+          action: { label: 'Upgrade', page: 'settings' },
+        }));
+      }
       setIsCreating(false);
     }
   }

@@ -345,7 +345,15 @@ function UploadPage() {
       dispatch(fetchDatarooms());
       dispatch(refreshCurrentView());
     } catch (err) {
-      setLocalError(typeof err === 'string' ? err : err?.message || 'An error occurred.');
+      const errMsg = typeof err === 'string' ? err : err?.message || 'An error occurred.';
+      setLocalError(errMsg);
+      if (err?.upgradeRequired) {
+        dispatch(addToast({
+          message: errMsg,
+          type: 'warning',
+          action: { label: 'Upgrade', page: 'settings' },
+        }));
+      }
       // Pass local variables — React state hasn't flushed yet, so closures see stale values
       await performCleanup(mode, mode === 'ai' ? dataroomId : undefined, registeredIds);
       setRegisteredFileIds([]);

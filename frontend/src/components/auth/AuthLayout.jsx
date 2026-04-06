@@ -101,11 +101,11 @@ function AuthToast({ toast, onRemove }) {
  *   - On component unmount, credentials are wiped by the useEffect cleanup.
  *   - Navigating away from the signup/verify flow clears credentials.
  */
-function AuthLayout() {
+function AuthLayout({ initialView = 'login' }) {
   const dispatch = useDispatch();
 
   // ── View state ─────────────────────────────────────────
-  const [activeView,      setActiveView]      = useState('login');
+  const [activeView,      setActiveView]      = useState(initialView);
   const [flowEmail,       setFlowEmail]       = useState('');
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
 

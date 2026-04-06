@@ -20,6 +20,7 @@ function App() {
   const theme           = useSelector((state) => state.ui.theme);
   const activePage      = useSelector((state) => state.ui.activePage);
   const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const userType        = useSelector((state) => state.auth.user?.userType);
   const isRestoring     = useSelector((state) => state.auth.isRestoring);
   const isOnline        = useSelector((state) => state.ui.isOnline);
 
@@ -77,6 +78,8 @@ function App() {
             <span className="app-loading-dot" />
           </div>
         </div>
+      ) : isAuthenticated && !userType ? (
+        <AuthPage initialView="userType" />
       ) : isAuthenticated ? (
         <div className="app-body">
           <Sidebar />

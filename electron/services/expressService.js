@@ -43,7 +43,12 @@ async function classifyFiles(fingerprints, folderTree, folderIds, requestId) {
   });
 
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'AI classification failed.');
+  if (!res.ok) {
+    const err = new Error(data.error || 'AI classification failed.');
+    if (data.code) err.code = data.code;
+    if (data.upgradeRequired) err.upgradeRequired = true;
+    throw err;
+  }
   return data.results;
 }
 
@@ -76,7 +81,12 @@ async function generateDataroom(name, description, fingerprints, requestId) {
   });
 
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'AI DataRoom generation failed.');
+  if (!res.ok) {
+    const err = new Error(data.error || 'AI DataRoom generation failed.');
+    if (data.code) err.code = data.code;
+    if (data.upgradeRequired) err.upgradeRequired = true;
+    throw err;
+  }
   return data.gemini_result;
 }
 

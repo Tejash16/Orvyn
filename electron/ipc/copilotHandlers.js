@@ -71,7 +71,12 @@ async function expressPost(endpoint, body) {
   } catch {
     data = { error: rawText };
   }
-  if (!res.ok) throw new Error(data.error || data.detail || `Express ${endpoint} failed.`);
+  if (!res.ok) {
+    const err = new Error(data.error || data.detail || `Express ${endpoint} failed.`);
+    if (data.code) err.code = data.code;
+    if (data.upgradeRequired) err.upgradeRequired = true;
+    throw err;
+  }
   return data;
 }
 
@@ -268,7 +273,10 @@ async function streamFromExpress(event, body) {
 
   if (!response.ok) {
     const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.error || errData.detail || 'Chat stream request failed.');
+    const err = new Error(errData.error || errData.detail || 'Chat stream request failed.');
+    if (errData.code) err.code = errData.code;
+    if (errData.upgradeRequired) err.upgradeRequired = true;
+    throw err;
   }
 
   const reader = response.body.getReader();
@@ -601,8 +609,11 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
         return { success: false, error: 'Stream cancelled.' };
       }
       log.error('copilot:send-message failed:', err.message);
-      event.sender.send('copilot:stream-error', { message: err.message });
-      return { success: false, error: err.message };
+      const errorPayload = { message: err.message };
+      if (err.code) errorPayload.code = err.code;
+      if (err.upgradeRequired) errorPayload.upgradeRequired = true;
+      event.sender.send('copilot:stream-error', errorPayload);
+      return { success: false, error: err.message, code: err.code || null, upgradeRequired: err.upgradeRequired || false };
     }
   });
 
@@ -921,8 +932,11 @@ function registerCopilotHandlers(ipcMain, getMainWindow) {
         return { success: false, cancelled: true };
       }
       log.error('copilot:compare-documents failed:', err.message);
-      event.sender.send('copilot:stream-error', { message: err.message });
-      return { success: false, error: err.message };
+      const errorPayload = { message: err.message };
+      if (err.code) errorPayload.code = err.code;
+      if (err.upgradeRequired) errorPayload.upgradeRequired = true;
+      event.sender.send('copilot:stream-error', errorPayload);
+      return { success: false, error: err.message, code: err.code || null, upgradeRequired: err.upgradeRequired || false };
     } finally {
       activeStreamController = null;
     }

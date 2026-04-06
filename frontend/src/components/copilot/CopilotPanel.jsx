@@ -132,10 +132,18 @@ function CopilotPanel() {
       cleanups.push(
         window.api.copilot.onStreamError((data) => {
           dispatch(finalizeStreamMessage({ sources: [] }));
-          dispatch(addToast({
-            message: data?.message || 'AI service unavailable',
-            type: 'error',
-          }));
+          if (data?.code === 'LIMIT_EXCEEDED' || data?.upgradeRequired) {
+            dispatch(addToast({
+              message: data?.message || 'Usage limit reached.',
+              type: 'warning',
+              action: { label: 'Upgrade', page: 'settings' },
+            }));
+          } else {
+            dispatch(addToast({
+              message: data?.message || 'AI service unavailable',
+              type: 'error',
+            }));
+          }
         })
       );
     }

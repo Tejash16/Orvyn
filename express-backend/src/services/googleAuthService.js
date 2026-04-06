@@ -118,7 +118,7 @@ async function findOrCreateGoogleUser(profile, mode) {
     profilePicture: profile.picture,
     provider: 'google',
     isEmailVerified: true, // Google already verified the email
-    userType: 'individual', // Default, user selects type after first login
+    // userType left as null — user selects type after first login
   });
 
   return { user: newUser, isNewUser: true, requiresLinking: false };

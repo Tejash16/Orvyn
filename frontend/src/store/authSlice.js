@@ -20,7 +20,7 @@ const authSlice = createSlice({
     isRestoring: true,
 
     // ── Subscription / plan state (Phase 2) ────────────────
-    plan: null,        // 'free' | 'pro' | 'enterprise'
+    plan: 'free',      // 'free' | 'pro' | 'enterprise'
     limits: null,      // { dataroomLimit, monthlyFileLimit, dailyMessageLimit }
     usage: null,       // { filesUploadedThisPeriod, messagesToday }
   },

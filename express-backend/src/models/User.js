@@ -40,7 +40,7 @@ const userSchema = new mongoose.Schema(
     userType: {
       type: String,
       enum: ['individual', 'enterprise'],
-      default: 'individual',
+      default: null,
     },
     activeOrganizationId: {
       type: Schema.Types.ObjectId,

@@ -75,7 +75,10 @@ function registerAiHandlers(ipcMain, getMainWindow) {
         time_seconds: (Date.now() - startTime) / 1000,
       };
     } catch (err) {
-      return { success: false, error: err.message };
+      const result = { success: false, error: err.message };
+      if (err.code) result.code = err.code;
+      if (err.upgradeRequired) result.upgradeRequired = true;
+      return result;
     }
   });
 
@@ -131,7 +134,10 @@ function registerAiHandlers(ipcMain, getMainWindow) {
         time_seconds: (Date.now() - startTime) / 1000,
       };
     } catch (err) {
-      return { success: false, error: err.message };
+      const result = { success: false, error: err.message };
+      if (err.code) result.code = err.code;
+      if (err.upgradeRequired) result.upgradeRequired = true;
+      return result;
     }
   });
 

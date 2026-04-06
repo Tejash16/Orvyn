@@ -34,7 +34,12 @@ export const createDataroom = createAsyncThunk(
     }
 
     const result = await window.api.dataroom.create({ name: trimmed, description });
-    if (!result.success) return rejectWithValue(result.error);
+    if (!result.success) {
+      if (result.upgradeRequired) {
+        return rejectWithValue({ message: result.error, upgradeRequired: true });
+      }
+      return rejectWithValue(result.error);
+    }
     // Refresh the list so it includes the new DataRoom
     dispatch(fetchDatarooms());
     return result.dataroom;
@@ -150,7 +155,9 @@ const dataroomSlice = createSlice({
       })
       .addCase(createDataroom.rejected, (state, action) => {
         state.isCreating = false;
-        state.error = action.payload;
+        state.error = typeof action.payload === 'string'
+          ? action.payload
+          : action.payload?.message || 'Failed to create DataRoom.';
       });
 
     // updateDataroom
