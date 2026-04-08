@@ -18,7 +18,7 @@ const PRODUCTION_EXPRESS_URL = 'https://orvyn-express-160954399633.asia-south1.r
 
 module.exports = {
   EXPRESS_URL: isDev
-    ? (process.env.EXPRESS_URL || 'http://localhost:3000')
+    ? (process.env.EXPRESS_URL || 'http://localhost:8080')
     : PRODUCTION_EXPRESS_URL,
 
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',

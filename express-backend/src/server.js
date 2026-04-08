@@ -36,7 +36,7 @@ if (missingSmtp.length > 0) {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 // ── View engine + static files for checkout pages ────────
 app.set('view engine', 'ejs');
