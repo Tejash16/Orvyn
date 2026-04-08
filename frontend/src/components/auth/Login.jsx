@@ -90,13 +90,7 @@ function Login({ onSwitchView, showAuthToast }) {
 
 
     try {
-      const result = await window.api.auth.initiateGoogleAuth('login');
-
-      if (result.noAccount) {
-        showAuthToast('No account found with this Google email. Please create an account first.');
-        setIsGoogleLoading(false);
-        return;
-      }
+      const result = await window.api.auth.initiateGoogleAuth();
 
       if (result.requiresLinking) {
         // Show password dialog for account linking

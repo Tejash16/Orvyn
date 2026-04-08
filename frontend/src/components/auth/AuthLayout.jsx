@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { loginSuccess } from '../../store/authSlice';
 import { setTheme } from '../../store/uiSlice';
 import Login from './Login';
@@ -91,18 +91,13 @@ function AuthToast({ toast, onRemove }) {
 /**
  * AuthFlowContainer — owns all transient auth flow state.
  *
- * Security rules for signup auto-login:
- *   - Credentials are cached in a ref (not state, not Redux, not localStorage).
- *   - Auto-login fires ONLY when all three guards are true:
- *       1. flowOrigin === 'signup'
- *       2. signupSessionActive ref is true
- *       3. cachedCredentials ref holds { email, password }
- *   - Credentials are wiped immediately after any use (success or failure).
- *   - On component unmount, credentials are wiped by the useEffect cleanup.
- *   - Navigating away from the signup/verify flow clears credentials.
+ * Email verification now establishes the session directly: the Express
+ * /verify-email endpoint returns access + refresh tokens, so no credential
+ * caching or second login round-trip is required.
  */
 function AuthLayout({ initialView = 'login' }) {
   const dispatch = useDispatch();
+  const currentUser = useSelector((state) => state.auth.user);
 
   // ── View state ─────────────────────────────────────────
   const [activeView,      setActiveView]      = useState(initialView);
@@ -135,64 +130,32 @@ function AuthLayout({ initialView = 'login' }) {
     setAuthToasts([]);
   }, [activeView]);
 
-  // ── Signup auto-login guards (never persisted) ─────────
-  const signupSessionActive = useRef(false);
-  const cachedCredentials   = useRef(null);   // { email, password } — wiped after use
-
-  function clearSignupSession() {
-    signupSessionActive.current = false;
-    cachedCredentials.current   = null;
-  }
-
-  // Wipe on unmount
-  useEffect(() => () => clearSignupSession(), []);
-
   // ── View navigation ────────────────────────────────────
   function handleSwitchView(view, extras = {}) {
-    // Leaving signup/verify flow without completing it — clear cached creds
-    if (view !== 'verify' && view !== 'register') {
-      clearSignupSession();
-    }
-
     setActiveView(view);
     if (extras.email          != null) setFlowEmail(extras.email);
     if (extras.cooldownSeconds != null) setCooldownSeconds(extras.cooldownSeconds);
   }
 
   // ── Called by Register on success ─────────────────────
-  function handleRegisterSuccess({ email, password, cooldownSeconds: cd }) {
-    // Cache credentials strictly in memory for auto-login after verification
-    signupSessionActive.current = true;
-    cachedCredentials.current   = { email, password };
+  function handleRegisterSuccess({ email, cooldownSeconds: cd }) {
     setFlowEmail(email);
     setCooldownSeconds(cd || 60);
     setActiveView('verify');
   }
 
   // ── Called by VerifyCode on success ───────────────────
-  async function handleVerifySuccess() {
-    if (signupSessionActive.current && cachedCredentials.current) {
-      const { email, password } = cachedCredentials.current;
-      clearSignupSession(); // wipe immediately before the async call
-      try {
-        const result = await window.api.auth.login({ email, password });
-        if (result.success) {
-          dispatch(loginSuccess(result.user));
-          dispatch(setTheme(result.theme ?? 'light'));
-
-          // New signup — route to user type selection before entering app
-          if (!result.user?.userType) {
-            setActiveView('userType');
-            return;
-          }
-
-          return; // navigates to app shell — AuthLayout unmounts
-        }
-      } catch {
-        // Fall through to manual login
-      }
+  // Express now returns { user, theme } directly from verify-email,
+  // so the user is logged in without a second login call.
+  function handleVerifySuccess(verifyResult) {
+    if (verifyResult && verifyResult.user) {
+      dispatch(loginSuccess(verifyResult.user));
+      dispatch(setTheme(verifyResult.theme ?? 'light'));
+      // App.jsx will route to <AuthPage initialView="userType" /> via the
+      // `isAuthenticated && !userType` branch, which remounts AuthLayout.
+      return;
     }
-    // No auto-login: route to sign-in
+    // No session payload — fall back to manual login.
     setActiveView('login');
   }
 
@@ -315,23 +278,21 @@ function AuthLayout({ initialView = 'login' }) {
           )}
           {activeView === 'userType'  && (
             <UserTypeSelection
-              onComplete={(userType) => {
+              onComplete={(userType, freshUser) => {
+                // Update redux with the fresh user (now carrying userType).
+                // Without this, App.jsx stays in the `!userType` branch and
+                // any later screen-switch never bubbles the choice through.
+                const merged = freshUser
+                  ? freshUser
+                  : { ...(currentUser || {}), userType };
+                dispatch(loginSuccess(merged));
+
                 if (userType === 'enterprise') {
                   // Enterprise users need to create or join an org
                   setActiveView('orgChoice');
-                  return;
                 }
-                // Individual — re-fetch user and proceed to app
-                (async () => {
-                  try {
-                    const result = await window.api.auth.getCurrentUser();
-                    if (result.success && result.user) {
-                      dispatch(loginSuccess({ ...result.user, userType }));
-                    }
-                  } catch {
-                    // User is already authenticated, just proceed
-                  }
-                })();
+                // Individual — App.jsx will switch out of the auth tree
+                // automatically once redux has userType set.
               }}
               showAuthToast={showAuthToast}
             />
@@ -345,17 +306,14 @@ function AuthLayout({ initialView = 'login' }) {
           )}
           {activeView === 'createOrg' && (
             <CreateOrganization
-              onComplete={(org) => {
-                (async () => {
-                  try {
-                    const result = await window.api.auth.getCurrentUser();
-                    if (result.success && result.user) {
-                      dispatch(loginSuccess(result.user));
-                    }
-                  } catch {
-                    // Already authenticated
-                  }
-                })();
+              onComplete={(org, freshUser) => {
+                // Use the fresh user returned by org:create (carries
+                // userType=enterprise + activeOrganizationId). This causes
+                // App.jsx to render the main app body — AuthLayout unmounts.
+                const merged = freshUser
+                  ? freshUser
+                  : { ...(currentUser || {}), userType: 'enterprise', activeOrganizationId: org?._id };
+                dispatch(loginSuccess(merged));
               }}
               onBack={() => setActiveView('orgChoice')}
               showAuthToast={showAuthToast}
@@ -363,17 +321,11 @@ function AuthLayout({ initialView = 'login' }) {
           )}
           {activeView === 'joinOrg' && (
             <JoinOrganization
-              onComplete={(org) => {
-                (async () => {
-                  try {
-                    const result = await window.api.auth.getCurrentUser();
-                    if (result.success && result.user) {
-                      dispatch(loginSuccess(result.user));
-                    }
-                  } catch {
-                    // Already authenticated
-                  }
-                })();
+              onComplete={(org, freshUser) => {
+                const merged = freshUser
+                  ? freshUser
+                  : { ...(currentUser || {}), userType: 'enterprise', activeOrganizationId: org?._id };
+                dispatch(loginSuccess(merged));
               }}
               onBack={() => setActiveView('orgChoice')}
               showAuthToast={showAuthToast}

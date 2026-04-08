@@ -40,19 +40,17 @@ async function exchangeCodeForProfile(code, redirectUri) {
 
 /**
  * Find existing user or create new one from Google profile.
- * Handles account linking when email already exists with local provider.
+ * Unified find-or-create regardless of which screen the user came from
+ * (login or signup). Handles account linking when email already exists
+ * with a local provider.
  *
  * @param {Object} profile - { googleId, email, name, picture, emailVerified }
- * @param {'login'|'signup'} mode - 'login' only signs in existing users; 'signup' only creates new users
- * @returns {Object} { user, isNewUser, requiresLinking, noAccount?, alreadyExists?, email? }
+ * @returns {Object} { user, isNewUser, requiresLinking, email? }
  */
-async function findOrCreateGoogleUser(profile, mode) {
+async function findOrCreateGoogleUser(profile) {
   // 1. Check if user exists by googleId (returning Google user)
   let user = await User.findOne({ googleId: profile.googleId, isDeleted: false });
   if (user) {
-    if (mode === 'signup') {
-      return { user: null, isNewUser: false, requiresLinking: false, alreadyExists: true };
-    }
     return { user, isNewUser: false, requiresLinking: false };
   }
 
@@ -63,10 +61,7 @@ async function findOrCreateGoogleUser(profile, mode) {
       // Account linking required — return flag, don't auto-link
       return { user: null, isNewUser: false, requiresLinking: true, email: profile.email };
     }
-    // Already linked or is google-only — update googleId if missing
-    if (mode === 'signup') {
-      return { user: null, isNewUser: false, requiresLinking: false, alreadyExists: true };
-    }
+    // Already linked or google-only — update googleId if missing
     if (!user.googleId) {
       user.googleId = profile.googleId;
       user.profilePicture = profile.picture;
@@ -75,18 +70,13 @@ async function findOrCreateGoogleUser(profile, mode) {
     return { user, isNewUser: false, requiresLinking: false };
   }
 
-  // 2.5. Check for soft-deleted user (deleted account re-registration)
+  // 2.5. Check for soft-deleted user — reactivate
   const deletedUser = await User.findOne({
     email: profile.email.toLowerCase(),
     isDeleted: true,
   });
 
   if (deletedUser) {
-    if (mode === 'login') {
-      return { user: null, isNewUser: false, requiresLinking: false, noAccount: true };
-    }
-
-    // Signup mode — reactivate the soft-deleted account
     deletedUser.isDeleted = false;
     deletedUser.deletedAt = undefined;
     deletedUser.name = profile.name;
@@ -104,13 +94,7 @@ async function findOrCreateGoogleUser(profile, mode) {
     return { user: deletedUser, isNewUser: true, requiresLinking: false };
   }
 
-  // 3. New user
-  if (mode === 'login') {
-    // Login mode — don't auto-create, tell user to register first
-    return { user: null, isNewUser: false, requiresLinking: false, noAccount: true };
-  }
-
-  // Signup mode — create account
+  // 3. Brand new user — create account
   const newUser = await User.create({
     name: profile.name,
     email: profile.email.toLowerCase(),

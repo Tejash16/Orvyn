@@ -11,14 +11,11 @@ const logger = require('../services/logger');
  */
 async function googleLogin(req, res, next) {
   try {
-    const { code, redirectUri, mode } = req.body;
+    const { code, redirectUri } = req.body;
 
     if (!code || !redirectUri) {
       return res.status(400).json({ success: false, error: 'code and redirectUri are required' });
     }
-
-    // Validate mode — default to 'login' for backward compatibility
-    const authMode = mode === 'signup' ? 'signup' : 'login';
 
     // Exchange code for Google profile
     const profile = await googleAuthService.exchangeCodeForProfile(code, redirectUri);
@@ -27,24 +24,8 @@ async function googleLogin(req, res, next) {
       return res.status(400).json({ success: false, error: 'Google email is not verified' });
     }
 
-    // Find or create user
-    const result = await googleAuthService.findOrCreateGoogleUser(profile, authMode);
-
-    if (result.noAccount) {
-      return res.status(404).json({
-        success: false,
-        noAccount: true,
-        error: 'No account found with this Google email. Please create an account first.',
-      });
-    }
-
-    if (result.alreadyExists) {
-      return res.status(409).json({
-        success: false,
-        alreadyExists: true,
-        error: 'An account with this email already exists. Please sign in instead.',
-      });
-    }
+    // Find or create user (unified — same behavior for login/signup screens)
+    const result = await googleAuthService.findOrCreateGoogleUser(profile);
 
     if (result.requiresLinking) {
       // Frontend needs to show password verification dialog

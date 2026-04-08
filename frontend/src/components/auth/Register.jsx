@@ -96,7 +96,6 @@ function Register({ onSwitchView, onRegisterSuccess, showAuthToast }) {
       if (result.success) {
         onRegisterSuccess({
           email,
-          password,
           cooldownSeconds: result.cooldownSeconds ?? 60,
         });
       } else {
@@ -113,13 +112,7 @@ function Register({ onSwitchView, onRegisterSuccess, showAuthToast }) {
     setIsGoogleLoading(true);
 
     try {
-      const result = await window.api.auth.initiateGoogleAuth('signup');
-
-      if (result.alreadyExists) {
-        showAuthToast('An account with this email already exists. Please sign in instead.');
-        setIsGoogleLoading(false);
-        return;
-      }
+      const result = await window.api.auth.initiateGoogleAuth();
 
       if (result.requiresLinking) {
         setLinkingState({

@@ -322,18 +322,10 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
   // Step 2: Exchange code via Express → get tokens or requiresLinking
   // Step 3–7: Same as local login (init dir, init DB, theme, tokens, scheduler)
 
-  ipcMain.handle('auth:initiateGoogleAuth', async (_event, mode) => {
+  ipcMain.handle('auth:initiateGoogleAuth', async () => {
     try {
       const { code, redirectUri } = await authService.initiateGoogleAuth();
-      const result = await authService.googleLogin(code, redirectUri, mode);
-
-      if (result.noAccount) {
-        return { success: false, noAccount: true, error: result.error };
-      }
-
-      if (result.alreadyExists) {
-        return { success: false, alreadyExists: true, error: result.error };
-      }
+      const result = await authService.googleLogin(code, redirectUri);
 
       if (result.requiresLinking) {
         // Notify renderer to show password dialog
@@ -500,8 +492,48 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
   ipcMain.handle('auth:verifyEmail', async (_event, { email, code }) => {
     try {
+      // Express now returns { accessToken, refreshToken, user } so the user
+      // is logged in by the verify call itself — no second login required.
       const result = await authService.verifyEmail(email, code);
-      return { success: true, message: result.message };
+
+      if (!result.accessToken || !result.refreshToken || !result.user) {
+        // Backwards-safety — verification succeeded but no session payload
+        return { success: true, message: result.message };
+      }
+
+      const user = result.user;
+
+      // Same post-login sequence as auth:login / auth:initiateGoogleAuth
+      await userContextService.initializeUserDirectory(String(user._id));
+      const databasePath = userContextService.getActiveDatabasePath();
+
+      try {
+        await pythonService.initDb(databasePath, String(user._id));
+      } catch (initErr) {
+        authService.logout();
+        userContextService.clear();
+        throw new Error(`Database initialisation failed: ${initErr.message}`);
+      }
+
+      let theme;
+      try {
+        theme = await pythonService.getTheme();
+      } catch (themeErr) {
+        authService.logout();
+        userContextService.clear();
+        throw new Error(`Theme fetch failed: ${themeErr.message}`);
+      }
+
+      try {
+        tokenVault.store(result.refreshToken);
+      } catch { /* non-fatal */ }
+
+      authService.setSession(result.accessToken, user);
+      startRefreshScheduler();
+      startSubscriptionCheck();
+      resumePendingIndexing(getMainWindow).catch(() => { /* non-fatal */ });
+
+      return { success: true, user, theme };
     } catch (err) {
       return {
         success:           false,
@@ -561,6 +593,10 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
   ipcMain.handle('auth:setUserType', async (_event, userType) => {
     try {
       const result = await expressService.setUserType(userType);
+      // Refresh in-memory user so subsequent IPCs see the new userType
+      if (result.user) {
+        authService.setSession(authService.getToken(), result.user);
+      }
       return { success: true, user: result.user };
     } catch (err) {
       return { success: false, error: err.message };

@@ -65,13 +65,18 @@ async function createOrganization(req, res, next) {
       status: 'active',
     });
 
-    // Update user
-    await User.findByIdAndUpdate(userId, {
-      userType: 'enterprise',
-      activeOrganizationId: org._id,
-    });
+    // Update user — return the fresh doc so the desktop app can sync redux
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { userType: 'enterprise', activeOrganizationId: org._id },
+      { new: true },
+    );
 
-    return res.status(201).json({ success: true, organization: org.toJSON() });
+    return res.status(201).json({
+      success: true,
+      organization: org.toJSON(),
+      user: updatedUser ? updatedUser.toJSON() : undefined,
+    });
   } catch (err) {
     if (err.statusCode) {
       return res.status(err.statusCode).json({ success: false, error: err.message });

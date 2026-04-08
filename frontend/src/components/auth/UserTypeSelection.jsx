@@ -55,7 +55,7 @@ function UserTypeSelection({ onComplete, showAuthToast }) {
     try {
       const result = await window.api.auth.setUserType(selected);
       if (result.success) {
-        onComplete(selected);
+        onComplete(selected, result.user);
       } else {
         showAuthToast(result.error || 'Failed to set account type.');
       }

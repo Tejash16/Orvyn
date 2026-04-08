@@ -808,19 +808,15 @@ function initiateGoogleAuth() {
 /**
  * Complete Google login by sending code to Express.
  */
-async function googleLogin(code, redirectUri, mode) {
+async function googleLogin(code, redirectUri) {
   const res = await fetch(`${getExpressUrl()}/api/v1/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code, redirectUri, mode }),
+    body: JSON.stringify({ code, redirectUri }),
   });
 
   const data = await res.json();
-  if (!res.ok) {
-    // Pass through structured error flags (noAccount, alreadyExists)
-    if (data.noAccount || data.alreadyExists) return data;
-    throw new Error(data.error || 'Google login failed');
-  }
+  if (!res.ok) throw new Error(data.error || 'Google login failed');
   return data;
 }
 

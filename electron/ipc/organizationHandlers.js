@@ -1,6 +1,7 @@
 'use strict';
 
 const expressService = require('../services/expressService');
+const authService    = require('../services/authService');
 const log = require('../services/logger');
 
 /**
@@ -17,7 +18,11 @@ function registerOrganizationHandlers(ipcMain, getMainWindow) {
   ipcMain.handle('org:create', async (_event, { name }) => {
     try {
       const data = await expressService.createOrganization(name);
-      return { success: true, organization: data.organization };
+      // Refresh in-memory user so it reflects the new userType + activeOrganizationId
+      if (data.user) {
+        authService.setSession(authService.getToken(), data.user);
+      }
+      return { success: true, organization: data.organization, user: data.user };
     } catch (err) {
       log.error('org:create failed:', err.message);
       return { success: false, error: err.message };

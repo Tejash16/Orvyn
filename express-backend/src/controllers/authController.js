@@ -6,6 +6,7 @@ const validator  = require('validator');
 
 const User        = require('../models/User');
 const authService = require('../services/authService');
+const logger      = require('../services/logger');
 
 // ── Register ──────────────────────────────────────────────
 
@@ -32,7 +33,32 @@ async function verifyEmail(req, res, next) {
   try {
     const { email, code } = req.body;
     await authService.verifyEmail(email, code);
-    return res.status(200).json({ success: true, message: 'Email verified successfully.' });
+
+    // Issue tokens immediately so the user is logged in as soon as
+    // they verify their email — no second login round-trip required.
+    const user = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
+    if (!user) {
+      return res.status(500).json({ success: false, error: 'Verification succeeded but user lookup failed.' });
+    }
+
+    const accessToken  = authService.issueAccessToken(user._id);
+    const refreshToken = authService.issueRefreshToken(user._id);
+
+    user.refreshToken        = authService.hashToken(refreshToken);
+    user.refreshTokenExpires = new Date(Date.now() + authService.REFRESH_TOKEN_TTL_MS);
+    user.failedLoginAttempts = 0;
+    user.lockUntil           = null;
+    await user.save();
+
+    logger.info(`Email verified and session issued for ${user.email}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Email verified successfully.',
+      accessToken,
+      refreshToken,
+      user: user.toJSON(),
+    });
   } catch (err) {
     if (err.statusCode) {
       const body = { success: false, error: err.message };
@@ -368,7 +394,7 @@ async function setUserType(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      user: { _id: user._id, userType: user.userType },
+      user: user.toJSON(),
     });
   } catch (err) {
     next(err);

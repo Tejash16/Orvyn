@@ -74,7 +74,7 @@ function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess,
       if (result.success) {
         setDigits(Array(CODE_LENGTH).fill(''));
         setStatus('confirmed');
-        await onVerifySuccess();
+        await onVerifySuccess(result);
       } else {
         setDigits(Array(CODE_LENGTH).fill(''));
         if (result.retryAfterSeconds) {

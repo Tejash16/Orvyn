@@ -24,19 +24,22 @@ function CreateOrganization({ onComplete, onBack, showAuthToast }) {
 
   async function handleCreate(e) {
     e.preventDefault();
+    if (loading) return;            // double-submit guard
     if (!name.trim()) return;
     setLoading(true);
 
     try {
       const result = await window.api.organization.create(name.trim());
       if (result.success) {
-        onComplete(result.organization);
-      } else {
-        showAuthToast(result.error || 'Failed to create organization.');
+        // Keep button disabled — parent will dispatch loginSuccess and
+        // App.jsx will unmount this component on the next render.
+        onComplete(result.organization, result.user);
+        return;
       }
+      showAuthToast(result.error || 'Failed to create organization.');
+      setLoading(false);
     } catch {
       showAuthToast('Something went wrong. Please try again.');
-    } finally {
       setLoading(false);
     }
   }
