@@ -7,6 +7,16 @@ const validator   = require('validator');
 
 const User                = require('../models/User');
 const PendingRegistration = require('../models/PendingRegistration');
+const Organization         = require('../models/Organization');
+const OrganizationMember   = require('../models/OrganizationMember');
+const OrganizationInvite   = require('../models/OrganizationInvite');
+const SharedDataRoom       = require('../models/SharedDataRoom');
+const SharedDataRoomAccess = require('../models/SharedDataRoomAccess');
+const AuditLog             = require('../models/AuditLog');
+const Subscription         = require('../models/Subscription');
+const UserLimits           = require('../models/UserLimits');
+const UserUsage            = require('../models/UserUsage');
+const IdempotencyKey       = require('../models/IdempotencyKey');
 const codeService         = require('./codeService');
 const logger      = require('./logger');
 const { sendEmail }       = require('./emailService');
@@ -519,10 +529,81 @@ async function sendFeedbackEmail({ name, email, feedback }) {
   });
 }
 
+/**
+ * Hard-delete a user and cascade-purge all related records.
+ * Blocks if the user owns an organization with other active members.
+ */
+async function hardDeleteUser(userId) {
+  const user = await User.findById(userId);
+  if (!user) {
+    const err = new Error('User not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const userEmail = user.email;
+
+  // Step 2 — owned orgs check + solo-org cascade
+  const ownedOrgs = await Organization.find({ createdBy: userId, isDeleted: false });
+  for (const org of ownedOrgs) {
+    const otherMembers = await OrganizationMember.countDocuments({
+      organizationId: org._id,
+      userId: { $ne: userId },
+      status: 'active',
+    });
+    if (otherMembers > 0) {
+      const err = new Error(
+        'Cannot delete account: you own an organization with other members. ' +
+        'Transfer ownership or remove all other members first.'
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  // Solo-owned orgs: cascade-delete each
+  for (const org of ownedOrgs) {
+    const orgId = org._id;
+    const safe = async (label, fn) => {
+      try { await fn(); }
+      catch (e) { logger.error(`hardDeleteUser: ${label} failed for org ${orgId}: ${e.message}`); }
+    };
+    await safe('OrganizationMember', () => OrganizationMember.deleteMany({ organizationId: orgId }));
+    await safe('OrganizationInvite', () => OrganizationInvite.deleteMany({ organizationId: orgId }));
+    await safe('SharedDataRoom',     () => SharedDataRoom.deleteMany({ organizationId: orgId }));
+    await safe('SharedDataRoomAccess', () => SharedDataRoomAccess.deleteMany({ organizationId: orgId }));
+    await safe('AuditLog',           () => AuditLog.deleteMany({ organizationId: orgId }));
+    await safe('Subscription',       () => Subscription.deleteMany({ organizationId: orgId }));
+    await safe('Organization',       () => Organization.deleteOne({ _id: orgId }));
+  }
+
+  // Best-effort purge for remaining user-owned data
+  const safe = async (label, fn) => {
+    try { await fn(); }
+    catch (e) { logger.error(`hardDeleteUser: ${label} failed for user ${userId}: ${e.message}`); }
+  };
+
+  await safe('OrganizationMember (memberships)', () => OrganizationMember.deleteMany({ userId }));
+  await safe('OrganizationInvite (sent)',         () => OrganizationInvite.deleteMany({ invitedBy: userId }));
+  await safe('OrganizationInvite (received)',     () => OrganizationInvite.deleteMany({ email: userEmail }));
+  await safe('SharedDataRoom (sharedBy)',         () => SharedDataRoom.deleteMany({ sharedBy: userId }));
+  await safe('SharedDataRoomAccess',              () => SharedDataRoomAccess.deleteMany({ userId }));
+  await safe('AuditLog',                          () => AuditLog.deleteMany({ userId }));
+  await safe('UserLimits',                        () => UserLimits.deleteMany({ userId }));
+  await safe('UserUsage',                         () => UserUsage.deleteMany({ userId }));
+  await safe('Subscription',                      () => Subscription.deleteMany({ userId }));
+  await safe('IdempotencyKey',                    () => IdempotencyKey.deleteMany({ userId }));
+  await safe('PendingRegistration',               () => PendingRegistration.deleteMany({ email: userEmail }));
+
+  // Step 11 — must succeed
+  await User.deleteOne({ _id: userId });
+}
+
 module.exports = {
   registerUser,
   loginUser,
   verifyEmail,
+  hardDeleteUser,
   requestPasswordReset,
   verifyResetCode,
   resetPassword,

@@ -151,8 +151,12 @@ function AuthLayout({ initialView = 'login' }) {
     if (verifyResult && verifyResult.user) {
       dispatch(loginSuccess(verifyResult.user));
       dispatch(setTheme(verifyResult.theme ?? 'light'));
-      // App.jsx will route to <AuthPage initialView="userType" /> via the
-      // `isAuthenticated && !userType` branch, which remounts AuthLayout.
+      // React reuses this AuthLayout instance across the App.jsx ternary
+      // branches (same component type, same JSX position), so initialView
+      // changes don't reset activeView. Switch the local view explicitly.
+      if (!verifyResult.user.userType) {
+        setActiveView('userType');
+      }
       return;
     }
     // No session payload — fall back to manual login.

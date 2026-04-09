@@ -6,12 +6,78 @@
  */
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const logger = require('./logger');
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_CHAIN = (process.env.GEMINI_MODEL_CHAIN || 'gemini-2.5-flash,gemini-1.5-flash,gemini-1.5-pro')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+const MODEL_NAME = MODEL_CHAIN[0];
 const TEMPERATURE = 0.1;
 const MAX_RETRIES = 3;
 const BATCH_SIZE = 10;
 const MAX_PARALLEL_BATCHES = 5;
+
+// Build the chat-side model chain. Honors GEMINI_CHAT_MODEL by pinning it first
+// (deduped) so existing env wiring keeps working.
+function _chatModelChain() {
+  const pinned = process.env.GEMINI_CHAT_MODEL;
+  if (!pinned) return MODEL_CHAIN;
+  return [pinned, ...MODEL_CHAIN.filter((m) => m !== pinned)];
+}
+
+// Extract an HTTP-ish status code from a Gemini SDK error.
+function _statusOf(err) {
+  if (!err) return 0;
+  if (typeof err.status === 'number') return err.status;
+  const m = (err.message || '').match(/\[(\d{3})\s/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// 403/404/400 → permanent for this model, fall through immediately.
+// 429/500/503/0 → transient, retry same model then fall through.
+function _isPermanent(status) {
+  return status === 400 || status === 403 || status === 404;
+}
+
+/**
+ * Run `attemptFn(modelName)` across MODEL_CHAIN with per-model retry + backoff.
+ * SyntaxError is treated as a JSON-shape problem and retried on the same model
+ * via the caller's onSyntaxError hook (no model switch).
+ */
+async function _callWithFallback(chain, attemptFn, onSyntaxError) {
+  let lastError;
+  for (const modelName of chain) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const out = await attemptFn(modelName, attempt);
+        if (modelName !== chain[0]) {
+          logger.info(`[gemini] served by fallback model: ${modelName}`);
+        }
+        return out;
+      } catch (e) {
+        lastError = e;
+        if (e instanceof SyntaxError) {
+          if (onSyntaxError) onSyntaxError(attempt);
+          if (attempt < MAX_RETRIES - 1) {
+            await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
+            continue;
+          }
+          break; // bad JSON repeatedly — try next model
+        }
+        const status = _statusOf(e);
+        if (_isPermanent(status)) {
+          logger.warn(`[gemini] ${modelName} permanent error ${status}, falling through`);
+          break;
+        }
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
+          continue;
+        }
+        logger.warn(`[gemini] ${modelName} exhausted retries (status ${status || 'n/a'})`);
+      }
+    }
+  }
+  throw new Error(`Gemini failed across [${chain.join(',')}]: ${lastError?.message || 'unknown error'}`);
+}
 
 // ── Gemini client ────────────────────────────────────────
 
@@ -23,47 +89,34 @@ function _getClient() {
 
 // ── Low-level Gemini call with retries ───────────────────
 
-async function _callGemini(systemPrompt, userPrompt, retries = MAX_RETRIES) {
+async function _callGemini(systemPrompt, userPrompt) {
   const genAI = _getClient();
-  const model = genAI.getGenerativeModel({
-    model: MODEL_NAME,
-    systemInstruction: systemPrompt,
-    generationConfig: { temperature: TEMPERATURE },
-  });
+  let prompt = userPrompt;
 
-  let lastError;
-
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      const result = await model.generateContent(userPrompt);
+  return _callWithFallback(
+    MODEL_CHAIN,
+    async (modelName) => {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: systemPrompt,
+        generationConfig: { temperature: TEMPERATURE },
+      });
+      const result = await model.generateContent(prompt);
       let raw = result.response.text();
-
-      // Strip markdown code fences if present
       raw = raw.replace(/^```(?:json)?\s*\n?/gm, '');
       raw = raw.replace(/\n?```\s*$/gm, '');
       raw = raw.trim();
-
-      // Validate it's parseable JSON
       JSON.parse(raw);
       return raw;
-    } catch (e) {
-      lastError = e;
-
-      // On second attempt, append a re-prompt hint for JSON issues
-      if (e instanceof SyntaxError && attempt === 1) {
-        userPrompt +=
+    },
+    (attempt) => {
+      if (attempt === 1) {
+        prompt +=
           '\n\nIMPORTANT: Your previous response was not valid JSON. ' +
           'Return ONLY a valid JSON object/array with no extra text.';
       }
-
-      // Exponential backoff: 1s, 2s, 4s
-      if (attempt < retries - 1) {
-        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
-      }
-    }
-  }
-
-  throw new Error(`Gemini API failed after ${retries} attempts: ${lastError?.message}`);
+    },
+  );
 }
 
 // ── Classification ───────────────────────────────────────
@@ -258,26 +311,15 @@ const SUMMARIZE_SYSTEM_PROMPT =
  */
 async function summarizeFile(text) {
   const genAI = _getClient();
-  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
-  const model = genAI.getGenerativeModel({
-    model: chatModel,
-    systemInstruction: SUMMARIZE_SYSTEM_PROMPT,
-    generationConfig: { temperature: 0.2 },
+  return _callWithFallback(_chatModelChain(), async (modelName) => {
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: SUMMARIZE_SYSTEM_PROMPT,
+      generationConfig: { temperature: 0.2 },
+    });
+    const result = await model.generateContent(text);
+    return result.response.text().trim();
   });
-
-  let lastError;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const result = await model.generateContent(text);
-      return result.response.text().trim();
-    } catch (e) {
-      lastError = e;
-      if (attempt < MAX_RETRIES - 1) {
-        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
-      }
-    }
-  }
-  throw new Error(`Summarize failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
 }
 
 // ── OCR via Gemini Vision ─────────────────────────────────
@@ -297,13 +339,6 @@ const OCR_SYSTEM_PROMPT =
  */
 async function extractTextFromImage(imageBase64, mimeType, filename) {
   const genAI = _getClient();
-  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
-  const model = genAI.getGenerativeModel({
-    model: chatModel,
-    systemInstruction: OCR_SYSTEM_PROMPT,
-    generationConfig: { temperature: 0.1 },
-  });
-
   const parts = [
     { inlineData: { mimeType, data: imageBase64 } },
     {
@@ -313,19 +348,15 @@ async function extractTextFromImage(imageBase64, mimeType, filename) {
     },
   ];
 
-  let lastError;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const result = await model.generateContent({ contents: [{ role: 'user', parts }] });
-      return result.response.text().trim();
-    } catch (e) {
-      lastError = e;
-      if (attempt < MAX_RETRIES - 1) {
-        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
-      }
-    }
-  }
-  throw new Error(`OCR failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+  return _callWithFallback(_chatModelChain(), async (modelName) => {
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: OCR_SYSTEM_PROMPT,
+      generationConfig: { temperature: 0.1 },
+    });
+    const result = await model.generateContent({ contents: [{ role: 'user', parts }] });
+    return result.response.text().trim();
+  });
 }
 
 // ── Chat title generation (V1 Copilot) ───────────────────
@@ -342,26 +373,15 @@ const TITLE_SYSTEM_PROMPT =
  */
 async function generateTitle(message) {
   const genAI = _getClient();
-  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
-  const model = genAI.getGenerativeModel({
-    model: chatModel,
-    systemInstruction: TITLE_SYSTEM_PROMPT,
-    generationConfig: { temperature: 0.3, maxOutputTokens: 20 },
+  return _callWithFallback(_chatModelChain(), async (modelName) => {
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: TITLE_SYSTEM_PROMPT,
+      generationConfig: { temperature: 0.3, maxOutputTokens: 20 },
+    });
+    const result = await model.generateContent(message);
+    return result.response.text().trim();
   });
-
-  let lastError;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const result = await model.generateContent(message);
-      return result.response.text().trim();
-    } catch (e) {
-      lastError = e;
-      if (attempt < MAX_RETRIES - 1) {
-        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
-      }
-    }
-  }
-  throw new Error(`Title generation failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
 }
 
 // ── Chat streaming (Phase C2 — Copilot) ──────────────────
@@ -497,46 +517,31 @@ async function chatStream(res, systemPrompt, messages, tools, toolConfig) {
  */
 async function chatNonStreaming(systemPrompt, messages, tools, toolConfig) {
   const genAI = _getClient();
-  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
   const chatTemp = parseFloat(process.env.GEMINI_CHAT_TEMPERATURE || '0.3');
   const maxTokens = parseInt(process.env.GEMINI_CHAT_MAX_OUTPUT_TOKENS || '4096', 10);
 
-  const modelConfig = {
-    model: chatModel,
-    systemInstruction: systemPrompt || CHAT_SYSTEM_PROMPT,
-    generationConfig: { temperature: chatTemp, maxOutputTokens: maxTokens },
-  };
-
-  if (tools && tools.length > 0) {
-    modelConfig.tools = [{ functionDeclarations: tools }];
-  }
-  if (toolConfig) {
-    modelConfig.toolConfig = { functionCallingConfig: { mode: toolConfig.mode || 'AUTO' } };
-  }
-
-  const model = genAI.getGenerativeModel(modelConfig);
-
-  let lastError;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const result = await model.generateContent({ contents: messages });
-      const parts = result.response.candidates?.[0]?.content?.parts || [];
-
-      const textParts = parts.filter(p => p.text).map(p => p.text);
-      const toolCalls = parts.filter(p => p.functionCall).map(p => ({
-        name: p.functionCall.name,
-        args: p.functionCall.args,
-      }));
-
-      return { response: textParts.join(''), tool_calls: toolCalls };
-    } catch (e) {
-      lastError = e;
-      if (attempt < MAX_RETRIES - 1) {
-        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
-      }
+  return _callWithFallback(_chatModelChain(), async (modelName) => {
+    const modelConfig = {
+      model: modelName,
+      systemInstruction: systemPrompt || CHAT_SYSTEM_PROMPT,
+      generationConfig: { temperature: chatTemp, maxOutputTokens: maxTokens },
+    };
+    if (tools && tools.length > 0) {
+      modelConfig.tools = [{ functionDeclarations: tools }];
     }
-  }
-  throw new Error(`Chat failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+    if (toolConfig) {
+      modelConfig.toolConfig = { functionCallingConfig: { mode: toolConfig.mode || 'AUTO' } };
+    }
+    const model = genAI.getGenerativeModel(modelConfig);
+    const result = await model.generateContent({ contents: messages });
+    const parts = result.response.candidates?.[0]?.content?.parts || [];
+    const textParts = parts.filter((p) => p.text).map((p) => p.text);
+    const toolCalls = parts.filter((p) => p.functionCall).map((p) => ({
+      name: p.functionCall.name,
+      args: p.functionCall.args,
+    }));
+    return { response: textParts.join(''), tool_calls: toolCalls };
+  });
 }
 
 module.exports = {

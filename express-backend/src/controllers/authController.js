@@ -195,11 +195,7 @@ async function deleteAccount(req, res, next) {
       }
     }
 
-    user.isDeleted           = true;
-    user.deletedAt           = new Date();
-    user.refreshToken        = undefined;
-    user.refreshTokenExpires = undefined;
-    await user.save();
+    await authService.hardDeleteUser(req.user.userId);
 
     return res.status(200).json({ success: true });
   } catch (err) {
