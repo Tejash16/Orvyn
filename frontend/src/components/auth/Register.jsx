@@ -128,6 +128,11 @@ function Register({ onSwitchView, onRegisterSuccess, showAuthToast }) {
         // Google signup — email already verified, skip OTP and log in directly
         dispatch(loginSuccess(result.user));
         if (result.theme) dispatch(setTheme(result.theme));
+
+        // New Google users don't have a userType yet — show type selection
+        if (result.isNewUser || !result.user?.userType) {
+          onSwitchView('userType');
+        }
       } else {
         showAuthToast(result.error || 'Google sign-up failed.');
       }

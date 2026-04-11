@@ -21,6 +21,7 @@ function App() {
   const activePage      = useSelector((state) => state.ui.activePage);
   const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
   const userType        = useSelector((state) => state.auth.user?.userType);
+  const activeOrgId     = useSelector((state) => state.auth.user?.activeOrganizationId);
   const isRestoring     = useSelector((state) => state.auth.isRestoring);
   const isOnline        = useSelector((state) => state.ui.isOnline);
 
@@ -80,6 +81,8 @@ function App() {
         </div>
       ) : isAuthenticated && !userType ? (
         <AuthPage initialView="userType" />
+      ) : isAuthenticated && userType === 'enterprise' && !activeOrgId ? (
+        <AuthPage initialView="orgChoice" />
       ) : isAuthenticated ? (
         <div className="app-body">
           <Sidebar />
