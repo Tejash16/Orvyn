@@ -290,11 +290,21 @@ async function removeMember(req, res, next) {
     targetMember.status = 'removed';
     await targetMember.save();
 
-    // Clear their activeOrganizationId if it matches
-    await User.findOneAndUpdate(
-      { _id: req.params.userId, activeOrganizationId: req.params.orgId },
-      { $set: { activeOrganizationId: null } },
-    );
+    // Re-sync the removed user's top-level state so they aren't stranded
+    // as userType='enterprise' with no active org (which traps them at the
+    // org-choice screen). If they belong to another active org, switch to
+    // it; otherwise demote them back to 'individual'.
+    const otherActive = await OrganizationMember.findOne({
+      userId: req.params.userId,
+      organizationId: { $ne: req.params.orgId },
+      status: 'active',
+    });
+
+    const userUpdate = otherActive
+      ? { activeOrganizationId: otherActive.organizationId, userType: 'enterprise' }
+      : { activeOrganizationId: null, userType: 'individual' };
+
+    await User.findByIdAndUpdate(req.params.userId, { $set: userUpdate });
 
     // Audit log: member removed
     const remover = await User.findById(req.user.userId).select('name email');
@@ -395,6 +405,12 @@ async function createInvite(req, res, next) {
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     });
 
+    // Shareable links. The web landing URL is the primary share target — it
+    // works in every email client and then hands off to the app via deep link.
+    const appUrl = (process.env.APP_URL || `http://localhost:${process.env.PORT || 8080}`).replace(/\/$/, '');
+    const inviteUrl = `${appUrl}/invite/${invite.inviteCode}`;
+    const deepLink  = `orvyn://invite?code=${invite.inviteCode}`;
+
     // Send invite email
     const inviter = await User.findById(req.user.userId);
     await sendOrganizationInviteEmail({
@@ -404,6 +420,7 @@ async function createInvite(req, res, next) {
       inviteCode: invite.inviteCode,
       role: invite.role,
       expiresAt: invite.expiresAt,
+      inviteUrl,
     });
 
     // Audit log: member invited
@@ -430,6 +447,8 @@ async function createInvite(req, res, next) {
         email: invite.email,
         role: invite.role,
         expiresAt: invite.expiresAt,
+        inviteUrl,
+        deepLink,
       },
     });
   } catch (err) {
@@ -447,7 +466,14 @@ async function listInvites(req, res, next) {
       status: 'pending',
     }).sort({ createdAt: -1 });
 
-    return res.status(200).json({ success: true, invites: invites.map((i) => i.toJSON()) });
+    const appUrl = (process.env.APP_URL || `http://localhost:${process.env.PORT || 8080}`).replace(/\/$/, '');
+    const withLinks = invites.map((i) => ({
+      ...i.toJSON(),
+      inviteUrl: `${appUrl}/invite/${i.inviteCode}`,
+      deepLink:  `orvyn://invite?code=${i.inviteCode}`,
+    }));
+
+    return res.status(200).json({ success: true, invites: withLinks });
   } catch (err) {
     next(err);
   }
@@ -491,6 +517,18 @@ async function acceptInvite(req, res, next) {
 
     if (!invite) {
       return res.status(404).json({ success: false, error: 'Invalid or expired invite.' });
+    }
+
+    const caller = await User.findById(req.user.userId).select('email');
+    if (!caller) {
+      return res.status(401).json({ success: false, error: 'User not found.' });
+    }
+
+    if (invite.email.toLowerCase() !== caller.email.toLowerCase()) {
+      return res.status(403).json({
+        success: false,
+        error: 'This invite was sent to a different email address.',
+      });
     }
 
     const org = await Organization.findOne({ _id: invite.organizationId, isDeleted: false });

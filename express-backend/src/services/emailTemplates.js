@@ -197,8 +197,11 @@ function passwordResetEmailTemplate(code, expiryMinutes) {
 
 // ── Template: Organization Invite ────────────────────────────
 
-function organizationInviteTemplate({ orgName, inviterName, inviteCode, role, expiresAt }) {
-  const appDeepLink = `orvyn://invite?code=${inviteCode}`;
+function organizationInviteTemplate({ orgName, inviterName, inviteCode, role, expiresAt, inviteUrl }) {
+  // Primary CTA — an HTTPS landing page served by Express. The landing page
+  // offers an "Open in Orvyn" button that fires the orvyn:// deep link, so we
+  // avoid custom-protocol links in the email itself (Gmail/Outlook strip them).
+  const landingUrl = inviteUrl || `orvyn://invite?code=${inviteCode}`;
   const expiryDate = new Date(expiresAt).toLocaleDateString('en-IN', {
     year: 'numeric', month: 'long', day: 'numeric',
   });
@@ -229,16 +232,16 @@ function organizationInviteTemplate({ orgName, inviterName, inviteCode, role, ex
     </table>
 
     <p style="margin:0 0 20px;font-size:14px;color:#52525b;text-align:center;line-height:21px;">
-      Open Orvyn &rarr; <strong>Join Organization</strong> &rarr; paste the code above.
+      Click the button below to accept this invite, or paste the code into Orvyn manually.
     </p>
 
     <!-- CTA button -->
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
       <tr>
         <td align="center" style="padding:0 0 24px;">
-          <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" style="height:44px;width:200px;v-text-anchor:middle;" arcsize="14%" fillcolor="#059669"><center style="color:#ffffff;font-size:15px;font-weight:600;font-family:sans-serif;">Open in Orvyn</center></v:roundrect><![endif]-->
-          <a href="${appDeepLink}" style="display:inline-block;background-color:#059669;color:#ffffff;padding:12px 28px;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;font-family:-apple-system,sans-serif;">
-            Open in Orvyn
+          <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" style="height:44px;width:220px;v-text-anchor:middle;" arcsize="14%" fillcolor="#059669"><center style="color:#ffffff;font-size:15px;font-weight:600;font-family:sans-serif;">Accept Invite</center></v:roundrect><![endif]-->
+          <a href="${landingUrl}" style="display:inline-block;background-color:#059669;color:#ffffff;padding:12px 28px;border-radius:8px;font-size:15px;font-weight:600;text-decoration:none;font-family:-apple-system,sans-serif;">
+            Accept Invite
           </a>
         </td>
       </tr>
@@ -260,11 +263,10 @@ function organizationInviteTemplate({ orgName, inviterName, inviteCode, role, ex
     '',
     `${inviterName} has invited you to join "${orgName}" as a ${role}.`,
     '',
-    'To accept this invite:',
-    '1. Open Orvyn and go to "Join Organization"',
-    `2. Enter this invite code: ${inviteCode}`,
+    `Accept your invite: ${landingUrl}`,
     '',
-    `Or click this link to open directly in the app: ${appDeepLink}`,
+    'Or open Orvyn, go to "Join Organization", and paste this code:',
+    `  ${inviteCode}`,
     '',
     `This invite expires on ${expiryDate}.`,
   ].join('\n');

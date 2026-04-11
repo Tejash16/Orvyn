@@ -17,6 +17,27 @@
   margin: 0;
 }
 
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 8px;
+  margin-bottom: 12px;
+  background: transparent;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.backButton:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 .pageSubtitle {
   font-size: 0.875rem;
   color: var(--text-muted);
@@ -243,10 +264,41 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  gap: 12px;
+  padding: 12px 14px;
   background-color: var(--bg-hover);
   border-radius: 10px;
   font-size: 0.8125rem;
+}
+
+.inviteRowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.inviteRowHead {
+  display: flex;
+  align-items: center;
+}
+
+.inviteRowLink {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.inviteRowActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .inviteEmail {
@@ -258,6 +310,120 @@
   color: var(--text-muted);
   text-transform: capitalize;
   margin-left: 8px;
+}
+
+/* ── Freshly-created invite link banner ──────────────────── */
+
+.inviteLinkBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px;
+  background-color: var(--bg-hover);
+  border: 1px solid var(--accent-primary);
+  border-radius: 12px;
+}
+
+.inviteLinkBannerHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inviteLinkBannerTitle {
+  display: block;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 2px;
+}
+
+.inviteLinkBannerHint {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.inviteLinkDismiss {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.inviteLinkDismiss:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.inviteLinkRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inviteLinkInput {
+  flex: 1;
+  min-width: 200px;
+  padding: 9px 12px;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+}
+
+.inviteLinkInput:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.inviteLinkCopyBtn {
+  padding: 9px 16px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  flex-shrink: 0;
+}
+
+.inviteLinkCopyBtn:hover {
+  opacity: 0.9;
+}
+
+.inviteLinkCopyBtnSecondary {
+  padding: 9px 14px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.inviteLinkCopyBtnSecondary:hover {
+  background-color: var(--bg-secondary);
 }
 
 /* ── Danger zone ─────────────────────────────────────────── */

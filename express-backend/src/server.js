@@ -16,6 +16,7 @@ const usageRouter        = require('./routes/usage');
 const organizationRouter = require('./routes/organization');
 const billingRouter      = require('./routes/billing');
 const sharingRouter      = require('./routes/sharing');
+const invitePagesRouter  = require('./routes/invitePages');
 
 // ── Fail fast on missing required environment variables ───
 const REQUIRED_ENV = ['JWT_SECRET', 'REFRESH_TOKEN_SECRET', 'MONGO_URI', 'GEMINI_API_KEY'];
@@ -85,6 +86,8 @@ app.use('/api/v1/billing', billingRouter);
 app.use('/api/v1/sharing', sharingRouter);
 // Checkout web pages served at /billing/* (not under /api/v1/)
 app.use('/billing', billingRouter);
+// Invite landing page served at /invite/:code (public, shared in invite emails)
+app.use('/invite', invitePagesRouter);
 
 // ── Backward-compat aliases (unversioned → v1) ───────────
 // Keeps existing Electron builds working until they update to /api/v1/.

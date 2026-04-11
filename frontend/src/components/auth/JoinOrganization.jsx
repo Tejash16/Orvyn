@@ -18,6 +18,46 @@ const ArrowLeftIcon = () => (
  *   onBack() — navigate back to org choice screen
  *   showAuthToast(msg, type?) — toast function from AuthLayout
  */
+/**
+ * Extract a bare invite code from whatever the user pastes. Accepts:
+ *   - Raw 32-char hex code:              "abc123..."
+ *   - Deep link:                         "orvyn://invite?code=abc123..."
+ *   - Web landing URL:                   "https://app.orvyn.com/invite/abc123..."
+ *   - Landing URL with query/fragment:   ".../invite/abc123?foo=bar#baz"
+ */
+function extractInviteCode(input) {
+  const raw = (input || '').trim();
+  if (!raw) return '';
+
+  // Custom-protocol deep link: orvyn://invite?code=XXX
+  if (raw.toLowerCase().startsWith('orvyn://')) {
+    try {
+      const url = new URL(raw);
+      const fromQuery = url.searchParams.get('code');
+      if (fromQuery) return fromQuery.trim();
+      // Fallback: orvyn://invite/XXX form
+      const parts = url.pathname.split('/').filter(Boolean);
+      if (parts.length > 0) return parts[parts.length - 1].trim();
+    } catch {
+      return raw;
+    }
+  }
+
+  // HTTPS landing page: .../invite/XXX
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const url = new URL(raw);
+      const parts = url.pathname.split('/').filter(Boolean);
+      const idx = parts.indexOf('invite');
+      if (idx !== -1 && parts[idx + 1]) return parts[idx + 1].trim();
+    } catch {
+      return raw;
+    }
+  }
+
+  return raw;
+}
+
 function JoinOrganization({ onComplete, onBack, showAuthToast }) {
   const [inviteCode, setInviteCode] = useState('');
   const [preview, setPreview] = useState(null);
@@ -28,7 +68,7 @@ function JoinOrganization({ onComplete, onBack, showAuthToast }) {
   // Listen for deep link invite codes
   useEffect(() => {
     const cleanup = window.api.deepLink.onInvite((code) => {
-      setInviteCode(code);
+      setInviteCode(extractInviteCode(code));
     });
     return cleanup;
   }, []);
@@ -89,16 +129,16 @@ function JoinOrganization({ onComplete, onBack, showAuthToast }) {
 
       <h1 className={styles.cardTitle}>Join an organization</h1>
       <p className={styles.orgFlowSubtitle}>
-        Enter the invite code you received from your team admin.
+        Paste the invite link or code you received from your team admin.
       </p>
 
       <form onSubmit={handleJoin}>
         <input
           type="text"
           className={styles.orgInput}
-          placeholder="Paste invite code"
+          placeholder="Paste invite link or code"
           value={inviteCode}
-          onChange={(e) => setInviteCode(e.target.value)}
+          onChange={(e) => setInviteCode(extractInviteCode(e.target.value))}
           disabled={loading}
           autoFocus
         />

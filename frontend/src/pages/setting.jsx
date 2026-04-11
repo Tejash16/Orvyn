@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../store/authSlice';
-import { setTheme } from '../store/uiSlice';
+import { setTheme, setActivePage } from '../store/uiSlice';
 import BillingSettings from '../components/settings/BillingSettings';
 import styles from './setting.module.css';
 
@@ -308,6 +308,42 @@ function SettingsPage() {
 
       {/* Billing & Plan */}
       <BillingSettings />
+
+      {/* Organization — enterprise users with an active org only */}
+      {user?.userType === 'enterprise' && user?.activeOrganizationId && (
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <svg className={styles.sectionIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
+              <path d="M9 22v-4h6v4" />
+              <line x1="8" y1="6" x2="8" y2="6" />
+              <line x1="12" y1="6" x2="12" y2="6" />
+              <line x1="16" y1="6" x2="16" y2="6" />
+              <line x1="8" y1="10" x2="8" y2="10" />
+              <line x1="12" y1="10" x2="12" y2="10" />
+              <line x1="16" y1="10" x2="16" y2="10" />
+              <line x1="8" y1="14" x2="8" y2="14" />
+              <line x1="12" y1="14" x2="12" y2="14" />
+              <line x1="16" y1="14" x2="16" y2="14" />
+            </svg>
+            <h2 className={styles.sectionTitle}>Organization</h2>
+          </div>
+          <div className={styles.row}>
+            <div className={styles.rowInfo}>
+              <span className={styles.label}>Manage organization</span>
+              <p className={styles.hint}>
+                Members, invites, activity log, and plan details
+              </p>
+            </div>
+            <button
+              className={styles.btnSecondary}
+              onClick={() => dispatch(setActivePage('orgSettings'))}
+            >
+              Open
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* Appearance */}
       <section className={styles.section}>

@@ -51,13 +51,14 @@ async function sendEmail({ to, subject, text, html, attachments }) {
 
 // ── Organization invite email ─────────────────────────────
 
-async function sendOrganizationInviteEmail({ to, orgName, inviterName, inviteCode, role, expiresAt }) {
+async function sendOrganizationInviteEmail({ to, orgName, inviterName, inviteCode, role, expiresAt, inviteUrl }) {
   const { html, text } = organizationInviteTemplate({
     orgName,
     inviterName,
     inviteCode,
     role,
     expiresAt,
+    inviteUrl,
   });
   await sendEmail({
     to,

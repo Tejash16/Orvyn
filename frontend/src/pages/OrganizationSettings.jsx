@@ -12,7 +12,7 @@ import {
   fetchAuditLogs,
   clearAuditLogs,
 } from '../store/organizationSlice';
-import { addToast } from '../store/uiSlice';
+import { addToast, setActivePage } from '../store/uiSlice';
 import styles from './OrganizationSettings.module.css';
 
 // ── Human-readable action labels ─────────────────────────
@@ -96,6 +96,8 @@ function OrganizationSettings() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole]   = useState('member');
   const [inviteSending, setInviteSending] = useState(false);
+  const [lastInvite, setLastInvite]   = useState(null);   // { email, inviteUrl, inviteCode }
+  const [copiedKey, setCopiedKey]     = useState(null);   // which value was just copied
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -153,16 +155,33 @@ function OrganizationSettings() {
     e.preventDefault();
     if (!inviteEmail.trim() || !orgId) return;
     setInviteSending(true);
+    const targetEmail = inviteEmail.trim();
     try {
-      const result = await dispatch(createInviteThunk(orgId, inviteEmail.trim(), inviteRole));
+      const result = await dispatch(createInviteThunk(orgId, targetEmail, inviteRole));
       if (result.success) {
         setInviteEmail('');
-        dispatch(addToast({ message: `Invite sent to ${inviteEmail.trim()}`, type: 'success' }));
+        setLastInvite({
+          email: targetEmail,
+          inviteUrl: result.invite?.inviteUrl || '',
+          inviteCode: result.invite?.inviteCode || '',
+        });
+        dispatch(addToast({ message: `Invite sent to ${targetEmail}`, type: 'success' }));
       } else {
         dispatch(addToast({ message: result.error || 'Failed to send invite.', type: 'error' }));
       }
     } finally {
       setInviteSending(false);
+    }
+  }
+
+  async function copyToClipboard(value, key) {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
+    } catch {
+      dispatch(addToast({ message: 'Failed to copy to clipboard.', type: 'error' }));
     }
   }
 
@@ -237,6 +256,18 @@ function OrganizationSettings() {
 
   return (
     <div className={styles.container}>
+      <button
+        type="button"
+        className={styles.backButton}
+        onClick={() => dispatch(setActivePage('settings'))}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12" />
+          <polyline points="12 19 5 12 12 5" />
+        </svg>
+        Back to Settings
+      </button>
       <h1 className={styles.pageTitle}>Organization Settings</h1>
 
       {/* Tab navigation */}
@@ -380,6 +411,51 @@ function OrganizationSettings() {
             </button>
           </form>
 
+          {/* Freshly-created invite — link banner with Copy + Dismiss */}
+          {lastInvite && (
+            <div className={styles.inviteLinkBanner}>
+              <div className={styles.inviteLinkBannerHead}>
+                <div>
+                  <span className={styles.inviteLinkBannerTitle}>Invite sent to {lastInvite.email}</span>
+                  <span className={styles.inviteLinkBannerHint}>
+                    Share this link with them directly, or they can use the email we just sent.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.inviteLinkDismiss}
+                  onClick={() => setLastInvite(null)}
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+              </div>
+              <div className={styles.inviteLinkRow}>
+                <input
+                  type="text"
+                  readOnly
+                  value={lastInvite.inviteUrl || lastInvite.inviteCode}
+                  className={styles.inviteLinkInput}
+                  onFocus={(e) => e.target.select()}
+                />
+                <button
+                  type="button"
+                  className={styles.inviteLinkCopyBtn}
+                  onClick={() => copyToClipboard(lastInvite.inviteUrl, `fresh-link`)}
+                >
+                  {copiedKey === 'fresh-link' ? 'Copied!' : 'Copy link'}
+                </button>
+                <button
+                  type="button"
+                  className={styles.inviteLinkCopyBtnSecondary}
+                  onClick={() => copyToClipboard(lastInvite.inviteCode, `fresh-code`)}
+                >
+                  {copiedKey === 'fresh-code' ? 'Copied!' : 'Copy code'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Pending invites */}
           {invites.length > 0 && (
             <>
@@ -389,16 +465,35 @@ function OrganizationSettings() {
               <div className={styles.inviteList}>
                 {invites.map((inv) => (
                   <div key={inv._id} className={styles.inviteRow}>
-                    <div>
-                      <span className={styles.inviteEmail}>{inv.email}</span>
-                      <span className={styles.inviteRole}>{inv.role}</span>
+                    <div className={styles.inviteRowMain}>
+                      <div className={styles.inviteRowHead}>
+                        <span className={styles.inviteEmail}>{inv.email}</span>
+                        <span className={styles.inviteRole}>{inv.role}</span>
+                      </div>
+                      {inv.inviteUrl && (
+                        <span className={styles.inviteRowLink} title={inv.inviteUrl}>
+                          {inv.inviteUrl}
+                        </span>
+                      )}
                     </div>
-                    <button
-                      className={styles.actionBtnDanger}
-                      onClick={() => handleRevokeInvite(inv._id)}
-                    >
-                      Revoke
-                    </button>
+                    <div className={styles.inviteRowActions}>
+                      {inv.inviteUrl && (
+                        <button
+                          className={styles.inviteLinkCopyBtnSecondary}
+                          onClick={() => copyToClipboard(inv.inviteUrl, `row-${inv._id}`)}
+                          type="button"
+                        >
+                          {copiedKey === `row-${inv._id}` ? 'Copied!' : 'Copy link'}
+                        </button>
+                      )}
+                      <button
+                        className={styles.actionBtnDanger}
+                        onClick={() => handleRevokeInvite(inv._id)}
+                        type="button"
+                      >
+                        Revoke
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
