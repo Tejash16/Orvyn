@@ -7,6 +7,7 @@ const validator  = require('validator');
 const User        = require('../models/User');
 const authService = require('../services/authService');
 const logger      = require('../services/logger');
+const { consumePendingInvitesForEmail } = require('./collaborationController');
 
 // ── Register ──────────────────────────────────────────────
 
@@ -49,6 +50,11 @@ async function verifyEmail(req, res, next) {
     user.failedLoginAttempts = 0;
     user.lockUntil           = null;
     await user.save();
+
+    // Convert any pending CollaborationInvite rows for this email into
+    // real Collaboration(pending) + notification so the new user sees
+    // inbound requests on their first login.
+    await consumePendingInvitesForEmail(user._id, user.email);
 
     logger.info(`Email verified and session issued for ${user.email}`);
 

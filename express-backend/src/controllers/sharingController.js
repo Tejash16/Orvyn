@@ -1,8 +1,33 @@
 const SharedDataRoom = require('../models/SharedDataRoom');
 const SharedDataRoomAccess = require('../models/SharedDataRoomAccess');
+const Collaboration = require('../models/Collaboration');
+const OrganizationMember = require('../models/OrganizationMember');
+const Notification = require('../models/Notification');
 const User = require('../models/User');
 const logger = require('../services/logger');
 const { logAudit } = require('../services/auditService');
+
+/**
+ * Returns true if `caller` is allowed to share with `recipient`.
+ * Allowed when they are active members of the same org, or have an
+ * accepted Collaboration. Used as the gate for createShare and grantAccess.
+ */
+async function isAllowedToShareWith(caller, recipientId) {
+  if (String(caller._id) === String(recipientId)) return false;
+
+  if (caller.activeOrganizationId) {
+    const sameOrg = await OrganizationMember.findOne({
+      organizationId: caller.activeOrganizationId,
+      userId: recipientId,
+      status: 'active',
+    });
+    if (sameOrg) return true;
+  }
+
+  const pair = Collaboration.canonicalPair(caller._id, recipientId);
+  const collab = await Collaboration.findOne({ ...pair, status: 'accepted' });
+  return !!collab;
+}
 
 /**
  * POST /api/v1/sharing/datarooms
@@ -18,26 +43,20 @@ async function createSharedDataRoom(req, res, next) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Check external sharing restriction for enterprise users
-    if (user.activeOrganizationId) {
-      const Organization = require('../models/Organization');
-      const OrganizationMember = require('../models/OrganizationMember');
-      const org = await Organization.findById(user.activeOrganizationId);
-
-      if (recipientEmail && org && !org.allowExternalSharing) {
-        const recipient = await User.findOne({ email: recipientEmail.toLowerCase(), isDeleted: false });
-        if (recipient) {
-          const recipientMembership = await OrganizationMember.findOne({
-            organizationId: user.activeOrganizationId,
-            userId: recipient._id,
-            status: 'active',
-          });
-          if (!recipientMembership) {
-            return res.status(403).json({
-              error: 'Your organization does not allow sharing with external users',
-            });
-          }
-        }
+    // Collaboration gate: recipient (if provided) must be an org peer or an
+    // accepted Collaboration partner. This replaces the previous
+    // allowExternalSharing-only check because Collaboration is now the
+    // primary authorization layer for sharing.
+    if (recipientEmail) {
+      const recipient = await User.findOne({ email: recipientEmail.toLowerCase(), isDeleted: false });
+      if (!recipient) {
+        return res.status(404).json({ error: 'Recipient not found. Add them to your Collaboration list first.' });
+      }
+      const allowed = await isAllowedToShareWith(user, recipient._id);
+      if (!allowed) {
+        return res.status(403).json({
+          error: 'You can only share with users in your Collaboration list.',
+        });
       }
     }
 
@@ -54,7 +73,9 @@ async function createSharedDataRoom(req, res, next) {
       snapshotVersion: 1,
     });
 
-    // Grant access to recipient if email provided
+    // Grant access to recipient if email provided.
+    // Recipient existence + permission was already verified above by the
+    // isAllowedToShareWith gate, so we re-fetch just to get the ObjectId.
     if (recipientEmail) {
       const recipient = await User.findOne({ email: recipientEmail.toLowerCase(), isDeleted: false });
       if (recipient) {
@@ -63,6 +84,18 @@ async function createSharedDataRoom(req, res, next) {
           userId: recipient._id,
           permission: 'viewer',
           grantedBy: req.user.userId,
+        });
+
+        // In-app notification (surfaces on recipient's next poll, even if offline)
+        await Notification.create({
+          userId: recipient._id,
+          type: 'dataroom_shared',
+          data: {
+            fromUserId: user._id,
+            fromUserName: user.name,
+            shareId: shared._id,
+            dataRoomName: name,
+          },
         });
 
         // Send sharing notification email
@@ -76,8 +109,6 @@ async function createSharedDataRoom(req, res, next) {
         } catch (emailErr) {
           logger.warn(`Failed to send sharing notification email: ${emailErr.message}`);
         }
-      } else {
-        logger.info(`Recipient ${recipientEmail} not found for sharing`);
       }
     }
 
@@ -198,6 +229,15 @@ async function grantAccess(req, res, next) {
       return res.status(400).json({ error: 'Cannot share with yourself' });
     }
 
+    // Collaboration gate: same as createSharedDataRoom
+    const caller = await User.findById(req.user.userId).select('_id activeOrganizationId');
+    const allowed = await isAllowedToShareWith(caller, recipient._id);
+    if (!allowed) {
+      return res.status(403).json({
+        error: 'You can only share with users in your Collaboration list.',
+      });
+    }
+
     const access = await SharedDataRoomAccess.findOneAndUpdate(
       { sharedDataRoomId: shared._id, userId: recipient._id },
       {
@@ -210,13 +250,25 @@ async function grantAccess(req, res, next) {
       { upsert: true, new: true }
     );
 
+    // In-app notification
+    const sharer = await User.findById(req.user.userId).select('name');
+    await Notification.create({
+      userId: recipient._id,
+      type: 'dataroom_shared',
+      data: {
+        fromUserId: req.user.userId,
+        fromUserName: sharer ? sharer.name : 'Someone',
+        shareId: shared._id,
+        dataRoomName: shared.sourceDataroomName,
+      },
+    });
+
     // Send notification email
     try {
-      const user = await User.findById(req.user.userId);
       const emailService = require('../services/emailService');
       await emailService.sendDataRoomSharedEmail({
         to: recipient.email,
-        sharerName: user.name,
+        sharerName: sharer ? sharer.name : 'A collaborator',
         dataRoomName: shared.sourceDataroomName,
       });
     } catch (emailErr) {
@@ -424,60 +476,72 @@ async function getSharedDataRoom(req, res, next) {
 
 /**
  * GET /api/v1/sharing/users/search?q=...
- * Search users for sharing.
- * - Individual users: exact email match only
- * - Enterprise users: can search within org by name or email
+ * Share-time directory: returns the caller's collaboration set (same-org
+ * members + accepted collaborators), optionally filtered by a substring
+ * of name or email. Empty query returns the full set so ShareDialog can
+ * show options without requiring typing.
  */
 async function searchUsers(req, res, next) {
   try {
-    const { q } = req.query;
-    if (!q || q.length < 3) return res.json({ users: [] });
+    const currentUser = await User.findById(req.user.userId).select('_id activeOrganizationId');
+    if (!currentUser) return res.json({ users: [] });
 
-    const currentUser = await User.findById(req.user.userId);
-    let users = [];
+    const map = new Map(); // userId -> user
 
+    // Org members (implicit collaborators)
     if (currentUser.activeOrganizationId) {
-      // Enterprise: search within organization
-      const OrganizationMember = require('../models/OrganizationMember');
       const members = await OrganizationMember.find({
         organizationId: currentUser.activeOrganizationId,
         status: 'active',
         userId: { $ne: req.user.userId },
       }).populate('userId', 'name email profilePicture');
 
-      users = members
-        .filter(m => {
-          const u = m.userId;
-          if (!u) return false;
-          return u.name.toLowerCase().includes(q.toLowerCase()) ||
-                 u.email.toLowerCase().includes(q.toLowerCase());
-        })
-        .map(m => ({
+      for (const m of members) {
+        if (!m.userId) continue;
+        map.set(String(m.userId._id), {
           _id: m.userId._id,
           name: m.userId.name,
           email: m.userId.email,
           profilePicture: m.userId.profilePicture,
           isOrgMember: true,
-        }));
-    }
-
-    // Also search by exact email for cross-org or individual sharing
-    if (q.includes('@')) {
-      const exactMatch = await User.findOne({
-        email: q.toLowerCase(),
-        isDeleted: false,
-        _id: { $ne: req.user.userId },
-      }).select('name email profilePicture');
-
-      if (exactMatch && !users.find(u => u._id.toString() === exactMatch._id.toString())) {
-        users.push({
-          _id: exactMatch._id,
-          name: exactMatch.name,
-          email: exactMatch.email,
-          profilePicture: exactMatch.profilePicture,
-          isOrgMember: false,
         });
       }
+    }
+
+    // Accepted collaborations
+    const collabs = await Collaboration.find({
+      status: 'accepted',
+      $or: [{ userA: currentUser._id }, { userB: currentUser._id }],
+    });
+    const partnerIds = collabs.map((c) =>
+      String(c.userA) === String(currentUser._id) ? c.userB : c.userA,
+    );
+    const partners = await User.find({ _id: { $in: partnerIds } })
+      .select('name email profilePicture')
+      .lean();
+
+    for (const p of partners) {
+      const key = String(p._id);
+      if (map.has(key)) continue;
+      map.set(key, {
+        _id: p._id,
+        name: p.name,
+        email: p.email,
+        profilePicture: p.profilePicture,
+        isOrgMember: false,
+      });
+    }
+
+    let users = Array.from(map.values());
+
+    const { q } = req.query;
+    if (q && typeof q === 'string' && q.trim().length > 0) {
+      const needle = q.trim().toLowerCase();
+      users = users.filter(
+        (u) =>
+          (u.name && u.name.toLowerCase().includes(needle)) ||
+          (u.email && u.email.toLowerCase().includes(needle)),
+      );
     }
 
     res.json({ users });

@@ -189,6 +189,23 @@ contextBridge.exposeInMainWorld('api', {
     listAccess:     (shareId) => ipcRenderer.invoke('sharing:listAccess', { shareId }),
   },
 
+  // Collaboration (contact list / friend requests)
+  collaboration: {
+    list:        ()           => ipcRenderer.invoke('collaboration:list'),
+    suggestions: ()           => ipcRenderer.invoke('collaboration:suggestions'),
+    request:     (email)      => ipcRenderer.invoke('collaboration:request', { email }),
+    accept:      (id)         => ipcRenderer.invoke('collaboration:accept', { id }),
+    reject:      (id)         => ipcRenderer.invoke('collaboration:reject', { id }),
+    remove:      (id)         => ipcRenderer.invoke('collaboration:remove', { id }),
+  },
+
+  // Notifications (polling)
+  notifications: {
+    list:        (opts = {})  => ipcRenderer.invoke('notification:list', opts),
+    markRead:    (id)         => ipcRenderer.invoke('notification:markRead', { id }),
+    markAllRead: ()           => ipcRenderer.invoke('notification:markAllRead'),
+  },
+
   // Deep link push events (invite links from emails)
   deepLink: {
     onInvite: (callback) => {

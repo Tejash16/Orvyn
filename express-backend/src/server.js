@@ -16,6 +16,8 @@ const usageRouter        = require('./routes/usage');
 const organizationRouter = require('./routes/organization');
 const billingRouter      = require('./routes/billing');
 const sharingRouter      = require('./routes/sharing');
+const collaborationRouter = require('./routes/collaboration');
+const notificationRouter  = require('./routes/notifications');
 const invitePagesRouter  = require('./routes/invitePages');
 
 // ── Fail fast on missing required environment variables ───
@@ -84,6 +86,8 @@ app.use('/api/v1/usage', usageRouter);
 app.use('/api/v1/organizations', organizationRouter);
 app.use('/api/v1/billing', billingRouter);
 app.use('/api/v1/sharing', sharingRouter);
+app.use('/api/v1/collaborations', collaborationRouter);
+app.use('/api/v1/notifications', notificationRouter);
 // Checkout web pages served at /billing/* (not under /api/v1/)
 app.use('/billing', billingRouter);
 // Invite landing page served at /invite/:code (public, shared in invite emails)

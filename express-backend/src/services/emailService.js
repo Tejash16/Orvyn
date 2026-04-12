@@ -9,6 +9,7 @@ const {
   paymentSuccessTemplate,
   paymentFailureTemplate,
   dataRoomSharedTemplate,
+  collaborationInviteTemplate,
 } = require('./emailTemplates');
 
 // ── Transporter (lazy singleton) ──────────────────────────
@@ -122,10 +123,24 @@ async function sendDataRoomSharedEmail({ to, sharerName, dataRoomName }) {
   });
 }
 
+// ── Collaboration invite email ────────────────────────────
+
+async function sendCollaborationInviteEmail({ to, fromUserName }) {
+  const { html, text } = collaborationInviteTemplate({ fromUserName });
+  await sendEmail({
+    to,
+    subject: `${fromUserName} invited you to collaborate on Orvyn`,
+    text,
+    html,
+  });
+  logger.info(`Collaboration invite email sent to ${to}`);
+}
+
 module.exports = {
   sendEmail,
   sendOrganizationInviteEmail,
   sendPaymentSuccessEmail,
   sendPaymentFailureEmail,
   sendDataRoomSharedEmail,
+  sendCollaborationInviteEmail,
 };

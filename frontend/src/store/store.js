@@ -9,6 +9,8 @@ import copilotReducer from './copilotSlice';
 import organizationReducer from './organizationSlice';
 import billingReducer from './billingSlice';
 import sharingReducer from './sharingSlice';
+import collaborationReducer from './collaborationSlice';
+import notificationReducer from './notificationSlice';
 import { offlineGuardMiddleware } from './offlineGuardMiddleware';
 
 const store = configureStore({
@@ -23,6 +25,8 @@ const store = configureStore({
     organization: organizationReducer,
     billing: billingReducer,
     sharing: sharingReducer,
+    collaboration: collaborationReducer,
+    notifications: notificationReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware().concat(offlineGuardMiddleware),

@@ -1,0 +1,212 @@
+/* ── Notification bell (lives in Header window chrome) ─── */
+
+.wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+  margin-right: 4px;
+}
+
+.bellBtn {
+  position: relative;
+  width: 38px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--chrome-text);
+  transition: background-color 0.15s ease, color 0.15s ease;
+  padding: 0;
+  outline: none;
+}
+
+.bellBtn:hover {
+  color: var(--chrome-text-hover);
+  background-color: var(--chrome-hover-bg);
+}
+
+.bellBtn:focus-visible {
+  outline: 1px solid var(--chrome-focus-outline);
+  outline-offset: -2px;
+}
+
+.badge {
+  position: absolute;
+  top: 6px;
+  right: 4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+/* ── Dropdown panel ───────────────────────────────────── */
+
+.panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 340px;
+  max-height: 480px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  z-index: 200;
+  -webkit-app-region: no-drag;
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.panelTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.markAllBtn {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.markAllBtn:hover {
+  text-decoration: underline;
+}
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.empty {
+  padding: 40px 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.item:hover {
+  background-color: var(--bg-hover);
+}
+
+.itemUnread {
+  background-color: var(--accent-soft);
+}
+
+.itemUnread:hover {
+  background-color: var(--accent-soft);
+  filter: brightness(0.97);
+}
+
+.unreadDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--accent-primary);
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.itemBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.itemTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+}
+
+.itemSubtitle {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.itemTime {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+.itemActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.acceptBtn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #ffffff;
+  background-color: var(--accent-primary);
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.acceptBtn:hover {
+  background-color: var(--accent-hover);
+}
+
+.rejectBtn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--btn-secondary-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.rejectBtn:hover {
+  background-color: var(--btn-secondary-hover);
+}

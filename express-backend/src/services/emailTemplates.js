@@ -427,6 +427,32 @@ function dataRoomSharedTemplate({ sharerName, dataRoomName }) {
   return { html, text };
 }
 
+// ── Template: Collaboration Invite ───────────────────────────
+
+function collaborationInviteTemplate({ fromUserName }) {
+  const html = wrapLayout(`
+    <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#18181b;text-align:center;">
+      You&rsquo;ve been invited to collaborate
+    </h1>
+    <p style="margin:0 0 24px;font-size:15px;color:#52525b;text-align:center;line-height:22px;">
+      <strong>${fromUserName}</strong> wants to collaborate with you on Orvyn.
+      Create a free account to accept the request and start sharing DataRooms.
+    </p>
+    <p style="margin:0;font-size:14px;color:#52525b;text-align:center;">
+      After signing up, open the Collaboration section to accept ${fromUserName}&rsquo;s request.
+    </p>
+  `);
+
+  const text = [
+    'You\'ve been invited to collaborate on Orvyn',
+    '',
+    `${fromUserName} wants to collaborate with you on Orvyn.`,
+    'Create a free Orvyn account to accept the request and start sharing DataRooms.',
+  ].join('\n');
+
+  return { html, text };
+}
+
 module.exports = {
   verificationEmailTemplate,
   passwordResetEmailTemplate,
@@ -434,4 +460,5 @@ module.exports = {
   paymentSuccessTemplate,
   paymentFailureTemplate,
   dataRoomSharedTemplate,
+  collaborationInviteTemplate,
 };

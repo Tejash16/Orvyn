@@ -1,31 +1,31 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { searchUsers, shareDataroom, clearSearchResults } from '../../store/sharingSlice';
+import { shareDataroom } from '../../store/sharingSlice';
+import { fetchSuggestions } from '../../store/collaborationSlice';
 import { addToast } from '../../store/uiSlice';
 import styles from '../../pages/CollaborationPage.module.css';
 
 function ShareDialog({ dataroomId, dataroomName, onClose }) {
   const dispatch = useDispatch();
-  const { searchResults, isSharing } = useSelector(state => state.sharing);
+  const { isSharing } = useSelector(state => state.sharing);
+  const { suggestions } = useSelector(state => state.collaboration);
   const [query, setQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
 
-  // Debounced search
+  // Pre-load collaborators + org members on mount. No per-keystroke search —
+  // the sharing gate only allows these users, so we show the full list.
   useEffect(() => {
-    if (query.length < 3) {
-      dispatch(clearSearchResults());
-      return;
-    }
-    const timer = setTimeout(() => {
-      dispatch(searchUsers(query));
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [query, dispatch]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => dispatch(clearSearchResults());
+    dispatch(fetchSuggestions());
   }, [dispatch]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return suggestions;
+    return suggestions.filter((u) =>
+      (u.name || '').toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q)
+    );
+  }, [query, suggestions]);
 
   const handleShare = useCallback(async () => {
     if (!selectedUser) return;
@@ -35,7 +35,7 @@ function ShareDialog({ dataroomId, dataroomName, onClose }) {
         recipientEmail: selectedUser.email,
       })).unwrap();
       dispatch(addToast({
-        message: `DataRoom shared with ${selectedUser.name}.`,
+        message: `DataRoom shared with ${selectedUser.name || selectedUser.email}.`,
         type: 'success',
       }));
       onClose();
@@ -52,23 +52,21 @@ function ShareDialog({ dataroomId, dataroomName, onClose }) {
       <div className={styles.modal} onClick={e => e.stopPropagation()}>
         <h2 className={styles.modalTitle}>Share DataRoom</h2>
         <p className={styles.modalSubtitle}>
-          Share "{dataroomName}" with another user
+          Share "{dataroomName}" with a collaborator or organization member
         </p>
 
-        {/* Search input */}
         <input
           className={styles.searchInput}
           type="text"
-          placeholder="Search by email address…"
+          placeholder="Filter by name or email…"
           value={query}
           onChange={e => setQuery(e.target.value)}
           autoFocus
         />
 
-        {/* Search results */}
-        {searchResults.length > 0 && (
+        {filtered.length > 0 ? (
           <div className={styles.userList}>
-            {searchResults.map(user => (
+            {filtered.map(user => (
               <div
                 key={user._id}
                 className={`${styles.userItem} ${selectedUser?._id === user._id ? styles.userItemSelected : ''}`}
@@ -78,29 +76,27 @@ function ShareDialog({ dataroomId, dataroomName, onClose }) {
                   {user.profilePicture ? (
                     <img src={user.profilePicture} alt="" />
                   ) : (
-                    user.name?.charAt(0)?.toUpperCase() || '?'
+                    (user.name || user.email || '?').charAt(0).toUpperCase()
                   )}
                 </div>
                 <div className={styles.userInfo}>
-                  <div className={styles.userName}>{user.name}</div>
+                  <div className={styles.userName}>{user.name || user.email}</div>
                   <div className={styles.userEmail}>{user.email}</div>
                 </div>
-                {user.isOrgMember && (
+                {user.source === 'org' && (
                   <span className={styles.orgBadge}>Org</span>
                 )}
               </div>
             ))}
           </div>
-        )}
-
-        {/* No results */}
-        {query.length >= 3 && searchResults.length === 0 && (
+        ) : (
           <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', textAlign: 'center', padding: '12px 0' }}>
-            No users found. Try an exact email address.
+            {suggestions.length === 0
+              ? 'Add collaborators from the Collaboration page first, then share DataRooms with them.'
+              : 'No matches. Try a different filter.'}
           </p>
         )}
 
-        {/* Selected user display */}
         {selectedUser && (
           <div style={{
             fontSize: '13px',
@@ -109,11 +105,10 @@ function ShareDialog({ dataroomId, dataroomName, onClose }) {
             backgroundColor: 'var(--accent-soft)',
             borderRadius: '8px',
           }}>
-            Sharing with <strong>{selectedUser.name}</strong> ({selectedUser.email}) as Viewer
+            Sharing with <strong>{selectedUser.name || selectedUser.email}</strong> as Viewer
           </div>
         )}
 
-        {/* Actions */}
         <div className={styles.modalActions}>
           <button className={styles.btnSecondary} onClick={onClose}>
             Cancel
