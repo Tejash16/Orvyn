@@ -408,7 +408,7 @@ async function createInvite(req, res, next) {
     // Shareable links. The web landing URL is the primary share target — it
     // works in every email client and then hands off to the app via deep link.
     const appUrl = (process.env.APP_URL || `http://localhost:${process.env.PORT || 8080}`).replace(/\/$/, '');
-    const inviteUrl = `${appUrl}/invite/${invite.inviteCode}`;
+    const inviteUrl = `${appUrl}/portal/invite/${invite.inviteCode}`;
     const deepLink  = `orvyn://invite?code=${invite.inviteCode}`;
 
     // Send invite email
@@ -469,7 +469,7 @@ async function listInvites(req, res, next) {
     const appUrl = (process.env.APP_URL || `http://localhost:${process.env.PORT || 8080}`).replace(/\/$/, '');
     const withLinks = invites.map((i) => ({
       ...i.toJSON(),
-      inviteUrl: `${appUrl}/invite/${i.inviteCode}`,
+      inviteUrl: `${appUrl}/portal/invite/${i.inviteCode}`,
       deepLink:  `orvyn://invite?code=${i.inviteCode}`,
     }));
 

@@ -116,11 +116,38 @@ registerNotificationHandlers(ipcMain);
 function handleDeepLink(url) {
   try {
     const parsed = new URL(url);
+
+    // orvyn://invite?code=...
     if (parsed.hostname === 'invite' || parsed.pathname === '/invite') {
       const inviteCode = parsed.searchParams.get('code');
       if (inviteCode && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('deep-link:invite', inviteCode);
       }
+      return;
+    }
+
+    // orvyn://auth/google?action=login&token=...&refreshToken=...
+    // orvyn://auth/google?action=link&email=...&googleId=...
+    if (parsed.hostname === 'auth' && parsed.pathname.startsWith('/google')) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const action = parsed.searchParams.get('action');
+        if (action === 'login') {
+          mainWindow.webContents.send('deep-link:google-auth', {
+            action: 'login',
+            accessToken: parsed.searchParams.get('token'),
+            refreshToken: parsed.searchParams.get('refreshToken'),
+            isNewUser: parsed.searchParams.get('isNewUser') === 'true',
+          });
+        } else if (action === 'link') {
+          mainWindow.webContents.send('deep-link:google-auth', {
+            action: 'link',
+            email: parsed.searchParams.get('email'),
+            googleId: parsed.searchParams.get('googleId'),
+            picture: parsed.searchParams.get('picture'),
+          });
+        }
+      }
+      return;
     }
   } catch (err) {
     log.error('Failed to parse deep link:', err.message);

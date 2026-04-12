@@ -80,6 +80,23 @@ const userSchema = new mongoose.Schema(
     failedLoginAttempts: { type: Number, default: 0 },
     lockUntil:           { type: Date,   default: null },
 
+    // ── Admin role ──────────────────────────────────────────
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
+    },
+
+    // ── Account restriction (admin-managed) ────────────────
+    restrictionStatus: {
+      type: String,
+      enum: ['active', 'suspended', 'banned'],
+      default: 'active',
+    },
+    restrictionReason:  { type: String,  default: null },
+    restrictedUntil:    { type: Date,    default: null },
+    restrictedBy:       { type: Schema.Types.ObjectId, ref: 'User', default: null },
+
     // ── Soft delete ────────────────────────────────────────
     isDeleted:  { type: Boolean, default: false },
     deletedAt:  { type: Date,    select: false },

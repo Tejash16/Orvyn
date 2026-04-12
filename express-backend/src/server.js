@@ -18,7 +18,8 @@ const billingRouter      = require('./routes/billing');
 const sharingRouter      = require('./routes/sharing');
 const collaborationRouter = require('./routes/collaboration');
 const notificationRouter  = require('./routes/notifications');
-const invitePagesRouter  = require('./routes/invitePages');
+// invitePagesRouter removed — invite landing now served by web-portal React app
+const adminRouter        = require('./routes/admin');
 
 // ── Fail fast on missing required environment variables ───
 const REQUIRED_ENV = ['JWT_SECRET', 'REFRESH_TOKEN_SECRET', 'MONGO_URI', 'GEMINI_API_KEY'];
@@ -40,11 +41,6 @@ if (missingSmtp.length > 0) {
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-
-// ── View engine + static files for checkout pages ────────
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, '../views'));
-app.use('/static', express.static(path.join(__dirname, '../public')));
 
 // ── Middleware ────────────────────────────────────────────
 app.use(helmet());
@@ -90,8 +86,25 @@ app.use('/api/v1/collaborations', collaborationRouter);
 app.use('/api/v1/notifications', notificationRouter);
 // Checkout web pages served at /billing/* (not under /api/v1/)
 app.use('/billing', billingRouter);
-// Invite landing page served at /invite/:code (public, shared in invite emails)
-app.use('/invite', invitePagesRouter);
+// Redirect old invite URLs to the web-portal React app
+app.get('/invite/:code', (req, res) => {
+  res.redirect(`/portal/invite/${req.params.code}`);
+});
+
+// ── Admin API routes ─────────────────────────────────────
+app.use('/api/v1/admin', adminRouter);
+
+// ── Serve web-portal React build ─────────────────────────
+app.use('/portal', express.static(path.join(__dirname, '../../web-portal/dist')));
+app.get('/portal/{*path}', (req, res) => {
+  res.sendFile(path.join(__dirname, '../../web-portal/dist/index.html'));
+});
+
+// ── Serve web-admin React build ──────────────────────────
+app.use('/admin', express.static(path.join(__dirname, '../../web-admin/dist')));
+app.get('/admin/{*path}', (req, res) => {
+  res.sendFile(path.join(__dirname, '../../web-admin/dist/index.html'));
+});
 
 // ── Backward-compat aliases (unversioned → v1) ───────────
 // Keeps existing Electron builds working until they update to /api/v1/.

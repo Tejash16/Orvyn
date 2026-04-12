@@ -318,28 +318,30 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
   // ── Google OAuth: Initiate ────────────────────────────────
   //
-  // Step 1: Start loopback server + open browser → get auth code
-  // Step 2: Exchange code via Express → get tokens or requiresLinking
-  // Step 3–7: Same as local login (init dir, init DB, theme, tokens, scheduler)
+  // Opens the system browser to Google consent URL with a cloud callback.
+  // The web-portal React app handles the code exchange and provides a
+  // deep link (orvyn://auth/google) back to this app with tokens.
+  // The renderer listens for 'deep-link:google-auth' events from main.js.
 
   ipcMain.handle('auth:initiateGoogleAuth', async () => {
     try {
-      const { code, redirectUri } = await authService.initiateGoogleAuth();
-      const result = await authService.googleLogin(code, redirectUri);
+      authService.initiateGoogleAuth();
+      return { success: true, message: 'Browser opened for Google sign-in.' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
 
-      if (result.requiresLinking) {
-        // Notify renderer to show password dialog
-        return {
-          success: false,
-          requiresLinking: true,
-          email: result.email,
-          googleId: result.googleId,
-          picture: result.picture,
-        };
-      }
+  // ── Google OAuth: Complete login via deep link ──────────────
+  //
+  // Called by the renderer after receiving tokens from the deep link
+  // (orvyn://auth/google?action=login&token=...&refreshToken=...)
 
-      // Same login sequence as email login
-      const user = result.user;
+  ipcMain.handle('auth:completeGoogleAuth', async (_event, { accessToken, refreshToken, isNewUser }) => {
+    try {
+      // Validate the token and get user info
+      const user = await authService.validateToken(accessToken);
+
       await userContextService.initializeUserDirectory(String(user._id));
       const databasePath = userContextService.getActiveDatabasePath();
 
@@ -362,11 +364,11 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
       // Store tokens
       try {
-        tokenVault.store(result.refreshToken);
+        tokenVault.store(refreshToken);
       } catch { /* non-fatal */ }
 
       // Set in-memory session state
-      authService.setSession(result.accessToken, user);
+      authService.setSession(accessToken, user);
 
       startRefreshScheduler();
 
@@ -381,7 +383,7 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
         success: true,
         user,
         theme,
-        isNewUser: result.isNewUser,
+        isNewUser: isNewUser || false,
       };
     } catch (error) {
       return { success: false, error: error.message };

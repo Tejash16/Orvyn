@@ -55,11 +55,11 @@ router.post('/create-checkout-session', authenticate, async (req, res, next) => 
       { expiresIn: '5m' }
     );
 
-    const expressUrl = process.env.CLIENT_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const expressUrl = process.env.APP_URL || `http://localhost:${process.env.PORT || 8080}`;
 
     res.json({
       checkoutUrl: result.shortUrl, // Razorpay-hosted checkout as primary
-      selfHostedCheckoutUrl: `${expressUrl}/billing/checkout/${checkoutToken}`,
+      selfHostedCheckoutUrl: `${expressUrl}/portal/checkout/${checkoutToken}`,
       subscriptionId: result.subscriptionId,
     });
   } catch (error) {
@@ -146,49 +146,19 @@ router.post('/webhook', async (req, res) => {
   }
 });
 
-// ── Checkout Web Pages (served in browser, not API) ───────
+// ── Checkout Web Pages — redirect to web-portal React app ─
+// The React portal at /portal/checkout/* handles all UI now.
 
-/**
- * GET /billing/checkout/:token
- * Serve the Razorpay checkout page. Token is a short-lived JWT.
- */
-router.get('/checkout/:token', (req, res) => {
-  try {
-    const decoded = jwt.verify(req.params.token, process.env.JWT_SECRET);
-
-    res.render('checkout', {
-      razorpayKeyId: process.env.RAZORPAY_KEY_ID,
-      subscriptionId: decoded.subscriptionId,
-      planName: decoded.planName,
-      formattedPrice: decoded.formattedPrice,
-      planDescription: decoded.planDescription,
-      userEmail: decoded.userEmail,
-      userName: decoded.userName,
-    });
-  } catch (error) {
-    logger.warn('Invalid checkout token:', error.message);
-    res.status(400).send('Invalid or expired checkout link. Please try again from the Orvyn app.');
-  }
-});
-
-/**
- * GET /billing/checkout/success
- * Payment success page shown after Razorpay checkout completes.
- */
 router.get('/checkout/success', (_req, res) => {
-  res.render('payment-success', {
-    message: 'Payment successful! You can close this tab and return to Orvyn.',
-  });
+  res.redirect('/portal/checkout/success');
 });
 
-/**
- * GET /billing/checkout/failure
- * Payment failure page.
- */
 router.get('/checkout/failure', (_req, res) => {
-  res.render('payment-failure', {
-    message: 'Payment could not be processed. Please try again from the Orvyn app.',
-  });
+  res.redirect('/portal/checkout/failure');
+});
+
+router.get('/checkout/:token', (req, res) => {
+  res.redirect(`/portal/checkout/${req.params.token}`);
 });
 
 module.exports = router;

@@ -45,6 +45,17 @@ const auditLogSchema = new mongoose.Schema({
       // DataRoom lifecycle
       'dataroom.created',
       'dataroom.deleted',
+
+      // Admin actions
+      'admin.user_suspended',
+      'admin.user_unsuspended',
+      'admin.user_banned',
+      'admin.user_deleted',
+      'admin.limits_overridden',
+      'admin.promo_code_created',
+      'admin.promo_code_deactivated',
+      'admin.notification_broadcast',
+      'admin.collaboration_broken',
     ],
     index: true,
   },

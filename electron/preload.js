@@ -37,9 +37,10 @@ contextBridge.exposeInMainWorld('api', {
     getLocalDbPath: ()        => ipcRenderer.invoke('auth:getLocalDbPath'),
     // Called once on app mount — Electron performs the entire restore sequence.
     restoreSession: ()        => ipcRenderer.invoke('auth:restoreSession'),
-    // Google OAuth
-    initiateGoogleAuth: (mode)    => ipcRenderer.invoke('auth:initiateGoogleAuth', mode),
-    linkGoogleAccount:  (payload) => ipcRenderer.invoke('auth:linkGoogleAccount', payload),
+    // Google OAuth (cloud callback via web-portal)
+    initiateGoogleAuth:  (mode)    => ipcRenderer.invoke('auth:initiateGoogleAuth', mode),
+    completeGoogleAuth:  (payload) => ipcRenderer.invoke('auth:completeGoogleAuth', payload),
+    linkGoogleAccount:   (payload) => ipcRenderer.invoke('auth:linkGoogleAccount', payload),
     // User type selection (called once after first login)
     setUserType:        (userType) => ipcRenderer.invoke('auth:setUserType', userType),
 
@@ -206,12 +207,17 @@ contextBridge.exposeInMainWorld('api', {
     markAllRead: ()           => ipcRenderer.invoke('notification:markAllRead'),
   },
 
-  // Deep link push events (invite links from emails)
+  // Deep link push events (invite links, Google OAuth from emails/browser)
   deepLink: {
     onInvite: (callback) => {
       const handler = (_event, code) => callback(code);
       ipcRenderer.on('deep-link:invite', handler);
       return () => ipcRenderer.removeListener('deep-link:invite', handler);
+    },
+    onGoogleAuth: (callback) => {
+      const handler = (_event, data) => callback(data);
+      ipcRenderer.on('deep-link:google-auth', handler);
+      return () => ipcRenderer.removeListener('deep-link:google-auth', handler);
     },
   },
 

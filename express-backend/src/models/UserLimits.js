@@ -32,6 +32,12 @@ const userLimitsSchema = new mongoose.Schema(
       type: Number,
       default: 3, // Free tier: 3 DataRooms. -1 = unlimited (Pro/Enterprise)
     },
+
+    // ── Admin override flag ──────────────────────────────
+    isCustomOverride: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
