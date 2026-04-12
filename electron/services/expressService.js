@@ -370,6 +370,7 @@ async function getInviteDetails(inviteCode) {
 }
 
 module.exports = {
+  getExpressUrl,
   classifyFiles,
   generateDataroom,
   checkFileLimit,
