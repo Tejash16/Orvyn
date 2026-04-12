@@ -168,13 +168,12 @@ All routes mounted at `/api/v1/billing/`.
 | `POST` | `/cancel` | Cancel active subscription |
 | `POST` | `/webhook` | Razorpay webhook handler (NO Bearer auth, signature-verified) |
 
-### Checkout Web Pages (served in browser, NOT API)
+### Checkout Redirects (legacy URLs → web-portal)
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `GET` | `/billing/checkout/:token` | Razorpay checkout page (short-lived JWT token) |
-| `GET` | `/billing/checkout/success` | Post-payment success page |
-| `GET` | `/billing/checkout/failure` | Post-payment failure page |
+Old `/billing/checkout/*` URLs now redirect to the web-portal React app:
+- `GET /billing/checkout/:token` → redirects to `/portal/checkout/:token`
+- `GET /billing/checkout/success` → redirects to `/portal/checkout/success`
+- `GET /billing/checkout/failure` → redirects to `/portal/checkout/failure`
 
 ---
 
@@ -198,6 +197,104 @@ All routes mounted at `/api/v1/sharing/`.
 
 ---
 
+## Admin Endpoints (require admin auth)
+
+All routes mounted at `/api/v1/admin/`. Protected by `adminAuthenticate` middleware
+(IP whitelist + Bearer token + `role === 'admin'`).
+
+### Auth
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/login` | Admin login (returns JWT with admin flag) |
+
+### Dashboard
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/dashboard/stats` | Aggregate counts (users, subs, revenue, recent signups) |
+
+### Users
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/users` | Paginated user list (query: `q`, `page`, `plan`, `status`) |
+| `GET` | `/users/:id` | Full user detail (profile + usage + limits + orgs + audit) |
+| `POST` | `/users/:id/suspend` | Suspend user (body: `{ reason, until }`) |
+| `POST` | `/users/:id/unsuspend` | Unsuspend user |
+| `POST` | `/users/:id/ban` | Ban user (body: `{ reason }`) |
+| `DELETE` | `/users/:id` | Force delete user (cascade) |
+| `POST` | `/users/:id/reset-password` | Trigger password reset email |
+| `PUT` | `/users/:id/limits` | Override UserLimits |
+
+### Promo Codes
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/promo-codes` | List all promo codes |
+| `POST` | `/promo-codes` | Create promo code |
+| `POST` | `/promo-codes/:id/deactivate` | Deactivate promo code |
+
+### Subscriptions
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/subscriptions` | List subscriptions (filterable by status, plan) |
+
+### Organizations
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/organizations` | List organizations |
+| `GET` | `/organizations/:id` | Organization detail with members |
+| `PUT` | `/organizations/:id/seats` | Update maxSeats |
+
+### Audit Logs
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/audit-logs` | Paginated, filterable audit logs |
+
+### Database Browser
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/database/collections` | List available MongoDB collections |
+| `GET` | `/database/:collection` | Paginated read-only documents |
+
+### Collaborations
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/collaborations` | List all collaborations |
+| `DELETE` | `/collaborations/:id` | Break a collaboration |
+
+### Notifications
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/notifications/broadcast` | Broadcast notification to all or targeted users |
+
+### System Health
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/system/health` | MongoDB status, memory, uptime |
+
+### Export
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/export/:type` | CSV download (users/usage/audit-logs/subscriptions) |
+
+### Shared DataRooms
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/shared-datarooms` | List all shared DataRooms with owner info |
+
+---
+
 ## Health Endpoint
 
 | Method | Path | Purpose |
@@ -210,9 +307,9 @@ All routes mounted at `/api/v1/sharing/`.
 
 | Model | File | Purpose |
 |-------|------|---------|
-| `User` | `src/models/User.js` | User account (email, password hash, verified status, googleId, profilePicture, userType, activeOrganizationId, provider) |
+| `User` | `src/models/User.js` | User account (email, password hash, verified status, googleId, profilePicture, userType, activeOrganizationId, provider, role: user/admin, restrictionStatus: active/suspended/banned, restrictionReason, restrictedUntil, restrictedBy) |
 | `PendingRegistration` | `src/models/PendingRegistration.js` | Temporary record during email verification flow |
-| `UserLimits` | `src/models/UserLimits.js` | Per-user monthly file upload limits, plan, dataroomLimit |
+| `UserLimits` | `src/models/UserLimits.js` | Per-user monthly file upload limits, plan, dataroomLimit, isCustomOverride |
 | `UserUsage` | `src/models/UserUsage.js` | Track file uploads per user per month (lastDailyReset, lastMonthlyReset) |
 | `IdempotencyKey` | `src/models/IdempotencyKey.js` | Idempotent request deduplication for classification/generation |
 | `Organization` | `src/models/Organization.js` | Organization entity (name, owner, settings) |
@@ -221,7 +318,8 @@ All routes mounted at `/api/v1/sharing/`.
 | `Subscription` | `src/models/Subscription.js` | Razorpay billing state (userId, orgId, plan, status, razorpaySubscriptionId) |
 | `SharedDataRoom` | `src/models/SharedDataRoom.js` | Shared DataRoom snapshot (folder tree, files, extracted text, metadata) |
 | `SharedDataRoomAccess` | `src/models/SharedDataRoomAccess.js` | Per-user access grant (sharedDataRoomId, userId, permission) |
-| `AuditLog` | `src/models/AuditLog.js` | Enterprise audit trail (userId, action, resourceType, metadata, TTL 1 year) |
+| `AuditLog` | `src/models/AuditLog.js` | Enterprise audit trail (userId, action, resourceType, metadata, TTL 1 year). Includes admin action enums: `admin.user_suspended`, `admin.user_banned`, `admin.user_deleted`, `admin.limits_overridden`, etc. |
+| `PromoCode` | `src/models/PromoCode.js` | Promo code (code, discountType: percentage/fixed/trial_extension, discountValue, applicablePlans, maxRedemptions, currentRedemptions, validFrom, validUntil, isActive, createdBy) |
 
 ---
 
@@ -229,7 +327,8 @@ All routes mounted at `/api/v1/sharing/`.
 
 | File | Purpose |
 |------|---------|
-| `authenticate.js` | Bearer token verification, attaches `req.user` |
+| `authenticate.js` | Bearer token verification, attaches `req.user`. Also checks user restriction status (banned → 403, suspended → 403 if not expired). |
+| `adminAuthenticate.js` | Admin-only middleware: IP whitelist check (ADMIN_ALLOWED_IPS), Bearer JWT verification (ADMIN_SESSION_SECRET or JWT_SECRET), user role === 'admin' check. Attaches `req.admin`. |
 | `rateLimiter.js` | All rate limiters (auth, Google, org, feedback) |
 | `errorHandler.js` | Global error handler |
 | `orgAuthorize.js` | Organization role-based access control. Accepts minimum role ('member', 'admin', 'owner'). Verifies user is a member with sufficient role. |
@@ -311,6 +410,11 @@ Also exports: `CHAT_SYSTEM_PROMPT` constant.
 | `MAIL_FROM` | — | From address for emails |
 | `GOOGLE_CLIENT_ID` | — | Google OAuth client ID (public, also in Electron) |
 | `GOOGLE_CLIENT_SECRET` | — | Google OAuth client secret (Express only) |
+| `GOOGLE_REDIRECT_URI` | — | Cloud callback URL for Google OAuth (e.g., `https://api.orvyn.app/portal/auth/google/callback`) |
+| `APP_URL` | `http://localhost:8080` | Public URL of this Express backend (used for invite URLs, checkout links) |
+| `GEMINI_MODEL_CHAIN` | `gemini-2.5-flash,gemini-1.5-flash,gemini-1.5-pro` | Ordered fallback chain for Gemini 403/503 errors |
+| `ADMIN_SESSION_SECRET` | — | Separate JWT secret for admin tokens (falls back to JWT_SECRET if blank) |
+| `ADMIN_ALLOWED_IPS` | — | Comma-separated IP whitelist for admin access (blank = allow all in dev) |
 | `RAZORPAY_KEY_ID` | — | Razorpay API key |
 | `RAZORPAY_KEY_SECRET` | — | Razorpay secret |
 | `RAZORPAY_WEBHOOK_SECRET` | — | Razorpay webhook signature verification |
@@ -323,4 +427,3 @@ Also exports: `CHAT_SYSTEM_PROMPT` constant.
 |---------|---------|
 | `google-auth-library` | Google OAuth token verification |
 | `razorpay` | Razorpay payment SDK |
-| `ejs` | Template engine for checkout web pages |

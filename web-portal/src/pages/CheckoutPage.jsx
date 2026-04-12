@@ -97,7 +97,7 @@ export default function CheckoutPage() {
       <BrandHeader subtitle="Secure Checkout" />
 
       {/* Plan details */}
-      <div className="bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-xl p-6 mb-7">
+      <div className="bg-linear-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-xl p-6 mb-7">
         <h1 className="text-xl font-bold text-zinc-900 mb-2">
           Upgrade to Orvyn {plan.planName}
         </h1>

@@ -27,7 +27,8 @@ All IPC channels are defined in `electron/ipc/` handler files and exposed via
 | `auth:getCurrentUser` | `window.api.auth.getCurrentUser()` | Get current authenticated user |
 | `auth:getLocalDbPath` | `window.api.auth.getLocalDbPath()` | Get local database file path |
 | `auth:sendFeedback` | `window.api.auth.sendFeedback(feedback)` | Submit user feedback |
-| `auth:initiateGoogleAuth` | `window.api.auth.initiateGoogleAuth(mode)` | Start Google OAuth flow (loopback server + browser) |
+| `auth:initiateGoogleAuth` | `window.api.auth.initiateGoogleAuth(mode)` | Opens system browser to Google consent URL with cloud callback redirect |
+| `auth:completeGoogleAuth` | `window.api.auth.completeGoogleAuth(payload)` | Complete Google OAuth after cloud callback (validates token, initializes user) |
 | `auth:linkGoogleAccount` | `window.api.auth.linkGoogleAccount(payload)` | Link Google identity to existing local account |
 | `auth:setUserType` | `window.api.auth.setUserType(userType)` | Set user type ('individual' or 'enterprise') |
 
@@ -172,13 +173,14 @@ Handler file: `electron/ipc/sharingHandlers.js`
 ### `deep-link:*` — Deep Link Protocol
 
 The `orvyn://` custom protocol is registered in `electron/main.js` for handling
-organization invite links from emails.
+organization invite links and Google OAuth callbacks from the web portal.
 
 **Push events:**
 
 | Channel | Preload Listener | Purpose |
 |---------|-----------------|---------|
 | `deep-link:invite` | `window.api.deepLink.onInvite(cb)` | Organization invite code received via deep link |
+| `deep-link:google-auth` | `window.api.deepLink.onGoogleAuth(cb)` | Google OAuth result received via `orvyn://auth/google` deep link |
 
 ### `app:*` / `logs:*` — App-Level
 
@@ -319,7 +321,8 @@ On app startup, after `/init-db` completes:
 
 | Function | Purpose |
 |----------|---------|
-| `initiateGoogleAuth()` | Start loopback OAuth server, open system browser, await auth code |
+| `initiateGoogleAuth()` | Opens system browser to Google consent URL with cloud redirect URI (no loopback server) |
+| `completeGoogleAuth(payload)` | Complete login after receiving OAuth result via deep link |
 | `googleLogin(code, redirectUri)` | Exchange auth code with Express for app tokens |
 | `linkGoogleAccount(email, password, googleId, picture)` | Link Google to existing local account via Express |
 | `setToken(token)` / `getToken()` | Store/retrieve access token in memory |

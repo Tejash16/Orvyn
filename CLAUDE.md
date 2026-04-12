@@ -14,8 +14,10 @@ This file contains cross-cutting rules that apply to all layers. For layer-speci
 |------|------------------------|----------|
 | `CLAUDE-ELECTRON.md` | `electron/` | IPC channels, services, Copilot orchestration |
 | `CLAUDE-PYTHON.md` | `python-backend/` | Python endpoints, DataRoom architecture, sync rules |
-| `CLAUDE-EXPRESS.md` | `express-backend/` | Express endpoints, Gemini integration, MongoDB models |
+| `CLAUDE-EXPRESS.md` | `express-backend/` | Express endpoints, Gemini integration, MongoDB models, admin API |
 | `CLAUDE-FRONTEND.md` | `frontend/` | Redux slices, File Explorer, UI architecture, component structure |
+| `CLAUDE-WEB-PORTAL.md` | `web-portal/` | Portal pages, routing, API calls, deep link protocol |
+| `CLAUDE-WEB-ADMIN.md` | `web-admin/` | Admin pages, auth flow, layout, API calls |
 
 When working on a specific layer, read **this file + that layer's file**.
 
@@ -37,6 +39,8 @@ It combines a local AI engine, a local database, and a cloud authentication laye
 | Auth backend     | Express (Node.js)              | Cloud           |
 | AI engine        | Python FastAPI                 | Local           |
 | Database         | SQLite                         | Local           |
+| Web portal       | React + Vite + Tailwind + shadcn/ui | Cloud (served by Express at `/portal/`) |
+| Admin panel      | React + Vite + Tailwind + shadcn/ui | Cloud (served by Express at `/admin/`) |
 
 ---
 
@@ -61,7 +65,7 @@ Orvyn/
 │   │   ├── sharingHandlers.js       # [V2] Share, import, access management
 │   │   └── windowControls.js
 │   ├── services/           # Electron-side service modules
-│   │   ├── authService.js          # Auth orchestration + Google loopback OAuth
+│   │   ├── authService.js          # Auth orchestration + Google cloud OAuth
 │   │   ├── expressService.js       # Express API communication (incl. org, billing)
 │   │   ├── logger.js               # electron-log wrapper (file-based logging)
 │   │   ├── pythonProcess.js        # Python process lifecycle + dynamic port
@@ -93,7 +97,7 @@ Orvyn/
 │
 ├── express-backend/        # Cloud auth + billing + org server (Node.js + Express)
 │   ├── src/
-│   │   ├── server.js       # Express app entry point (EJS views, all route mounts)
+│   │   ├── server.js       # Express app entry point (serves React SPAs, all route mounts)
 │   │   ├── config/         # Environment and app configuration
 │   │   │   ├── db.js               # MongoDB connection
 │   │   │   └── planLimits.js       # [V2] Plan-to-limits mapping (free/pro/enterprise)
@@ -103,13 +107,15 @@ Orvyn/
 │   │   │   ├── usageController.js
 │   │   │   ├── googleAuthController.js   # [V2] Google OAuth endpoints
 │   │   │   ├── organizationController.js # [V2] Org CRUD, members, invites
-│   │   │   └── sharingController.js      # [V2] DataRoom sharing logic
+│   │   │   ├── sharingController.js      # [V2] DataRoom sharing logic
+│   │   │   └── adminController.js        # [V3] Admin panel route handlers
 │   │   ├── middleware/     # Express middleware
 │   │   │   ├── authenticate.js     # Bearer token auth
 │   │   │   ├── rateLimiter.js      # Rate limiters (auth, org, Google)
 │   │   │   ├── errorHandler.js     # Global error handler
 │   │   │   ├── orgAuthorize.js     # [V2] Organization role-based access
-│   │   │   └── enforceLimits.js    # [V2] Server-side usage enforcement
+│   │   │   ├── enforceLimits.js    # [V2] Server-side usage enforcement
+│   │   │   └── adminAuthenticate.js # [V3] Admin IP whitelist + role check
 │   │   ├── models/         # MongoDB schema definitions
 │   │   ├── routes/         # Route definitions
 │   │   │   ├── auth.js             # Auth + Google auth + user type
@@ -117,8 +123,11 @@ Orvyn/
 │   │   │   ├── health.js           # Health check
 │   │   │   ├── usage.js            # Usage/quota endpoints
 │   │   │   ├── organization.js     # [V2] Org API + audit logs
-│   │   │   ├── billing.js          # [V2] Razorpay + checkout pages
-│   │   │   └── sharing.js          # [V2] Sharing API + user audit logs
+│   │   │   ├── billing.js          # [V2] Razorpay + checkout redirects
+│   │   │   ├── sharing.js          # [V2] Sharing API + user audit logs
+│   │   │   ├── collaboration.js    # [V2] Contact list / friend requests
+│   │   │   ├── notifications.js    # [V2] User notifications
+│   │   │   └── admin.js            # [V3] Admin panel API routes
 │   │   └── services/       # Business logic services
 │   │       ├── authService.js      # Auth + Google edge cases
 │   │       ├── geminiService.js    # Gemini API calls
@@ -130,13 +139,36 @@ Orvyn/
 │   │       ├── googleAuthService.js # [V2] Google OAuth token exchange
 │   │       ├── razorpayService.js  # [V2] Razorpay SDK integration
 │   │       └── auditService.js     # [V2] Audit log utility
-│   ├── views/              # [V2] EJS templates for checkout
-│   │   ├── checkout.ejs
-│   │   ├── payment-success.ejs
-│   │   └── payment-failure.ejs
-│   ├── public/css/          # [V2] Checkout page styles
 │   ├── .env                # Auth secrets (NOT committed)
 │   └── .env.example
+│
+├── web-portal/             # Public web portal (React SPA, served at /portal/)
+│   ├── src/
+│   │   ├── main.jsx
+│   │   ├── App.jsx
+│   │   ├── pages/          # InvitePage, GoogleAuthCallback, CheckoutPage, PaymentSuccess/Failure
+│   │   ├── components/     # BrandHeader, DeepLinkButton, StatusCard, PortalCard, ui/
+│   │   ├── lib/            # api.js, utils.js
+│   │   └── styles/         # globals.css (Tailwind directives + brand tokens)
+│   ├── index.html
+│   ├── vite.config.js      # base: '/portal/', dev port 5174
+│   ├── components.json     # shadcn/ui config
+│   └── package.json
+│
+├── web-admin/              # Admin dashboard (React SPA, served at /admin/)
+│   ├── src/
+│   │   ├── main.jsx
+│   │   ├── App.jsx
+│   │   ├── layouts/        # AdminLayout (sidebar + header + content)
+│   │   ├── pages/          # Login, Dashboard, Users, PromoCodes, Subscriptions, Orgs, etc.
+│   │   ├── components/     # AdminSidebar, StatsCard, DataTable, SearchBar, ConfirmDialog, ui/
+│   │   ├── hooks/          # useAuth (admin auth state)
+│   │   ├── lib/            # api.js (adminFetch, adminLogin, token management)
+│   │   └── styles/         # globals.css (Tailwind directives)
+│   ├── index.html
+│   ├── vite.config.js      # base: '/admin/', dev port 5175
+│   ├── components.json     # shadcn/ui config
+│   └── package.json
 │
 ├── python-backend/         # Local AI engine (FastAPI)
 │   ├── app/
@@ -153,7 +185,9 @@ Orvyn/
 ├── CLAUDE-ELECTRON.md      # Electron layer reference
 ├── CLAUDE-PYTHON.md        # Python backend reference
 ├── CLAUDE-EXPRESS.md       # Express backend reference
-└── CLAUDE-FRONTEND.md      # Frontend reference
+├── CLAUDE-FRONTEND.md      # Frontend reference
+├── CLAUDE-WEB-PORTAL.md   # Web portal reference
+└── CLAUDE-WEB-ADMIN.md    # Admin panel reference
 ```
 
 The folder structure above is fixed. Do not move, rename, or restructure any folder or file
@@ -188,13 +222,33 @@ across layers without an explicit instruction from the user.
   API key never ships with the desktop application.
 - AI proxy endpoints (`/api/v1/ai/*`) require Bearer token authentication.
 - Manages organizations, memberships, and invitations (MongoDB).
-- Handles billing/subscriptions via Razorpay (plan enforcement, webhook processing, checkout pages).
+- Handles billing/subscriptions via Razorpay (plan enforcement, webhook processing).
 - Stores shared DataRoom snapshots (folder tree + file metadata + extracted text) for collaboration.
 - Tracks enterprise audit logs for compliance.
-- Serves EJS checkout pages at `/billing/checkout/*` for Razorpay payment flows.
+- Serves web-portal React build at `/portal/*` and web-admin React build at `/admin/*` as static SPA files.
+- Old `/billing/checkout/*` and `/invite/:code` URLs redirect to the web-portal React app.
+- Admin API routes (`/api/v1/admin/*`) protected by IP whitelist + admin role check.
 - Must not contain any document processing or file system logic.
 
 > For Express endpoints, MongoDB models, and Gemini service details, see `CLAUDE-EXPRESS.md`.
+
+### Web Portal (`web-portal/`)
+- Public-facing React SPA for organization invite landing, Google OAuth callback, Razorpay checkout, and payment status pages.
+- Served by Express as static files at `/portal/*` with SPA catch-all.
+- Communicates with Express API via `fetch()` (no Electron IPC — runs in browser).
+- Uses `orvyn://` deep links to hand off to the Electron desktop app (invites, Google auth tokens).
+- No `.env` file — all config derived from Express API responses or JWT tokens.
+
+> For portal pages, components, and API calls, see `CLAUDE-WEB-PORTAL.md`.
+
+### Web Admin (`web-admin/`)
+- Admin dashboard React SPA for user management, promo codes, subscriptions, organizations, audit logs, database browsing, system health, CSV exports, and notification broadcasts.
+- Served by Express as static files at `/admin/*` with SPA catch-all.
+- Protected by admin authentication (role-based JWT + IP whitelist enforced server-side).
+- Admin token stored in `localStorage` (browser-only app, not Electron).
+- All API calls go to `/api/v1/admin/*`.
+
+> For admin pages, auth flow, and layout, see `CLAUDE-WEB-ADMIN.md`.
 
 ### Python FastAPI (`python-backend/`)
 - Runs locally, spawned by Electron at startup on a dynamically allocated port (see Section 13.6).
@@ -291,12 +345,12 @@ The following actions are **prohibited** unless the user provides an explicit, u
 instruction authorizing each specific action:
 
 1. **Change the folder structure.** Do not move, rename, create, or delete top-level
-   folders (`electron/`, `frontend/`, `express-backend/`, `python-backend/`).
+   folders (`electron/`, `frontend/`, `express-backend/`, `python-backend/`, `web-portal/`, `web-admin/`).
 
 2. **Move files across layers.** A file that belongs to `electron/` stays in `electron/`.
    Do not relocate source files between layer directories.
 
-3. **Modify `package.json` dependencies** in any layer (root, electron, frontend, express-backend)
+3. **Modify `package.json` dependencies** in any layer (root, electron, frontend, express-backend, web-portal, web-admin)
    without explicit user approval for each change.
 
 4. **Install new npm packages** (`npm install <pkg>`) automatically. Always confirm with
@@ -363,11 +417,14 @@ From the project root:
 npm run dev
 ```
 
-This uses `concurrently` to start all four processes:
-- React dev server (Vite) — `frontend/`
+This uses `concurrently` to start all five processes:
+- React desktop UI dev server (Vite) — `frontend/`
 - Electron — `electron/`
 - Express backend — `express-backend/`
-- Python FastAPI — `python-backend/`
+- Web portal dev server (Vite, port 5174) — `web-portal/`
+- Web admin dev server (Vite, port 5175) — `web-admin/`
+
+> **Note:** Python FastAPI is spawned by Electron at startup (dynamic port), not by the root dev script.
 
 ### Before making any change
 
