@@ -2682,8 +2682,14 @@ def export_dataroom(request: dict):
                     overlap_chars=int(os.getenv("RAG_CHUNK_OVERLAP_CHARS", "750"))
                 )
             else:
-                # Fallback: use truncated extracted_text (3000 chars) for unindexed files
-                full_text = f.extracted_text or ""
+                # Unindexed file: re-extract FULL text from disk (DB preview is truncated to 3000 chars)
+                if f.original_path and f.original_path != 'SHARED' and os.path.exists(f.original_path):
+                    try:
+                        full_text = _extract_text(f.original_path, f.file_extension, f.original_name)
+                    except Exception:
+                        full_text = f.extracted_text or ""
+                else:
+                    full_text = f.extracted_text or ""
 
             file_data.append({
                 "id": f.id,
@@ -2743,7 +2749,10 @@ def import_dataroom(request: dict):
         if folder_tree:
             _create_folders_recursive(session, dataroom.id, folder_tree, None, folder_id_map)
 
-        # Create file records
+        # Create file records and chunks for Copilot
+        from app.services.embedding_service import chunk_text, create_indexing_job
+
+        imported_file_ids = []
         for f in snapshot.get('files', []):
             new_folder_id = folder_id_map.get(f.get('folder_id'))
             file_record = File(
@@ -2760,6 +2769,7 @@ def import_dataroom(request: dict):
                 is_shared=True,
             )
             session.add(file_record)
+            session.flush()  # Ensure file_record.id is assigned
 
             # Create classification if exists
             if f.get('classification_confidence') is not None:
@@ -2783,6 +2793,29 @@ def import_dataroom(request: dict):
                     context=entity.get('context', ''),
                 ))
 
+            # Create file_chunks for immediate Copilot keyword search
+            extracted_text = f.get('extracted_text', '')
+            if extracted_text and extracted_text.strip():
+                chunks = chunk_text(extracted_text)
+                for chunk in chunks:
+                    session.execute(
+                        text("""INSERT INTO file_chunks (id, file_id, dataroom_id, chunk_index, chunk_text)
+                                VALUES (:id, :fid, :did, :idx, :txt)"""),
+                        {
+                            "id": str(uuid.uuid4()),
+                            "fid": file_record.id,
+                            "did": dataroom.id,
+                            "idx": chunk["index"],
+                            "txt": chunk["text"],
+                        },
+                    )
+                create_indexing_job(file_record.id, dataroom.id, session)
+                imported_file_ids.append(file_record.id)
+
         session.commit()
 
-        return {"dataroom_id": dataroom.id, "message": "Shared DataRoom imported successfully"}
+        return {
+            "dataroom_id": dataroom.id,
+            "file_ids": imported_file_ids,
+            "message": "Shared DataRoom imported successfully",
+        }

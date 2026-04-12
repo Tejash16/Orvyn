@@ -1,5 +1,6 @@
 import { useDispatch, useSelector } from 'react-redux';
 import { importDataroom } from '../../store/sharingSlice';
+import { indexFiles } from '../../store/copilotSlice';
 import { addToast } from '../../store/uiSlice';
 import styles from '../../pages/CollaborationPage.module.css';
 
@@ -11,6 +12,13 @@ function SharedWithMe({ items, isLoading }) {
     const result = await dispatch(importDataroom(shareId)).unwrap();
     if (result.dataroom_id) {
       dispatch(addToast({ message: `"${name}" imported to your DataRooms.`, type: 'success' }));
+      // Auto-trigger Copilot indexing so the recipient can use Copilot on shared files
+      if (result.file_ids && result.file_ids.length > 0) {
+        dispatch(indexFiles({
+          fileIds: result.file_ids,
+          dataroomId: result.dataroom_id,
+        }));
+      }
     }
   };
 
