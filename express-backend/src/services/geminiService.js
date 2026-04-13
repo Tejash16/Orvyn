@@ -8,7 +8,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const logger = require('./logger');
 
-const MODEL_CHAIN = (process.env.GEMINI_MODEL_CHAIN || 'gemini-2.5-flash,gemini-1.5-flash,gemini-1.5-pro')
+const MODEL_CHAIN = (process.env.GEMINI_MODEL_CHAIN || 'gemini-2.5-flash,gemini-2.5-pro,gemini-2.0-flash,gemini-2.5-flash-lite,gemini-2.0-flash-lite')
   .split(',').map((s) => s.trim()).filter(Boolean);
 const MODEL_NAME = MODEL_CHAIN[0];
 const TEMPERATURE = 0.1;
@@ -434,76 +434,95 @@ const CHAT_SYSTEM_PROMPT =
  */
 async function chatStream(res, systemPrompt, messages, tools, toolConfig) {
   const genAI = _getClient();
-  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
+  const chain = _chatModelChain();
   const chatTemp = parseFloat(process.env.GEMINI_CHAT_TEMPERATURE || '0.3');
   const maxTokens = parseInt(process.env.GEMINI_CHAT_MAX_OUTPUT_TOKENS || '4096', 10);
 
-  const modelConfig = {
-    model: chatModel,
-    systemInstruction: systemPrompt || CHAT_SYSTEM_PROMPT,
-    generationConfig: { temperature: chatTemp, maxOutputTokens: maxTokens },
-  };
+  let lastError;
 
-  // Only add tools if provided
-  if (tools && tools.length > 0) {
-    modelConfig.tools = [{ functionDeclarations: tools }];
-  }
-  if (toolConfig) {
-    modelConfig.toolConfig = { functionCallingConfig: { mode: toolConfig.mode || 'AUTO' } };
-  }
+  for (const modelName of chain) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const modelConfig = {
+          model: modelName,
+          systemInstruction: systemPrompt || CHAT_SYSTEM_PROMPT,
+          generationConfig: { temperature: chatTemp, maxOutputTokens: maxTokens },
+        };
 
-  const model = genAI.getGenerativeModel(modelConfig);
-
-  try {
-    const result = await model.generateContentStream({ contents: messages });
-    let hasToolCall = false;
-
-    for await (const chunk of result.stream) {
-      // Check for text content
-      const textContent = chunk.candidates?.[0]?.content?.parts
-        ?.filter(p => p.text)
-        ?.map(p => p.text)
-        ?.join('') || '';
-
-      if (textContent) {
-        res.write(`data: ${JSON.stringify({ type: 'chunk', text: textContent })}\n\n`);
-      }
-
-      // Check for function calls
-      const functionCalls = chunk.candidates?.[0]?.content?.parts
-        ?.filter(p => p.functionCall) || [];
-
-      if (functionCalls.length > 0) {
-        for (const part of functionCalls) {
-          // Whitelist check — reject hallucinated or unexpected tool names
-          if (!ALLOWED_TOOLS.has(part.functionCall.name)) {
-            console.warn(`[chatStream] Rejected tool call: ${part.functionCall.name}`);
-            res.write(`data: ${JSON.stringify({
-              type: 'error',
-              message: `Blocked disallowed tool: ${part.functionCall.name}`,
-            })}\n\n`);
-            continue;
-          }
-          hasToolCall = true;
-          res.write(`data: ${JSON.stringify({
-            type: 'tool_call',
-            name: part.functionCall.name,
-            args: part.functionCall.args,
-          })}\n\n`);
+        if (tools && tools.length > 0) {
+          modelConfig.tools = [{ functionDeclarations: tools }];
         }
+        if (toolConfig) {
+          modelConfig.toolConfig = { functionCallingConfig: { mode: toolConfig.mode || 'AUTO' } };
+        }
+
+        const model = genAI.getGenerativeModel(modelConfig);
+        const result = await model.generateContentStream({ contents: messages });
+        let hasToolCall = false;
+
+        if (modelName !== chain[0]) {
+          logger.info(`[chatStream] served by fallback model: ${modelName}`);
+        }
+
+        for await (const chunk of result.stream) {
+          const textContent = chunk.candidates?.[0]?.content?.parts
+            ?.filter(p => p.text)
+            ?.map(p => p.text)
+            ?.join('') || '';
+
+          if (textContent) {
+            res.write(`data: ${JSON.stringify({ type: 'chunk', text: textContent })}\n\n`);
+          }
+
+          const functionCalls = chunk.candidates?.[0]?.content?.parts
+            ?.filter(p => p.functionCall) || [];
+
+          if (functionCalls.length > 0) {
+            for (const part of functionCalls) {
+              if (!ALLOWED_TOOLS.has(part.functionCall.name)) {
+                console.warn(`[chatStream] Rejected tool call: ${part.functionCall.name}`);
+                res.write(`data: ${JSON.stringify({
+                  type: 'error',
+                  message: `Blocked disallowed tool: ${part.functionCall.name}`,
+                })}\n\n`);
+                continue;
+              }
+              hasToolCall = true;
+              res.write(`data: ${JSON.stringify({
+                type: 'tool_call',
+                name: part.functionCall.name,
+                args: part.functionCall.args,
+              })}\n\n`);
+            }
+          }
+        }
+
+        if (hasToolCall) {
+          res.write(`data: ${JSON.stringify({ type: 'tool_call_stop' })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify({ type: 'end' })}\n\n`);
+        }
+        return; // Success — exit the function
+      } catch (e) {
+        lastError = e;
+        const status = _statusOf(e);
+        if (_isPermanent(status)) {
+          logger.warn(`[chatStream] ${modelName} permanent error ${status}, falling through`);
+          break; // Try next model
+        }
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
+          continue; // Retry same model
+        }
+        logger.warn(`[chatStream] ${modelName} exhausted retries (status ${status || 'n/a'})`);
       }
     }
-
-    if (hasToolCall) {
-      // Signal Electron to execute tool and make a new request
-      res.write(`data: ${JSON.stringify({ type: 'tool_call_stop' })}\n\n`);
-    } else {
-      // Normal end — Gemini is done
-      res.write(`data: ${JSON.stringify({ type: 'end' })}\n\n`);
-    }
-  } catch (err) {
-    res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
   }
+
+  // All models failed
+  const errMsg = `Gemini chat failed across [${chain.join(',')}]: ${lastError?.message || 'unknown error'}`;
+  logger.error(`[chatStream] ${errMsg}`);
+  res.write(`data: ${JSON.stringify({ type: 'error', message: errMsg })}\n\n`);
 }
 
 /**

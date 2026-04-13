@@ -42,15 +42,32 @@ if (missingSmtp.length > 0) {
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// ── Serve portal/admin static assets BEFORE CORS ─────────
+// Static assets are same-origin and don't need CORS checks.
+// Placing these before the CORS middleware prevents CORS from
+// blocking JS/CSS loads during Google OAuth callback redirects.
+app.use('/portal', express.static(path.join(__dirname, '../../web-portal/dist')));
+app.use('/admin', express.static(path.join(__dirname, '../../web-admin/dist')));
+
 // ── Middleware ────────────────────────────────────────────
 app.use(helmet());
 const corsOptions = {
   origin: function (origin, callback) {
-    // Desktop app (Electron main process) sends no Origin header — allow it.
-    // Safe because all sensitive endpoints require Bearer token auth.
-    if (!origin) return callback(null, true);
-    const allowed = process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : [];
-    if (allowed.includes(origin)) return callback(null, true);
+    if (!origin) return callback(null, true); // Electron / curl
+
+    const allowed = process.env.CLIENT_URL
+      ? process.env.CLIENT_URL.split(',').map(o => o.trim())
+      : [];
+
+    if (process.env.APP_URL) {
+      allowed.push(process.env.APP_URL);
+    }
+
+    if (allowed.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.log("❌ CORS blocked:", origin); // debug log
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
@@ -94,14 +111,14 @@ app.get('/invite/:code', (req, res) => {
 // ── Admin API routes ─────────────────────────────────────
 app.use('/api/v1/admin', adminRouter);
 
-// ── Serve web-portal React build ─────────────────────────
-app.use('/portal', express.static(path.join(__dirname, '../../web-portal/dist')));
+// ── Serve web-portal React build (SPA catch-all) ─────────
+// Static files already served above CORS; this handles SPA routing.
 app.get('/portal/{*path}', (req, res) => {
   res.sendFile(path.join(__dirname, '../../web-portal/dist/index.html'));
 });
 
-// ── Serve web-admin React build ──────────────────────────
-app.use('/admin', express.static(path.join(__dirname, '../../web-admin/dist')));
+// ── Serve web-admin React build (SPA catch-all) ──────────
+// Static files already served above CORS; this handles SPA routing.
 app.get('/admin/{*path}', (req, res) => {
   res.sendFile(path.join(__dirname, '../../web-admin/dist/index.html'));
 });

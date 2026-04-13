@@ -115,6 +115,7 @@ registerNotificationHandlers(ipcMain);
 
 function handleDeepLink(url) {
   try {
+    log.info('[DeepLink] Received:', url);
     const parsed = new URL(url);
 
     // orvyn://invite?code=...
@@ -131,6 +132,7 @@ function handleDeepLink(url) {
     if (parsed.hostname === 'auth' && parsed.pathname.startsWith('/google')) {
       if (mainWindow && !mainWindow.isDestroyed()) {
         const action = parsed.searchParams.get('action');
+        log.info('[DeepLink] Google auth action:', action, '— hasToken:', !!parsed.searchParams.get('token'), '— hasRefresh:', !!parsed.searchParams.get('refreshToken'));
         if (action === 'login') {
           mainWindow.webContents.send('deep-link:google-auth', {
             action: 'login',
@@ -146,6 +148,8 @@ function handleDeepLink(url) {
             picture: parsed.searchParams.get('picture'),
           });
         }
+      } else {
+        log.warn('[DeepLink] mainWindow not available');
       }
       return;
     }
@@ -176,8 +180,17 @@ ipcMain.handle('app:openLogsFolder', async () => {
 app.whenReady().then(async () => {
   log.info('Orvyn starting up');
 
-  // Register orvyn:// custom protocol for deep links (invite emails)
-  app.setAsDefaultProtocolClient('orvyn');
+  // Register orvyn:// custom protocol for deep links (invite emails, Google OAuth)
+  // In dev mode, we must pass the app path explicitly so that Windows
+  // launches `electron.exe <appPath> <deepLinkUrl>` — otherwise the
+  // second instance doesn't load our app and the URL is silently lost.
+  if (!app.isPackaged) {
+    app.setAsDefaultProtocolClient('orvyn', process.execPath, [
+      path.resolve(__dirname),
+    ]);
+  } else {
+    app.setAsDefaultProtocolClient('orvyn');
+  }
 
   // Spawn the local Python backend before the window opens.
   // start() finds a free port dynamically, then spawns Python.

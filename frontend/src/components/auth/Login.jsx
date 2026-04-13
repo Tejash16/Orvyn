@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { loginStart, loginSuccess, loginFailure } from '../../store/authSlice';
 import { setTheme } from '../../store/uiSlice';
@@ -34,7 +34,7 @@ const GoogleIcon = () => (
   </svg>
 );
 
-function Login({ onSwitchView, showAuthToast }) {
+function Login({ onSwitchView, showAuthToast, initialLinkingState, onLinkingConsumed }) {
   const dispatch = useDispatch();
 
   const [email,        setEmail]        = useState('');
@@ -45,8 +45,15 @@ function Login({ onSwitchView, showAuthToast }) {
 
   // Google OAuth state
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [linkingState,    setLinkingState]    = useState(null); // { email, googleId, picture }
+  const [linkingState,    setLinkingState]    = useState(initialLinkingState || null); // { email, googleId, picture }
 
+  // Pick up linking data pushed from AuthLayout (Google OAuth deep link)
+  useEffect(() => {
+    if (initialLinkingState) {
+      setLinkingState(initialLinkingState);
+      if (onLinkingConsumed) onLinkingConsumed();
+    }
+  }, [initialLinkingState, onLinkingConsumed]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -88,34 +95,19 @@ function Login({ onSwitchView, showAuthToast }) {
   async function handleGoogleSignIn() {
     setIsGoogleLoading(true);
 
-
     try {
+      // This only opens the system browser for Google consent.
+      // The actual login completion happens via the deep link listener
+      // (onGoogleAuth) in AuthLayout when the orvyn:// callback arrives.
       const result = await window.api.auth.initiateGoogleAuth();
 
-      if (result.requiresLinking) {
-        // Show password dialog for account linking
-        setLinkingState({
-          email: result.email,
-          googleId: result.googleId,
-          picture: result.picture,
-        });
-        setIsGoogleLoading(false);
-        return;
-      }
-
-      if (result.success) {
-        dispatch(loginSuccess(result.user));
-        if (result.theme) dispatch(setTheme(result.theme));
-
-        // New users or users without a userType set — show type selection
-        if (result.isNewUser || !result.user?.userType) {
-          onSwitchView('userType');
-        }
-      } else {
+      if (!result.success) {
         showAuthToast(result.error || 'Google sign-in failed.');
       }
+      // On success, just wait — the browser is open. The deep link
+      // will fire completeGoogleAuth and AuthLayout handles the rest.
     } catch {
-      showAuthToast('Google sign-in failed.');
+      showAuthToast('Could not open Google sign-in.');
     }
     setIsGoogleLoading(false);
   }

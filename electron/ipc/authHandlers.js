@@ -5,6 +5,7 @@ const expressService         = require('../services/expressService');
 const tokenVault             = require('../services/tokenVault');
 const tokenRefreshScheduler  = require('../services/tokenRefreshScheduler');
 const { resumePendingIndexing } = require('./copilotHandlers');
+const log = require('../services/logger');
 
 /**
  * Registers all auth IPC handlers.
@@ -339,8 +340,11 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
   ipcMain.handle('auth:completeGoogleAuth', async (_event, { accessToken, refreshToken, isNewUser }) => {
     try {
+      log.info('[GoogleAuth] completeGoogleAuth called — hasAccessToken:', !!accessToken, 'hasRefreshToken:', !!refreshToken, 'isNewUser:', isNewUser);
+
       // Validate the token and get user info
       const user = await authService.validateToken(accessToken);
+      log.info('[GoogleAuth] Token validated — userId:', user?._id, 'email:', user?.email);
 
       await userContextService.initializeUserDirectory(String(user._id));
       const databasePath = userContextService.getActiveDatabasePath();
@@ -365,10 +369,14 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
       // Store tokens
       try {
         tokenVault.store(refreshToken);
-      } catch { /* non-fatal */ }
+        log.info('[GoogleAuth] Refresh token stored in vault');
+      } catch (vaultErr) {
+        log.warn('[GoogleAuth] Vault store failed:', vaultErr.message);
+      }
 
       // Set in-memory session state
       authService.setSession(accessToken, user);
+      log.info('[GoogleAuth] Session set — getToken() null?', !authService.getToken());
 
       startRefreshScheduler();
 
@@ -386,6 +394,7 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
         isNewUser: isNewUser || false,
       };
     } catch (error) {
+      log.error('[GoogleAuth] completeGoogleAuth failed:', error.message);
       return { success: false, error: error.message };
     }
   });
@@ -594,6 +603,27 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
   ipcMain.handle('auth:setUserType', async (_event, userType) => {
     try {
+      log.info('[setUserType] Called with:', userType, '— token null?', !authService.getToken(), '— user:', authService.getCurrentUser()?.email);
+
+      // Guard: if in-memory token was lost (e.g. deep-link timing race),
+      // attempt a one-shot recovery from the vault before giving up.
+      if (!authService.getToken()) {
+        log.warn('[setUserType] Token is NULL — attempting recovery from vault');
+        const storedRefreshToken = tokenVault.read();
+        log.info('[setUserType] Vault has token?', !!storedRefreshToken);
+        if (storedRefreshToken) {
+          try {
+            const tokens = await authService.refreshTokens(storedRefreshToken);
+            authService.setSession(tokens.accessToken, tokens.user);
+            try { tokenVault.store(tokens.refreshToken); } catch { /* non-fatal */ }
+            startRefreshScheduler();
+            log.info('[setUserType] Recovery successful — token restored');
+          } catch (recoverErr) {
+            log.error('[setUserType] Recovery failed:', recoverErr.message);
+          }
+        }
+      }
+
       const result = await expressService.setUserType(userType);
       // Refresh in-memory user so subsequent IPCs see the new userType
       if (result.user) {
@@ -601,6 +631,7 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
       }
       return { success: true, user: result.user };
     } catch (err) {
+      log.error('[setUserType] Failed:', err.message);
       return { success: false, error: err.message };
     }
   });

@@ -70,7 +70,7 @@ function CopilotChat() {
                 {processingFiles > 0 ? ` ${processingFiles} processing.` : ''}
                 {pendingFiles > 0 ? ` ${pendingFiles} pending.` : ''}
                 {failedFiles > 0 ? ` ${failedFiles} failed.` : ''}
-                {' '}Copilot will be ready once all files are indexed.
+                {' '}You can start chatting — results improve as more files finish indexing.
               </p>
               <div className={styles.indexBarWrapper}>
                 <div className={styles.indexBar}>

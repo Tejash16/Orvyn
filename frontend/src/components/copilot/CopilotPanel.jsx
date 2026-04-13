@@ -321,9 +321,9 @@ function CopilotPanel() {
     datarooms.length > 0 &&
     !datarooms.some((dr) => dr.id === scopeIds[0]);
 
-  // Block Copilot only while files are actively being indexed (pending/processing).
-  const activelyIndexing = (indexStatus?.pending ?? 0) + (indexStatus?.processing ?? 0);
-  const notFullyIndexed = scopeType !== 'global' && activelyIndexing > 0;
+  // NOTE: We no longer block Copilot during indexing. Core search (embeddings +
+  // ChromaDB) becomes available as each file finishes steps 1-3 of the pipeline.
+  // Entity extraction and summary are best-effort and run after core indexing.
 
   // Global scope — chat only, no quick actions
   const isGlobalScope = scopeType === 'global';
@@ -383,7 +383,7 @@ function CopilotPanel() {
         )}
       </div>
 
-      {!copilotUnavailable && !notFullyIndexed && !isGlobalScope && <CopilotQuickActions />}
+      {!copilotUnavailable && !isGlobalScope && <CopilotQuickActions />}
       <CopilotInput onSend={handleSendWithMultiDRDetection} disabled={copilotUnavailable || globalChatDisabled} />
     </div>
   );

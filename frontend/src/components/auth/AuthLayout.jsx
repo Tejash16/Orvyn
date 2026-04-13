@@ -103,6 +103,7 @@ function AuthLayout({ initialView = 'login' }) {
   const [activeView,      setActiveView]      = useState(initialView);
   const [flowEmail,       setFlowEmail]       = useState('');
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [googleLinkData,  setGoogleLinkData]  = useState(null);
 
   // ── Auth toast state ───────────────────────────────────
   const [authToasts,   setAuthToasts]   = useState([]);
@@ -129,6 +130,40 @@ function AuthLayout({ initialView = 'login' }) {
   useEffect(() => {
     setAuthToasts([]);
   }, [activeView]);
+
+  // ── Google OAuth deep link listener ────────────────────
+  useEffect(() => {
+    const cleanup = window.api.deepLink.onGoogleAuth(async (data) => {
+      if (data.action === 'login') {
+        try {
+          const result = await window.api.auth.completeGoogleAuth({
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken,
+            isNewUser: data.isNewUser,
+          });
+          if (result.success) {
+            dispatch(loginSuccess(result.user));
+            dispatch(setTheme(result.theme ?? 'light'));
+            if (result.isNewUser || !result.user?.userType) {
+              setActiveView('userType');
+            }
+          } else {
+            showAuthToast(result.error || 'Google sign-in failed.');
+          }
+        } catch {
+          showAuthToast('Google sign-in failed.');
+        }
+      } else if (data.action === 'link') {
+        setGoogleLinkData({
+          email: data.email,
+          googleId: data.googleId,
+          picture: data.picture,
+        });
+        setActiveView('login');
+      }
+    });
+    return cleanup;
+  }, [dispatch, showAuthToast]);
 
   // ── View navigation ────────────────────────────────────
   function handleSwitchView(view, extras = {}) {
@@ -251,7 +286,12 @@ function AuthLayout({ initialView = 'login' }) {
 
         <div className={styles.card}>
           {activeView === 'login'    && (
-            <Login onSwitchView={handleSwitchView} showAuthToast={showAuthToast} />
+            <Login
+              onSwitchView={handleSwitchView}
+              showAuthToast={showAuthToast}
+              initialLinkingState={googleLinkData}
+              onLinkingConsumed={() => setGoogleLinkData(null)}
+            />
           )}
           {activeView === 'register' && (
             <Register
