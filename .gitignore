@@ -4,6 +4,10 @@ dist/
 build/
 dist-electron/
 
+# Express-backend Docker build artifacts (copies of web-portal/dist and web-admin/dist)
+express-backend/portal-dist/
+express-backend/admin-dist/
+
 # Logs
 *.log
 

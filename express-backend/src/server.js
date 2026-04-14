@@ -46,8 +46,12 @@ const PORT = process.env.PORT || 8080;
 // Static assets are same-origin and don't need CORS checks.
 // Placing these before the CORS middleware prevents CORS from
 // blocking JS/CSS loads during Google OAuth callback redirects.
-app.use('/portal', express.static(path.join(__dirname, '../../web-portal/dist')));
-app.use('/admin', express.static(path.join(__dirname, '../../web-admin/dist')));
+// Paths resolve to /app/portal-dist and /app/admin-dist inside the
+// Docker container (copied in by the Dockerfile). In local dev,
+// the web-portal/web-admin Vite dev servers on ports 5174/5175
+// handle these routes directly.
+app.use('/portal', express.static(path.join(__dirname, '../portal-dist')));
+app.use('/admin', express.static(path.join(__dirname, '../admin-dist')));
 
 // ── Middleware ────────────────────────────────────────────
 app.use(helmet());
@@ -114,13 +118,13 @@ app.use('/api/v1/admin', adminRouter);
 // ── Serve web-portal React build (SPA catch-all) ─────────
 // Static files already served above CORS; this handles SPA routing.
 app.get('/portal/{*path}', (req, res) => {
-  res.sendFile(path.join(__dirname, '../../web-portal/dist/index.html'));
+  res.sendFile(path.join(__dirname, '../portal-dist/index.html'));
 });
 
 // ── Serve web-admin React build (SPA catch-all) ──────────
 // Static files already served above CORS; this handles SPA routing.
 app.get('/admin/{*path}', (req, res) => {
-  res.sendFile(path.join(__dirname, '../../web-admin/dist/index.html'));
+  res.sendFile(path.join(__dirname, '../admin-dist/index.html'));
 });
 
 // ── Backward-compat aliases (unversioned → v1) ───────────
