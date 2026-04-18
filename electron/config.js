@@ -16,12 +16,19 @@ const isDev = !app.isPackaged;
 // Replace this placeholder with your actual Cloud Run URL after deployment.
 const PRODUCTION_EXPRESS_URL = 'https://orvyn-express-160954399633.asia-south1.run.app';
 
+// ── Production Google OAuth client ID ───────────────────────
+// Not a secret — sent publicly to Google in the consent URL.
+// Must match the GOOGLE_CLIENT_ID configured in express-backend (GCP secret).
+const PRODUCTION_GOOGLE_CLIENT_ID = '160954399633-bf9fv2hr0a9hg926i0tmc7m5gg79m7lk.apps.googleusercontent.com';
+
 module.exports = {
   EXPRESS_URL: isDev
     ? (process.env.EXPRESS_URL || 'http://localhost:8080')
     : PRODUCTION_EXPRESS_URL,
 
-  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
+  GOOGLE_CLIENT_ID: isDev
+    ? (process.env.GOOGLE_CLIENT_ID || '')
+    : PRODUCTION_GOOGLE_CLIENT_ID,
 
   COPILOT_PANEL_DEFAULT_WIDTH: parseInt(process.env.COPILOT_PANEL_DEFAULT_WIDTH) || 380,
   COPILOT_PANEL_MIN_WIDTH:     parseInt(process.env.COPILOT_PANEL_MIN_WIDTH)     || 320,
