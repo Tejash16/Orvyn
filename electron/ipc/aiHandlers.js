@@ -141,6 +141,64 @@ function registerAiHandlers(ipcMain, getMainWindow) {
     }
   });
 
+  // Hybrid organize — AI mode targeting an existing DataRoom.
+  // Reuses existing folders where possible, creates new folders for leftover topics.
+  ipcMain.handle('ai:hybrid-organize', async (_event, { dataroom_id, file_ids }) => {
+    try {
+      const startTime = Date.now();
+      const requestId = crypto.randomUUID();
+
+      // Pre-check: advisory file limit check
+      try {
+        const check = await expressService.checkFileLimit(file_ids.length);
+        if (!check.allowed) {
+          return {
+            success: false,
+            error: `Monthly file upload limit reached (${check.remaining} remaining of ${check.limit}). Resets ${new Date(check.resetsAt).toLocaleDateString()}.`,
+            limitReached: true,
+          };
+        }
+      } catch (err) {
+        log.warn('ai:hybrid-organize pre-check failed (non-blocking):', err.message);
+      }
+
+      // Step 1: Python prepares rich fingerprints + existing folder tree
+      const prepared = await pythonService.prepareHybrid(dataroom_id, file_ids);
+
+      // Step 2: Express calls Gemini for hybrid organize result
+      const geminiResult = await expressService.hybridOrganize(
+        prepared.fingerprints,
+        prepared.folder_tree,
+        prepared.folder_ids,
+        requestId,
+      );
+
+      // Step 3: Python creates any new folders and assigns files in local DB
+      const applied = await pythonService.applyHybridResults(
+        dataroom_id,
+        geminiResult,
+        file_ids,
+      );
+
+      // Step 4: Trigger background indexing (fire-and-forget)
+      resumePendingIndexing(getMainWindow).catch(err =>
+        log.warn('ai:hybrid-organize post-organize indexing trigger failed (non-fatal):', err.message)
+      );
+
+      return {
+        success: true,
+        ...applied,
+        missing_file_ids: prepared.missing_file_ids,
+        time_seconds: (Date.now() - startTime) / 1000,
+      };
+    } catch (err) {
+      const result = { success: false, error: err.message };
+      if (err.code) result.code = err.code;
+      if (err.upgradeRequired) result.upgradeRequired = true;
+      return result;
+    }
+  });
+
 }
 
 module.exports = registerAiHandlers;

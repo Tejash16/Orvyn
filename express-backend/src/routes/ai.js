@@ -2,6 +2,7 @@ const { Router } = require('express');
 const {
   classify,
   generateDataroom,
+  hybridOrganize,
   embed,
   extractEntities,
   ocrImage,
@@ -25,6 +26,11 @@ router.post('/classify', authenticate, enforceLimits('file', (req) => {
 
 // Generate DataRoom — enforce dataroom limit
 router.post('/generate-dataroom', authenticate, enforceLimits('dataroom'), generateDataroom);
+
+// Hybrid organize — AI mode into an existing DataRoom. Counts files, no new DR created.
+router.post('/hybrid-organize', authenticate, enforceLimits('file', (req) => {
+  return req.body.fingerprints?.length || 0;
+}), hybridOrganize);
 
 // OCR via Gemini Vision
 router.post('/ocr', authenticate, ocrImage);

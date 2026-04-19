@@ -220,6 +220,114 @@ async function generateDataroom(name, description, fingerprints) {
   return JSON.parse(raw);
 }
 
+// ── Hybrid organize (AI mode + existing DataRoom) ────────
+
+const HYBRID_SYSTEM_PROMPT =
+  'You are a document organization AI. You are given a DataRoom with existing folders ' +
+  '(each with a UUID, name, and one-sentence description) and a set of new files to organize.\n\n' +
+  'PRIMARY GOAL: a user must be able to find any document just by reading folder names. ' +
+  'Folder names are the navigation system.\n\n' +
+  'Rules:\n' +
+  '1. STRONGLY PREFER reusing existing folders. For every file, first check whether any ' +
+  'existing folder fits its topic — if yes, assign it there. Do not create a near-duplicate ' +
+  'of an existing folder (e.g. do not create "Agreements" if "Contracts" already exists; ' +
+  'do not create "Bills" if "Invoices" already exists).\n' +
+  '2. Create NEW folders ONLY for genuinely new topics that no existing folder covers. ' +
+  'New folders may be root-level OR nested inside an existing folder (when that is the ' +
+  'natural parent — e.g. a new "2024 Invoices" inside an existing "Invoices" folder).\n' +
+  '3. Folder NAMES must be concrete, specific nouns: "Employment Contracts", "2024 Invoices", ' +
+  '"Board Minutes", "Product Roadmap" — NEVER vague labels like "Misc", "Other", "General", ' +
+  '"Docs", "Stuff", "Files".\n' +
+  '4. Every new folder must include a one-sentence context describing exactly what belongs there.\n' +
+  '5. Aim for at least 3 files per new folder. If fewer than 3 files would land in a new ' +
+  'folder, prefer the closest existing folder or a broader new folder instead.\n' +
+  '6. Every file must appear in exactly one of existing_assignments or new_assignments.\n' +
+  '7. Return ONLY a JSON object — no markdown, no commentary — with this shape:\n' +
+  '{\n' +
+  '  "existing_assignments": [\n' +
+  '    { "file_id": "...", "folder_id": "<existing-uuid>", "confidence": 0.0-1.0, "reasoning": "..." }\n' +
+  '  ],\n' +
+  '  "new_folders": [\n' +
+  '    { "temp_id": "nf_1", "name": "...", "context": "...", "parent": "<existing-uuid>|<another-temp_id>|null" }\n' +
+  '  ],\n' +
+  '  "new_assignments": [\n' +
+  '    { "file_id": "...", "new_folder_temp_id": "nf_1", "confidence": 0.0-1.0, "reasoning": "..." }\n' +
+  '  ]\n' +
+  '}\n' +
+  '- temp_id: unique string like "nf_1", "nf_2".\n' +
+  '- parent: an EXISTING folder UUID to nest the new folder under an existing folder, OR ' +
+  'another new folder\'s temp_id to build a new subtree, OR null to place at the DataRoom root.\n' +
+  '- confidence reflects how well the file matches the chosen folder.\n';
+
+/**
+ * Hybrid organize: classify files into an existing DataRoom, reusing existing
+ * folders where possible and creating new folders only for genuinely new topics.
+ *
+ * @param {Array} fingerprints  - Rich file fingerprints from Python (preview + optional summary)
+ * @param {string} folderTree   - Text tree of existing folders with IDs and contexts (may be empty string)
+ * @param {string[]} folderIds  - Valid existing folder IDs for this DataRoom
+ * @returns {Promise<Object>} { existing_assignments, new_folders, new_assignments }
+ */
+async function hybridOrganize(fingerprints, folderTree, folderIds) {
+  const folderIdsSet = new Set(folderIds || []);
+  const filesJson = JSON.stringify(fingerprints, null, 2);
+
+  const treeSection = folderTree && folderTree.trim().length > 0
+    ? folderTree
+    : '(this DataRoom currently has no folders — create the full structure as new folders)';
+
+  const userPrompt =
+    `## Existing folder tree\n${treeSection}\n\n` +
+    `## Files to organize (${fingerprints.length})\n${filesJson}\n\n` +
+    'Return the JSON object per the schema. Reuse existing folders whenever possible; ' +
+    'create new folders only for genuinely new topics.';
+
+  const raw = await _callGemini(HYBRID_SYSTEM_PROMPT, userPrompt);
+  const parsed = JSON.parse(raw);
+
+  // Sanitize: drop existing_assignments whose folder_id is not in the provided set.
+  const existingAssignments = Array.isArray(parsed.existing_assignments)
+    ? parsed.existing_assignments
+        .filter((r) => r && r.folder_id && folderIdsSet.has(r.folder_id))
+        .map((r) => ({
+          file_id: r.file_id,
+          folder_id: r.folder_id,
+          confidence: parseFloat(r.confidence || 0),
+          reasoning: r.reasoning || '',
+        }))
+    : [];
+
+  const newFolders = Array.isArray(parsed.new_folders)
+    ? parsed.new_folders
+        .filter((f) => f && typeof f.temp_id === 'string' && f.temp_id && f.name)
+        .map((f) => ({
+          temp_id: f.temp_id,
+          name: String(f.name),
+          context: f.context ? String(f.context) : String(f.name),
+          parent: f.parent == null ? null : String(f.parent),
+        }))
+    : [];
+
+  const tempIdSet = new Set(newFolders.map((f) => f.temp_id));
+
+  const newAssignments = Array.isArray(parsed.new_assignments)
+    ? parsed.new_assignments
+        .filter((r) => r && r.file_id && typeof r.new_folder_temp_id === 'string' && tempIdSet.has(r.new_folder_temp_id))
+        .map((r) => ({
+          file_id: r.file_id,
+          new_folder_temp_id: r.new_folder_temp_id,
+          confidence: parseFloat(r.confidence || 0),
+          reasoning: r.reasoning || '',
+        }))
+    : [];
+
+  return {
+    existing_assignments: existingAssignments,
+    new_folders: newFolders,
+    new_assignments: newAssignments,
+  };
+}
+
 // ── Embeddings (V1 Copilot) ──────────────────────────────
 
 const EMBEDDING_BATCH_SIZE = 50;
@@ -566,6 +674,7 @@ async function chatNonStreaming(systemPrompt, messages, tools, toolConfig) {
 module.exports = {
   classifyFiles,
   generateDataroom,
+  hybridOrganize,
   embedTexts,
   extractEntities,
   extractTextFromImage,

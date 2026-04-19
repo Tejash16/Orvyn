@@ -1660,6 +1660,17 @@ class ApplyGenerateRequest(BaseModel):
     dataroom_id: Optional[str] = None
 
 
+class PrepareHybridRequest(BaseModel):
+    dataroom_id: str
+    file_ids: List[str]
+
+
+class ApplyHybridRequest(BaseModel):
+    dataroom_id: str
+    gemini_result: dict  # {existing_assignments: [...], new_folders: [...], new_assignments: [...]}
+    file_ids: List[str]
+
+
 @app.post("/api/v1/ai/prepare-classify")
 async def ai_prepare_classify(request: PrepareClassifyRequest):
     """
@@ -1810,6 +1821,95 @@ async def ai_apply_generate(request: ApplyGenerateRequest):
                     logger.info(f"apply_generate: created {jobs_created} indexing jobs")
         except Exception as e:
             logger.warning(f"apply_generate: indexing job setup failed: {e}")
+
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/v1/ai/prepare-hybrid")
+async def ai_prepare_hybrid(request: PrepareHybridRequest):
+    """
+    Prepare fingerprints and existing folder tree for the hybrid organize path.
+    Unlike prepare-classify, this tolerates a DataRoom with zero folders.
+    """
+    from app.services.classification_service import prepare_hybrid
+
+    engine = _require_db()
+
+    if not request.file_ids:
+        raise HTTPException(status_code=400, detail="file_ids list cannot be empty.")
+
+    if len(request.file_ids) > _MAX_FILES_PER_REQUEST:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {_MAX_FILES_PER_REQUEST} files per request. Received {len(request.file_ids)}.",
+        )
+
+    with Session(engine) as session:
+        dr = session.query(DataRoom).filter_by(id=request.dataroom_id).first()
+        if not dr:
+            raise HTTPException(status_code=404, detail="DataRoom not found.")
+
+    try:
+        result = prepare_hybrid(engine, request.dataroom_id, request.file_ids)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/v1/ai/apply-hybrid")
+async def ai_apply_hybrid(request: ApplyHybridRequest):
+    """
+    Apply hybrid organize results (from Express/Gemini) to an existing DataRoom.
+    Reuses existing folders where possible, creates new folders at any depth,
+    and routes low-confidence files to an "Unclassified" folder.
+    """
+    from app.services.classification_service import apply_hybrid_results
+
+    engine = _require_db()
+
+    if not request.gemini_result:
+        raise HTTPException(status_code=400, detail="gemini_result is required.")
+
+    with Session(engine) as session:
+        dr = session.query(DataRoom).filter_by(id=request.dataroom_id).first()
+        if not dr:
+            raise HTTPException(status_code=404, detail="DataRoom not found.")
+
+    try:
+        result = apply_hybrid_results(
+            engine,
+            request.dataroom_id,
+            request.gemini_result,
+            request.file_ids,
+        )
+
+        # Create indexing jobs for every file_id that appeared in either assignment list
+        try:
+            from app.services.embedding_service import create_indexing_job
+            assigned_file_ids = set()
+            for r in request.gemini_result.get("existing_assignments", []) or []:
+                fid = r.get("file_id")
+                if fid:
+                    assigned_file_ids.add(fid)
+            for r in request.gemini_result.get("new_assignments", []) or []:
+                fid = r.get("file_id")
+                if fid:
+                    assigned_file_ids.add(fid)
+
+            jobs_created = 0
+            with Session(engine) as session:
+                for file_id in assigned_file_ids:
+                    try:
+                        create_indexing_job(file_id, request.dataroom_id, session)
+                        jobs_created += 1
+                    except Exception as e:
+                        logger.warning(f"apply_hybrid: indexing job creation failed for {file_id}: {e}")
+            if jobs_created:
+                logger.info(f"apply_hybrid: created {jobs_created} indexing jobs")
+        except Exception as e:
+            logger.warning(f"apply_hybrid: indexing job setup failed: {e}")
 
         return result
     except ValueError as e:

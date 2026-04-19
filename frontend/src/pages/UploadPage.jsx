@@ -4,6 +4,7 @@ import {
   registerFiles,
   classifyRegisteredFiles,
   generateNewDataroom,
+  hybridOrganizeExisting,
   resetUploadState,
 } from '../store/fileSlice';
 import { fetchDatarooms } from '../store/dataroomSlice';
@@ -47,6 +48,7 @@ function UploadPage() {
   const [step, setStep] = useState('select'); // 'select' | 'progress' | 'results'
   const [progressStep, setProgressStep] = useState('registering');
   const [targetDataroomId, setTargetDataroomId] = useState(uploadPreselectedDataroomId || '');
+  const [aiTarget, setAiTarget] = useState('new'); // 'new' | 'existing'
   const [aiName, setAiName] = useState('');
   const [aiDescription, setAiDescription] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
@@ -237,6 +239,7 @@ function UploadPage() {
     setLocalError(null);
     setMode('ai');
     setTargetDataroomId('');
+    setAiTarget('new');
     setAiName('');
     setAiDescription('');
     setResultDataroomId(null);
@@ -276,13 +279,16 @@ function UploadPage() {
 
     const filePaths = validFiles.map((f) => f.path);
 
+    const isAiNew = mode === 'ai' && aiTarget === 'new';
+    const isAiExisting = mode === 'ai' && aiTarget === 'existing';
+
     let dataroomId;
     let registeredIds = [];
 
     try {
       let regResult;
 
-      if (mode === 'custom') {
+      if (mode === 'custom' || isAiExisting) {
         dataroomId = targetDataroomId;
         regResult = await dispatch(registerFiles({ dataroomId, filePaths })).unwrap();
       } else {
@@ -324,6 +330,15 @@ function UploadPage() {
         setResultDataroomId(dataroomId);
         setProgressStep('complete');
         setStep('results');
+      } else if (isAiExisting) {
+        await dispatch(hybridOrganizeExisting({
+          dataroomId,
+          fileIds: registeredIds,
+        })).unwrap();
+
+        setResultDataroomId(dataroomId);
+        setProgressStep('complete');
+        setStep('results');
       } else {
         const genResult = await dispatch(generateNewDataroom({
           name: aiName.trim(),
@@ -354,8 +369,10 @@ function UploadPage() {
           action: { label: 'Upgrade', page: 'settings' },
         }));
       }
-      // Pass local variables — React state hasn't flushed yet, so closures see stale values
-      await performCleanup(mode, mode === 'ai' ? dataroomId : undefined, registeredIds);
+      // Pass local variables — React state hasn't flushed yet, so closures see stale values.
+      // Only pass dataroomId when we actually CREATED it (ai + new); for ai + existing we
+      // reuse the user's DataRoom and must not delete it.
+      await performCleanup(mode, isAiNew ? dataroomId : undefined, registeredIds);
       setRegisteredFileIds([]);
       setCreatedDataroomId(null);
       cleanupRef.current = { registeredFileIds: [], createdDataroomId: null, mode, step: 'select' };
@@ -395,7 +412,8 @@ function UploadPage() {
   const canClassify = (() => {
     if (validCount === 0) return false;
     if (mode === 'custom' && !targetDataroomId) return false;
-    if (mode === 'ai' && !aiName.trim()) return false;
+    if (mode === 'ai' && aiTarget === 'new' && !aiName.trim()) return false;
+    if (mode === 'ai' && aiTarget === 'existing' && !targetDataroomId) return false;
     return true;
   })();
 
@@ -455,12 +473,14 @@ function UploadPage() {
               onModeChange={setMode}
               targetDataroomId={targetDataroomId}
               onTargetChange={setTargetDataroomId}
+              aiTarget={aiTarget}
+              onAiTargetChange={setAiTarget}
               aiName={aiName}
               onAiNameChange={setAiName}
               aiDescription={aiDescription}
               onAiDescriptionChange={setAiDescription}
               datarooms={datarooms}
-            /> 
+            />
 
             {/* Status card */}
             <div className={styles.statusCard}>

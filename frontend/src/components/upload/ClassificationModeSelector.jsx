@@ -6,12 +6,16 @@ function ClassificationModeSelector({
     onModeChange,
     targetDataroomId,
     onTargetChange,
+    aiTarget,
+    onAiTargetChange,
     aiName,
     onAiNameChange,
     aiDescription,
     onAiDescriptionChange,
     datarooms,
 }) {
+    const aiUseExisting = mode === 'ai' && aiTarget === 'existing';
+
     return (
         <div className={styles.section}>
             <div className={styles.sectionTitle}>Organization Method</div>
@@ -57,33 +61,77 @@ function ClassificationModeSelector({
                             <span className={styles.configIcon}><IconSparkle /></span>
                             <span className={styles.configTitle}>AI-Powered Organization</span>
                         </div>
-                        <div className={styles.field}>
-                            <label className={styles.label} htmlFor="ai-name">Data Room Name</label>
-                            <input
-                                id="ai-name"
-                                className={styles.input}
-                                type="text"
-                                placeholder="Enter a name for your new data room"
-                                value={aiName}
-                                onChange={(e) => onAiNameChange(e.target.value)}
-                                maxLength={40}
-                            />
-                            <span className={styles.fieldHint}>
-                                The AI will create this data room and organize all files inside it
-                            </span>
+
+                        <div className={styles.subToggle} role="tablist" aria-label="AI target">
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={aiTarget === 'new'}
+                                className={`${styles.subToggleOption} ${aiTarget === 'new' ? styles.subToggleOptionActive : ''}`}
+                                onClick={() => onAiTargetChange('new')}
+                            >
+                                Create new DataRoom
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={aiTarget === 'existing'}
+                                className={`${styles.subToggleOption} ${aiTarget === 'existing' ? styles.subToggleOptionActive : ''}`}
+                                onClick={() => onAiTargetChange('existing')}
+                            >
+                                Use existing DataRoom
+                            </button>
                         </div>
-                        <div className={styles.field}>
-                            <label className={styles.label} htmlFor="ai-desc">
-                                Description <span className={styles.labelHint}>(optional)</span>
-                            </label>
-                            <textarea
-                                id="ai-desc"
-                                className={styles.textarea}
-                                placeholder="Describe the purpose of this DataRoom..."
-                                value={aiDescription}
-                                onChange={(e) => onAiDescriptionChange(e.target.value)}
-                            />
-                        </div>
+
+                        {aiUseExisting ? (
+                            <div className={styles.field}>
+                                <label className={styles.label} htmlFor="ai-target-dataroom">Target DataRoom</label>
+                                <select
+                                    id="ai-target-dataroom"
+                                    className={styles.select}
+                                    value={targetDataroomId}
+                                    onChange={(e) => onTargetChange(e.target.value)}
+                                >
+                                    <option value="">Select a DataRoom...</option>
+                                    {datarooms.map((dr) => (
+                                        <option key={dr.id} value={dr.id}>{dr.name}</option>
+                                    ))}
+                                </select>
+                                <span className={styles.fieldHint}>
+                                    AI will reuse existing folders where files fit, and create new folders only for genuinely new topics
+                                </span>
+                            </div>
+                        ) : (
+                            <>
+                                <div className={styles.field}>
+                                    <label className={styles.label} htmlFor="ai-name">Data Room Name</label>
+                                    <input
+                                        id="ai-name"
+                                        className={styles.input}
+                                        type="text"
+                                        placeholder="Enter a name for your new data room"
+                                        value={aiName}
+                                        onChange={(e) => onAiNameChange(e.target.value)}
+                                        maxLength={40}
+                                    />
+                                    <span className={styles.fieldHint}>
+                                        The AI will create this data room and organize all files inside it
+                                    </span>
+                                </div>
+                                <div className={styles.field}>
+                                    <label className={styles.label} htmlFor="ai-desc">
+                                        Description <span className={styles.labelHint}>(optional)</span>
+                                    </label>
+                                    <textarea
+                                        id="ai-desc"
+                                        className={styles.textarea}
+                                        placeholder="Describe the purpose of this DataRoom..."
+                                        value={aiDescription}
+                                        onChange={(e) => onAiDescriptionChange(e.target.value)}
+                                    />
+                                </div>
+                            </>
+                        )}
                     </>
                 )}
 

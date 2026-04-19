@@ -91,6 +91,44 @@ async function generateDataroom(name, description, fingerprints, requestId) {
 }
 
 /**
+ * Hybrid organize via Gemini — classify files into an existing DataRoom, reusing
+ * existing folders where possible and creating new folders for genuinely new topics.
+ *
+ * @param {Array}    fingerprints - Rich fingerprints (preview + optional summary) from Python
+ * @param {string}   folderTree   - Existing folder tree text (may be empty)
+ * @param {string[]} folderIds    - Valid existing folder IDs
+ * @param {string}   requestId    - Idempotency key for usage tracking
+ * @returns {Promise<Object>} Gemini result with existing_assignments, new_folders, new_assignments
+ */
+async function hybridOrganize(fingerprints, folderTree, folderIds, requestId) {
+  const token = authService.getToken();
+  if (!token) throw new Error('No active session. Please log in.');
+
+  const res = await fetch(`${getExpressUrl()}/api/v1/ai/hybrid-organize`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      fingerprints,
+      folder_tree: folderTree,
+      folder_ids: folderIds,
+      requestId,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    const err = new Error(data.error || 'AI hybrid organize failed.');
+    if (data.code) err.code = data.code;
+    if (data.upgradeRequired) err.upgradeRequired = true;
+    throw err;
+  }
+  return data.gemini_result;
+}
+
+/**
  * Pre-check file upload capacity against usage limits.
  * Advisory only — hard enforcement is in the classify endpoint.
  *
@@ -373,6 +411,7 @@ module.exports = {
   getExpressUrl,
   classifyFiles,
   generateDataroom,
+  hybridOrganize,
   checkFileLimit,
   getUsage,
   ocrImage,

@@ -131,6 +131,43 @@
   color: var(--text-primary);
 }
 
+/* ── Sub-toggle (segmented control) ────────────────────── */
+
+.subToggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.subToggleOption {
+  padding: 6px 8px;
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  text-align: center;
+}
+
+.subToggleOption:hover {
+  color: var(--text-primary);
+}
+
+.subToggleOptionActive {
+  background: var(--bg-surface);
+  color: var(--accent-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
 /* ── Form fields ───────────────────────────────────────── */
 
 .field {
