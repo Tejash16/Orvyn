@@ -2,10 +2,10 @@
 
 const Collaboration = require('../models/Collaboration');
 const CollaborationInvite = require('../models/CollaborationInvite');
-const Notification = require('../models/Notification');
 const OrganizationMember = require('../models/OrganizationMember');
 const User = require('../models/User');
 const emailService = require('../services/emailService');
+const { createNotification } = require('../services/notificationStream');
 const logger = require('../services/logger');
 
 const INVITE_TTL_DAYS = 14;
@@ -215,7 +215,7 @@ async function requestCollaboration(req, res, next) {
         existing.acceptedAt = null;
         await existing.save();
 
-        await Notification.create({
+        await createNotification({
           userId: target._id,
           type: 'collab_request',
           data: { fromUserId: me._id, fromUserName: me.name, fromUserEmail: me.email, collaborationId: existing._id },
@@ -226,7 +226,7 @@ async function requestCollaboration(req, res, next) {
 
       const created = await Collaboration.create({ ...pair, requestedBy: me._id, status: 'pending' });
 
-      await Notification.create({
+      await createNotification({
         userId: target._id,
         type: 'collab_request',
         data: { fromUserId: me._id, fromUserName: me.name, fromUserEmail: me.email, collaborationId: created._id },
@@ -289,7 +289,7 @@ async function acceptCollaboration(req, res, next) {
     collab.acceptedAt = new Date();
     await collab.save();
 
-    await Notification.create({
+    await createNotification({
       userId: collab.requestedBy,
       type: 'collab_accepted',
       data: { byUserId: me._id, byUserName: me.name, collaborationId: collab._id },
@@ -323,7 +323,7 @@ async function rejectCollaboration(req, res, next) {
     collab.status = 'rejected';
     await collab.save();
 
-    await Notification.create({
+    await createNotification({
       userId: collab.requestedBy,
       type: 'collab_rejected',
       data: { byUserId: me, collaborationId: collab._id },
@@ -384,7 +384,7 @@ async function consumePendingInvitesForEmail(userId, email) {
         });
 
         const fromUser = await User.findById(invite.fromUserId).select('name email');
-        await Notification.create({
+        await createNotification({
           userId,
           type: 'collab_request',
           data: {

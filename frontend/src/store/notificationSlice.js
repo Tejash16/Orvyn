@@ -48,6 +48,16 @@ const notificationSlice = createSlice({
   },
   reducers: {
     clearNotificationError: (state) => { state.error = null; },
+    // Handles pushes from the SSE stream. Mirrors the merge contract of
+    // fetchNotifications.fulfilled so a live push + a fallback poll can't
+    // double-insert the same document.
+    notificationReceived: (state, action) => {
+      const n = action.payload;
+      if (!n || !n._id) return;
+      if (state.items.some((x) => x._id === n._id)) return;
+      state.items = [n, ...state.items].slice(0, 100);
+      if (!n.read) state.unreadCount += 1;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -78,5 +88,5 @@ const notificationSlice = createSlice({
   },
 });
 
-export const { clearNotificationError } = notificationSlice.actions;
+export const { clearNotificationError, notificationReceived } = notificationSlice.actions;
 export default notificationSlice.reducer;

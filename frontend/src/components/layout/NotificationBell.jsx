@@ -4,6 +4,7 @@ import {
   fetchNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  notificationReceived,
 } from '../../store/notificationSlice';
 import {
   acceptCollaboration,
@@ -12,7 +13,10 @@ import {
 } from '../../store/collaborationSlice';
 import styles from './NotificationBell.module.css';
 
-const POLL_INTERVAL_MS = 60 * 1000;
+// Live pushes arrive over SSE (see electron/ipc/notificationHandlers.js).
+// This interval is a safety net for anything missed while the stream was
+// disconnected — the slice's `since` cursor keeps it cheap.
+const POLL_INTERVAL_MS = 5 * 60 * 1000;
 
 function formatRelative(iso) {
   if (!iso) return '';
@@ -66,13 +70,19 @@ function NotificationBell() {
   const panelRef = useRef(null);
   const btnRef = useRef(null);
 
-  // Poll notifications every minute. Full fetches are cheap and the slice
-  // dedupes merged results by _id, so we don't need a `since` cursor here.
+  // Initial fetch + subscribe to live SSE pushes. The interval is a
+  // reconnect fallback only — real-time delivery comes via `onNew`.
   useEffect(() => {
     if (!isAuthed) return undefined;
     dispatch(fetchNotifications({}));
+    const unsubscribe = window.api.notifications.onNew((payload) => {
+      dispatch(notificationReceived(payload));
+    });
     const id = setInterval(() => dispatch(fetchNotifications({})), POLL_INTERVAL_MS);
-    return () => clearInterval(id);
+    return () => {
+      unsubscribe();
+      clearInterval(id);
+    };
   }, [dispatch, isAuthed]);
 
   // Close panel on outside click

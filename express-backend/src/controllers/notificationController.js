@@ -1,6 +1,7 @@
 'use strict';
 
 const Notification = require('../models/Notification');
+const stream = require('../services/notificationStream');
 
 /**
  * GET /api/v1/notifications?unread=true&since=<iso>&limit=50
@@ -68,4 +69,22 @@ async function markAllRead(req, res, next) {
   }
 }
 
-module.exports = { listNotifications, markRead, markAllRead };
+/**
+ * GET /api/v1/notifications/stream
+ * Server-Sent Events stream scoped to the authenticated user. Each newly
+ * created Notification for this user is pushed as a `data: <json>` frame.
+ * The connection stays open; clients reconnect on close.
+ */
+function streamNotifications(req, res) {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  // Disable proxy buffering (nginx, Cloud Run) so frames flush immediately
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+  res.write(': connected\n\n');
+
+  stream.subscribe(req.user.userId, res);
+}
+
+module.exports = { listNotifications, markRead, markAllRead, streamNotifications };

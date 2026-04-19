@@ -6,10 +6,12 @@ const {
   listNotifications,
   markRead,
   markAllRead,
+  streamNotifications,
 } = require('../controllers/notificationController');
 
 const router = Router();
 
+router.get('/stream',        authenticate, streamNotifications);
 router.get('/',              authenticate, listNotifications);
 router.post('/read-all',     authenticate, markAllRead);
 router.post('/:id/read',     authenticate, markRead);

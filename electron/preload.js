@@ -200,11 +200,18 @@ contextBridge.exposeInMainWorld('api', {
     remove:      (id)         => ipcRenderer.invoke('collaboration:remove', { id }),
   },
 
-  // Notifications (polling)
+  // Notifications (SSE push + polling fallback)
   notifications: {
     list:        (opts = {})  => ipcRenderer.invoke('notification:list', opts),
     markRead:    (id)         => ipcRenderer.invoke('notification:markRead', { id }),
     markAllRead: ()           => ipcRenderer.invoke('notification:markAllRead'),
+    // Push event: fires when Express pushes a new notification over SSE.
+    // Returns a cleanup function for useEffect.
+    onNew: (callback) => {
+      const handler = (_event, payload) => callback(payload);
+      ipcRenderer.on('notification:new', handler);
+      return () => ipcRenderer.removeListener('notification:new', handler);
+    },
   },
 
   // Deep link push events (invite links, Google OAuth from emails/browser)

@@ -2,10 +2,10 @@ const SharedDataRoom = require('../models/SharedDataRoom');
 const SharedDataRoomAccess = require('../models/SharedDataRoomAccess');
 const Collaboration = require('../models/Collaboration');
 const OrganizationMember = require('../models/OrganizationMember');
-const Notification = require('../models/Notification');
 const User = require('../models/User');
 const logger = require('../services/logger');
 const { logAudit } = require('../services/auditService');
+const { createNotification } = require('../services/notificationStream');
 
 /**
  * Returns true if `caller` is allowed to share with `recipient`.
@@ -86,8 +86,9 @@ async function createSharedDataRoom(req, res, next) {
           grantedBy: req.user.userId,
         });
 
-        // In-app notification (surfaces on recipient's next poll, even if offline)
-        await Notification.create({
+        // In-app notification — pushed live over SSE if the recipient is
+        // connected; otherwise surfaces on their next poll.
+        await createNotification({
           userId: recipient._id,
           type: 'dataroom_shared',
           data: {
@@ -252,7 +253,7 @@ async function grantAccess(req, res, next) {
 
     // In-app notification
     const sharer = await User.findById(req.user.userId).select('name');
-    await Notification.create({
+    await createNotification({
       userId: recipient._id,
       type: 'dataroom_shared',
       data: {
