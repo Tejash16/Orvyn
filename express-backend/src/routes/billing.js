@@ -88,22 +88,30 @@ router.get('/status', authenticate, async (req, res, next) => {
 router.post('/cancel', authenticate, async (req, res, next) => {
   try {
     const Subscription = require('../models/Subscription');
-    const sub = await Subscription.findOne({
+    const User = require('../models/User');
+
+    // Check individual subscription first, then enterprise org subscription
+    let sub = await Subscription.findOne({
       userId: req.user.userId,
       status: { $in: ['active', 'trialing'] },
     });
 
     if (!sub) {
+      const user = await User.findById(req.user.userId);
+      if (user?.activeOrganizationId) {
+        sub = await Subscription.findOne({
+          organizationId: user.activeOrganizationId,
+          status: { $in: ['active', 'trialing'] },
+        });
+      }
+    }
+
+    if (!sub) {
       return res.status(404).json({ error: 'No active subscription found' });
     }
 
-    // Cancel on Razorpay
-    const Razorpay = require('razorpay');
-    const razorpay = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
-    });
-    await razorpay.subscriptions.cancel(sub.razorpaySubscriptionId);
+    // Cancel on Razorpay using the centralized singleton
+    await razorpayService.cancelSubscription(sub.razorpaySubscriptionId);
 
     sub.status = 'cancelled';
     sub.cancelledAt = new Date();

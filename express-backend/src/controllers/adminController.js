@@ -17,6 +17,7 @@ const Collaboration = require('../models/Collaboration');
 const Notification = require('../models/Notification');
 const { logAudit } = require('../services/auditService');
 const { requestPasswordReset, hardDeleteUser } = require('../services/authService');
+const { publish } = require('../services/notificationStream');
 const logger = require('../services/logger');
 
 // ── Auth ──────────────────────────────────────────────────
@@ -493,7 +494,11 @@ exports.broadcastNotification = async (req, res) => {
     read: false,
   }));
 
-  await Notification.insertMany(notifications);
+  const inserted = await Notification.insertMany(notifications);
+
+  for (const notif of inserted) {
+    publish(notif.userId, notif);
+  }
 
   logAudit({
     userId: req.admin.userId, userName: req.admin.name, userEmail: req.admin.email,

@@ -2863,7 +2863,7 @@ def import_dataroom(request: dict):
                 original_path='SHARED',  # Not a real path
                 file_extension=f.get('file_extension', ''),
                 size_bytes=f.get('size_bytes', 0),
-                extracted_text=f.get('extracted_text', ''),
+                extracted_text=f.get('extracted_text', '')[:_MAX_EXTRACTED_TEXT_LENGTH],
                 ai_summary=f.get('ai_summary', ''),
                 status='classified' if new_folder_id else 'registered',
                 is_shared=True,

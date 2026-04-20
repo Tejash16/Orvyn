@@ -445,8 +445,33 @@ async function downgradeToFree(subscription) {
       { userId: subscription.userId },
       { ...freeLimits, plan: 'free' }
     );
+  } else if (subscription.organizationId) {
+    const OrganizationMember = require('../models/OrganizationMember');
+    const members = await OrganizationMember.find({
+      organizationId: subscription.organizationId,
+      status: 'active',
+    });
+
+    for (const member of members) {
+      await UserLimits.findOneAndUpdate(
+        { userId: member.userId },
+        { ...freeLimits, plan: 'free' }
+      );
+    }
   }
-  // For enterprise: org members keep enterprise limits until period end
+}
+
+/**
+ * Cancel a subscription on Razorpay.
+ *
+ * @param {string} razorpaySubscriptionId
+ * @returns {Object} Razorpay cancellation response
+ */
+async function cancelSubscription(razorpaySubscriptionId) {
+  const razorpay = getRazorpay();
+  const result = await razorpay.subscriptions.cancel(razorpaySubscriptionId);
+  logger.info(`Subscription cancelled on Razorpay: ${razorpaySubscriptionId}`);
+  return result;
 }
 
 module.exports = {
@@ -456,4 +481,5 @@ module.exports = {
   handleWebhookEvent,
   getSubscriptionStatus,
   issueRefund,
+  cancelSubscription,
 };

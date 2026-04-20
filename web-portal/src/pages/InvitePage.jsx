@@ -15,7 +15,7 @@ export default function InvitePage() {
 
   useEffect(() => {
     apiFetch(`/organizations/invites/${code}`)
-      .then((data) => setInvite(data))
+      .then((data) => setInvite(data.invite))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [code]);
