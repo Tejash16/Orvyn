@@ -10,6 +10,13 @@ const userLimitsSchema = new mongoose.Schema(
       index: true,
     },
 
+    // ── Plan tier ──────────────────────────────────────────
+    plan: {
+      type: String,
+      enum: ['free', 'pro', 'enterprise'],
+      default: 'free',
+    },
+
     // ── Configurable limits (override defaults per user) ───
     monthlyFileLimit: {
       type: Number,
@@ -20,6 +27,16 @@ const userLimitsSchema = new mongoose.Schema(
       type: Number,
       default: 25,
       min: 0,
+    },
+    dataroomLimit: {
+      type: Number,
+      default: 3, // Free tier: 3 DataRooms. -1 = unlimited (Pro/Enterprise)
+    },
+
+    // ── Admin override flag ──────────────────────────────
+    isCustomOverride: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }

@@ -10,21 +10,20 @@ const CODE_LENGTH = 6;
  * @prop {number}   initialCooldown — backend-driven resend cooldown in seconds
  * @prop {function} onSwitchView    — navigate to another view
  * @prop {function} onVerifySuccess — called after successful verification
+ * @prop {function} showAuthToast   — display toast in form panel
  */
-function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess }) {
+function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess, showAuthToast }) {
   const [digits,   setDigits]   = useState(Array(CODE_LENGTH).fill(''));
   const [status,   setStatus]   = useState('idle'); // 'idle' | 'verifying' | 'confirmed'
-  const [error,    setError]    = useState('');
   const [cooldown, setCooldown] = useState(initialCooldown);
   const inputRefs = useRef([]);
 
   // Sync cooldown when parent updates initialCooldown (e.g. after resend)
   useEffect(() => { setCooldown(initialCooldown); }, [initialCooldown]);
 
-  // Clear inputs and error when email changes (view re-entered)
+  // Clear inputs when email changes (view re-entered)
   useEffect(() => {
     setDigits(Array(CODE_LENGTH).fill(''));
-    setError('');
   }, [email]);
 
   // Countdown ticker
@@ -39,7 +38,6 @@ function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess 
     const next  = [...digits];
     next[index] = digit;
     setDigits(next);
-    setError('');
     if (digit && index < CODE_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -58,19 +56,17 @@ function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess 
     const next = Array(CODE_LENGTH).fill('');
     for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
     setDigits(next);
-    setError('');
     inputRefs.current[Math.min(pasted.length, CODE_LENGTH - 1)]?.focus();
   }
 
   async function handleVerify() {
     const code = digits.join('');
     if (code.length < CODE_LENGTH) {
-      setError('Please enter all 6 digits.');
+      showAuthToast('Please enter all 6 digits.');
       return;
     }
 
     setStatus('verifying');
-    setError('');
 
     try {
       const result = await window.api.auth.verifyEmail(email, code);
@@ -78,17 +74,17 @@ function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess 
       if (result.success) {
         setDigits(Array(CODE_LENGTH).fill(''));
         setStatus('confirmed');
-        await onVerifySuccess();
+        await onVerifySuccess(result);
       } else {
         setDigits(Array(CODE_LENGTH).fill(''));
         if (result.retryAfterSeconds) {
           setCooldown(result.retryAfterSeconds);
         }
-        setError(result.error || 'Verification failed.');
+        showAuthToast(result.error || 'Verification failed.');
         setStatus('idle');
       }
     } catch {
-      setError('An unexpected error occurred.');
+      showAuthToast('An unexpected error occurred.');
       setStatus('idle');
     }
   }
@@ -103,9 +99,8 @@ function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess 
       } else {
         setCooldown(result.cooldownSeconds ?? 60);
       }
-      setError('');
     } catch {
-      setError('Failed to resend code. Please try again.');
+      showAuthToast('Failed to resend code. Please try again.');
     }
   }
 
@@ -156,8 +151,6 @@ function VerifyCode({ email, initialCooldown = 0, onSwitchView, onVerifySuccess 
           />
         ))}
       </div>
-
-      {error && <p className={styles.error}>{error}</p>}
 
       <button
         type="button"

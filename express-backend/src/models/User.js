@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { Schema } = mongoose;
 
 const userSchema = new mongoose.Schema(
   {
@@ -23,7 +24,28 @@ const userSchema = new mongoose.Schema(
     },
     provider: {
       type: String,
+      enum: ['local', 'google', 'local+google'],
       default: 'local',
+    },
+    googleId: {
+      type: String,
+      sparse: true,
+      unique: true,
+      default: null,
+    },
+    profilePicture: {
+      type: String,
+      default: null,
+    },
+    userType: {
+      type: String,
+      enum: ['individual', 'enterprise'],
+      default: null,
+    },
+    activeOrganizationId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Organization',
+      default: null,
     },
     isEmailVerified: {
       type: Boolean,
@@ -57,6 +79,23 @@ const userSchema = new mongoose.Schema(
     // ── Login lockout ──────────────────────────────────────
     failedLoginAttempts: { type: Number, default: 0 },
     lockUntil:           { type: Date,   default: null },
+
+    // ── Admin role ──────────────────────────────────────────
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
+    },
+
+    // ── Account restriction (admin-managed) ────────────────
+    restrictionStatus: {
+      type: String,
+      enum: ['active', 'suspended', 'banned'],
+      default: 'active',
+    },
+    restrictionReason:  { type: String,  default: null },
+    restrictedUntil:    { type: Date,    default: null },
+    restrictedBy:       { type: Schema.Types.ObjectId, ref: 'User', default: null },
 
     // ── Soft delete ────────────────────────────────────────
     isDeleted:  { type: Boolean, default: false },

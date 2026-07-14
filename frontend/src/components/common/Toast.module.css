@@ -60,6 +60,25 @@
   flex: 1;
 }
 
+.actionBtn {
+  padding: 3px 10px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+
+.actionBtn:hover {
+  opacity: 1;
+}
+
 .closeBtn {
   display: flex;
   align-items: center;

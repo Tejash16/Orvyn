@@ -1,11 +1,13 @@
 'use strict';
 
-const jwt        = require('jsonwebtoken');
+const jwt         = require('jsonwebtoken');
 const bcrypt     = require('bcryptjs');
 const validator  = require('validator');
 
 const User        = require('../models/User');
 const authService = require('../services/authService');
+const logger      = require('../services/logger');
+const { consumePendingInvitesForEmail } = require('./collaborationController');
 
 // ── Register ──────────────────────────────────────────────
 
@@ -32,7 +34,37 @@ async function verifyEmail(req, res, next) {
   try {
     const { email, code } = req.body;
     await authService.verifyEmail(email, code);
-    return res.status(200).json({ success: true, message: 'Email verified successfully.' });
+
+    // Issue tokens immediately so the user is logged in as soon as
+    // they verify their email — no second login round-trip required.
+    const user = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
+    if (!user) {
+      return res.status(500).json({ success: false, error: 'Verification succeeded but user lookup failed.' });
+    }
+
+    const accessToken  = authService.issueAccessToken(user._id);
+    const refreshToken = authService.issueRefreshToken(user._id);
+
+    user.refreshToken        = authService.hashToken(refreshToken);
+    user.refreshTokenExpires = new Date(Date.now() + authService.REFRESH_TOKEN_TTL_MS);
+    user.failedLoginAttempts = 0;
+    user.lockUntil           = null;
+    await user.save();
+
+    // Convert any pending CollaborationInvite rows for this email into
+    // real Collaboration(pending) + notification so the new user sees
+    // inbound requests on their first login.
+    await consumePendingInvitesForEmail(user._id, user.email);
+
+    logger.info(`Email verified and session issued for ${user.email}`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Email verified successfully.',
+      accessToken,
+      refreshToken,
+      user: user.toJSON(),
+    });
   } catch (err) {
     if (err.statusCode) {
       const body = { success: false, error: err.message };
@@ -146,27 +178,30 @@ async function logoutHandler(req, res, next) {
 
 async function deleteAccount(req, res, next) {
   try {
-    const { password } = req.body;
-
-    if (!password) {
-      return res.status(400).json({ success: false, error: 'Password is required.' });
-    }
+    const { password, confirmEmail } = req.body;
 
     const user = await User.findById(req.user.userId).select('+password');
     if (!user || user.isDeleted) {
       return res.status(404).json({ success: false, error: 'User not found.' });
     }
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      return res.status(403).json({ success: false, error: 'Incorrect password.' });
+    if (user.provider === 'google') {
+      // Google-only users: verify by email confirmation (they have no password)
+      if (!confirmEmail || confirmEmail.toLowerCase() !== user.email) {
+        return res.status(400).json({ success: false, error: 'Please type your email to confirm deletion.' });
+      }
+    } else {
+      // Local and local+google users: verify by password
+      if (!password) {
+        return res.status(400).json({ success: false, error: 'Password is required.' });
+      }
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) {
+        return res.status(403).json({ success: false, error: 'Incorrect password.' });
+      }
     }
 
-    user.isDeleted           = true;
-    user.deletedAt           = new Date();
-    user.refreshToken        = undefined;
-    user.refreshTokenExpires = undefined;
-    await user.save();
+    await authService.hardDeleteUser(req.user.userId);
 
     return res.status(200).json({ success: true });
   } catch (err) {
@@ -326,6 +361,48 @@ async function submitFeedback(req, res, next) {
   }
 }
 
+// ── Set User Type ─────────────────────────────────────────
+
+async function setUserType(req, res, next) {
+  try {
+    const { userType } = req.body;
+    if (!['individual', 'enterprise'].includes(userType)) {
+      return res.status(400).json({ success: false, error: 'Invalid user type. Must be "individual" or "enterprise".' });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user || user.isDeleted) {
+      return res.status(404).json({ success: false, error: 'User not found.' });
+    }
+
+    user.userType = userType;
+    await user.save();
+
+    // Create default UserLimits if not exists
+    const UserLimits = require('../models/UserLimits');
+    await UserLimits.findOneAndUpdate(
+      { userId: user._id },
+      {
+        $setOnInsert: {
+          userId: user._id,
+          plan: 'free',
+          dataroomLimit: 3,
+          monthlyFileLimit: 500,
+          dailyMessageLimit: 25,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      user: user.toJSON(),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   register,
   verifyEmail,
@@ -340,4 +417,5 @@ module.exports = {
   resendVerification,
   resendResetCode,
   submitFeedback,
+  setUserType,
 };

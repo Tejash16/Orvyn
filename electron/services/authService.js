@@ -11,7 +11,11 @@
  *   - Refresh token → 7-day JWT, stored encrypted in tokenVault by callers
  */
 
+const { URL } = require('url');
+const crypto = require('crypto');
+const { shell } = require('electron');
 const config = require('../config');
+const log    = require('./logger');
 
 let _token = null;   // Access token — in-process memory only
 let _user  = null;
@@ -243,14 +247,18 @@ async function resendResetCode(email) {
 
 // ── Delete Account ────────────────────────────────────────
 
-async function deleteAccount({ password }) {
+async function deleteAccount({ password, confirmEmail }) {
+  const body = {};
+  if (password)     body.password     = password;
+  if (confirmEmail) body.confirmEmail = confirmEmail;
+
   const res = await fetch(`${getExpressUrl()}/api/v1/auth/delete-account`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${_token}`,
     },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify(body),
   });
 
   const data = await res.json();
@@ -290,6 +298,66 @@ async function sendFeedback({ feedback }) {
   return data;
 }
 
+// ── Google OAuth ─────────────────────────────────────────
+
+/**
+ * Start Google OAuth flow using cloud callback.
+ * Opens the system browser to Google consent URL with a cloud redirect URI.
+ * The web portal page handles the code exchange and provides a deep link
+ * back to the app with the auth tokens.
+ */
+function initiateGoogleAuth() {
+  const expressUrl = getExpressUrl();
+  const redirectUri = `${expressUrl}/portal/auth/google/callback`;
+
+  const googleAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  googleAuthUrl.searchParams.set('client_id', config.GOOGLE_CLIENT_ID);
+  googleAuthUrl.searchParams.set('redirect_uri', redirectUri);
+  googleAuthUrl.searchParams.set('response_type', 'code');
+  googleAuthUrl.searchParams.set('scope', 'openid email profile');
+  googleAuthUrl.searchParams.set('state', crypto.randomBytes(32).toString('hex'));
+  googleAuthUrl.searchParams.set('access_type', 'offline');
+
+  shell.openExternal(googleAuthUrl.toString());
+  log.info('Google OAuth: opened browser with cloud callback');
+
+  // The flow continues via orvyn://auth/google deep link handled in main.js
+  return { redirectUri };
+}
+
+// REMOVED: Old localhost OAuth server (~400 lines of inline HTML/CSS template)
+// The OAuth flow now uses a cloud callback via the web-portal React app.
+
+/**
+ * Complete Google login by sending code to Express.
+ */
+async function googleLogin(code, redirectUri) {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, redirectUri }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Google login failed');
+  return data;
+}
+
+/**
+ * Link Google to existing local account.
+ */
+async function linkGoogleAccount(email, password, googleId, picture) {
+  const res = await fetch(`${getExpressUrl()}/api/v1/auth/google/link`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, googleId, picture }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Account linking failed');
+  return data;
+}
+
 module.exports = {
   register,
   login,
@@ -308,4 +376,7 @@ module.exports = {
   logout,
   getCurrentUser,
   getToken,
+  initiateGoogleAuth,
+  googleLogin,
+  linkGoogleAccount,
 };

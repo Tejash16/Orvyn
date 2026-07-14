@@ -119,6 +119,60 @@ async function generateDataroom(req, res, next) {
   }
 }
 
+// ── Hybrid organize (AI mode + existing DataRoom) ────────
+
+async function hybridOrganize(req, res, next) {
+  try {
+    const { fingerprints, folder_tree, folder_ids, requestId } = req.body;
+
+    if (!fingerprints || !Array.isArray(fingerprints) || fingerprints.length === 0) {
+      return res.status(400).json({ success: false, error: 'fingerprints array is required and must not be empty.' });
+    }
+
+    if (typeof folder_tree !== 'string') {
+      return res.status(400).json({ success: false, error: 'folder_tree string is required (may be empty).' });
+    }
+
+    if (!Array.isArray(folder_ids)) {
+      return res.status(400).json({ success: false, error: 'folder_ids array is required (may be empty).' });
+    }
+
+    if (fingerprints.length > 100) {
+      return res.status(400).json({ success: false, error: 'Maximum 100 files per hybrid organize request.' });
+    }
+
+    // ── Usage enforcement: reserve file capacity (atomic) ──
+    const fileCount = fingerprints.length;
+    const reservation = await usageService.reserveFiles(req.user.userId, fileCount, requestId);
+
+    if (!reservation.reserved && !reservation.idempotent) {
+      return res.status(429).json({
+        success: false,
+        error: `Monthly file upload limit reached (${reservation.limit}). Resets ${reservation.resetsAt?.toISOString()}.`,
+        current: reservation.current,
+        limit: reservation.limit,
+        remaining: reservation.remaining,
+        resetsAt: reservation.resetsAt,
+      });
+    }
+
+    // ── Call Gemini — rollback reservation on failure ──────
+    let geminiResult;
+    try {
+      geminiResult = await geminiService.hybridOrganize(fingerprints, folder_tree, folder_ids);
+    } catch (geminiErr) {
+      if (reservation.reserved) {
+        await usageService.rollbackFiles(req.user.userId, fileCount, requestId);
+      }
+      throw geminiErr;
+    }
+
+    return res.status(200).json({ success: true, gemini_result: geminiResult });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ── Embed texts (V1 Copilot) ─────────────────────────────
 
 async function embed(req, res, next) {
@@ -411,6 +465,7 @@ async function chat(req, res, next) {
 module.exports = {
   classify,
   generateDataroom,
+  hybridOrganize,
   embed,
   extractEntities,
   ocrImage,

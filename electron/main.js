@@ -18,6 +18,11 @@ const registerFolderHandlers   = require('./ipc/folderHandlers');
 const registerFileHandlers     = require('./ipc/fileHandlers');
 const registerAiHandlers       = require('./ipc/aiHandlers');
 const { registerCopilotHandlers } = require('./ipc/copilotHandlers');
+const registerOrganizationHandlers = require('./ipc/organizationHandlers');
+const { registerBillingHandlers }  = require('./ipc/billingHandlers');
+const { registerSharingHandlers }  = require('./ipc/sharingHandlers');
+const { registerCollaborationHandlers } = require('./ipc/collaborationHandlers');
+const { registerNotificationHandlers }  = require('./ipc/notificationHandlers');
 const pythonProcess            = require('./services/pythonProcess');
 
 let mainWindow;
@@ -29,12 +34,16 @@ if (!gotTheLock) {
   // Another instance is already running — quit immediately
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, commandLine) => {
     // Someone tried to open a second instance — focus the existing window
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
     }
+
+    // Deep link: parse orvyn:// protocol URL from command line args (Windows)
+    const deepLinkUrl = commandLine.find((arg) => arg.startsWith('orvyn://'));
+    if (deepLinkUrl) handleDeepLink(deepLinkUrl);
   });
 }
 
@@ -96,6 +105,58 @@ registerFolderHandlers(ipcMain);
 registerFileHandlers(ipcMain, () => mainWindow);
 registerAiHandlers(ipcMain, () => mainWindow);
 registerCopilotHandlers(ipcMain, () => mainWindow);
+registerOrganizationHandlers(ipcMain, () => mainWindow);
+registerBillingHandlers(ipcMain, () => mainWindow);
+registerSharingHandlers(ipcMain, () => mainWindow);
+registerCollaborationHandlers(ipcMain);
+registerNotificationHandlers(ipcMain);
+
+// ── Deep link handler ─────────────────────────────────────
+
+function handleDeepLink(url) {
+  try {
+    log.info('[DeepLink] Received:', url);
+    const parsed = new URL(url);
+
+    // orvyn://invite?code=...
+    if (parsed.hostname === 'invite' || parsed.pathname === '/invite') {
+      const inviteCode = parsed.searchParams.get('code');
+      if (inviteCode && mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('deep-link:invite', inviteCode);
+      }
+      return;
+    }
+
+    // orvyn://auth/google?action=login&token=...&refreshToken=...
+    // orvyn://auth/google?action=link&email=...&googleId=...
+    if (parsed.hostname === 'auth' && parsed.pathname.startsWith('/google')) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const action = parsed.searchParams.get('action');
+        log.info('[DeepLink] Google auth action:', action, '— hasToken:', !!parsed.searchParams.get('token'), '— hasRefresh:', !!parsed.searchParams.get('refreshToken'));
+        if (action === 'login') {
+          mainWindow.webContents.send('deep-link:google-auth', {
+            action: 'login',
+            accessToken: parsed.searchParams.get('token'),
+            refreshToken: parsed.searchParams.get('refreshToken'),
+            isNewUser: parsed.searchParams.get('isNewUser') === 'true',
+          });
+        } else if (action === 'link') {
+          mainWindow.webContents.send('deep-link:google-auth', {
+            action: 'link',
+            email: parsed.searchParams.get('email'),
+            googleId: parsed.searchParams.get('googleId'),
+            picture: parsed.searchParams.get('picture'),
+          });
+        }
+      } else {
+        log.warn('[DeepLink] mainWindow not available');
+      }
+      return;
+    }
+  } catch (err) {
+    log.error('Failed to parse deep link:', err.message);
+  }
+}
 
 // Runtime config — sourced from config.js (dev: .env, prod: hardcoded defaults)
 ipcMain.handle('app:getConfig', () => ({
@@ -118,11 +179,33 @@ ipcMain.handle('app:openLogsFolder', async () => {
 
 app.whenReady().then(async () => {
   log.info('Orvyn starting up');
+
+  // Register orvyn:// custom protocol for deep links (invite emails, Google OAuth)
+  // In dev mode, we must pass the app path explicitly so that Windows
+  // launches `electron.exe <appPath> <deepLinkUrl>` — otherwise the
+  // second instance doesn't load our app and the URL is silently lost.
+  if (!app.isPackaged) {
+    app.setAsDefaultProtocolClient('orvyn', process.execPath, [
+      path.resolve(__dirname),
+    ]);
+  } else {
+    app.setAsDefaultProtocolClient('orvyn');
+  }
+
   // Spawn the local Python backend before the window opens.
   // start() finds a free port dynamically, then spawns Python.
   // The renderer's session restore flow waits for Python health before proceeding.
   await pythonProcess.start();
   createWindow();
+
+  // Cold-start deep link: if the app was launched via orvyn:// URL, process.argv
+  // contains the URL. Send it to the renderer once the window finishes loading.
+  const coldStartUrl = process.argv.find((arg) => arg.startsWith('orvyn://'));
+  if (coldStartUrl) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      handleDeepLink(coldStartUrl);
+    });
+  }
 
   // Startup recovery of pending indexing jobs is now triggered from
   // authHandlers after login/session-restore completes (when user context

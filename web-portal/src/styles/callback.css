@@ -1,0 +1,440 @@
+/* ── Google OAuth Callback Page ─────────────────────────────
+   Premium dark glassmorphism design with animated elements.
+   ──────────────────────────────────────────────────────────── */
+
+/* ── Page layout ─────────────────────────────────────────── */
+
+.callback-page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #0a0f1a 0%, #0d1929 35%, #0f1f30 60%, #091420 100%);
+  overflow: hidden;
+  padding: 24px;
+}
+
+/* ── Ambient background orbs ─────────────────────────────── */
+
+.callback-bg-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.35;
+  pointer-events: none;
+  animation: orbFloat 12s ease-in-out infinite;
+}
+
+.callback-bg-orb-1 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, #059669 0%, transparent 70%);
+  top: -10%;
+  right: -5%;
+  animation-delay: 0s;
+}
+
+.callback-bg-orb-2 {
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, #0ea5e9 0%, transparent 70%);
+  bottom: -15%;
+  left: -8%;
+  animation-delay: -4s;
+}
+
+.callback-bg-orb-3 {
+  width: 250px;
+  height: 250px;
+  background: radial-gradient(circle, #6366f1 0%, transparent 70%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-delay: -8s;
+  opacity: 0.15;
+}
+
+@keyframes orbFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(15px, -20px) scale(1.05); }
+  50% { transform: translate(-10px, 15px) scale(0.95); }
+  75% { transform: translate(20px, 10px) scale(1.02); }
+}
+
+/* ── Card wrapper ────────────────────────────────────────── */
+
+.callback-card-wrapper {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  width: 100%;
+  max-width: 440px;
+  animation: wrapperFadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes wrapperFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Brand header ────────────────────────────────────────── */
+
+.callback-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.callback-brand-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.2), rgba(5, 150, 105, 0.05));
+  border: 1px solid rgba(5, 150, 105, 0.25);
+  color: #34d399;
+  backdrop-filter: blur(8px);
+}
+
+.callback-brand-name {
+  font-size: 22px;
+  font-weight: 800;
+  color: #f0fdf4;
+  letter-spacing: 0.5px;
+}
+
+/* ── Main card ───────────────────────────────────────────── */
+
+.callback-card {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 44px 36px;
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 24px 48px -12px rgba(0, 0, 0, 0.4),
+    0 0 80px -20px rgba(5, 150, 105, 0.08);
+  transition: border-color 0.3s ease;
+}
+
+.callback-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.callback-card-loading {
+  border-color: rgba(5, 150, 105, 0.15);
+}
+
+/* ── Content & animation ─────────────────────────────────── */
+
+.callback-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.callback-fade-in {
+  animation: contentFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+
+@keyframes contentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Icon rings ──────────────────────────────────────────── */
+
+.callback-icon-ring {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+  position: relative;
+}
+
+.callback-icon-success {
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.15), rgba(16, 185, 129, 0.08));
+  border: 2px solid rgba(5, 150, 105, 0.3);
+  color: #34d399;
+  box-shadow: 0 0 40px -10px rgba(5, 150, 105, 0.3);
+}
+
+.callback-icon-error {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
+  border: 2px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  box-shadow: 0 0 40px -10px rgba(239, 68, 68, 0.3);
+}
+
+.callback-icon-link {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
+  border: 2px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+  box-shadow: 0 0 40px -10px rgba(245, 158, 11, 0.3);
+}
+
+/* ── Animated checkmark SVG ──────────────────────────────── */
+
+.callback-icon-svg {
+  width: 38px;
+  height: 38px;
+}
+
+.callback-check-circle {
+  stroke: #34d399;
+  stroke-width: 2;
+  stroke-dasharray: 166;
+  stroke-dashoffset: 166;
+  animation: checkCircle 0.6s cubic-bezier(0.65, 0, 0.45, 1) 0.2s forwards;
+}
+
+.callback-check-path {
+  stroke: #34d399;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: checkMark 0.4s cubic-bezier(0.65, 0, 0.45, 1) 0.7s forwards;
+}
+
+@keyframes checkCircle {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes checkMark {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ── Typography ──────────────────────────────────────────── */
+
+.callback-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  letter-spacing: -0.3px;
+  line-height: 1.3;
+}
+
+.callback-title-success {
+  color: #6ee7b7;
+}
+
+.callback-title-error {
+  color: #fca5a5;
+}
+
+.callback-title-link {
+  color: #fde68a;
+}
+
+.callback-title-loading {
+  color: #e2e8f0;
+}
+
+.callback-subtitle {
+  font-size: 15px;
+  color: rgba(148, 163, 184, 0.9);
+  line-height: 1.6;
+  margin: 0 0 4px;
+  max-width: 340px;
+}
+
+.callback-subtitle strong {
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.callback-hint {
+  font-size: 13px;
+  color: rgba(100, 116, 139, 0.8);
+  margin: 16px 0 0;
+  line-height: 1.5;
+}
+
+/* ── Loading spinner ─────────────────────────────────────── */
+
+.callback-spinner-wrap {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 28px;
+}
+
+.callback-spinner {
+  width: 56px;
+  height: 56px;
+  border: 3px solid rgba(5, 150, 105, 0.12);
+  border-top-color: #34d399;
+  border-radius: 50%;
+  animation: spinnerRotate 1s linear infinite;
+}
+
+.callback-spinner-glow {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(5, 150, 105, 0.15) 0%, transparent 70%);
+  animation: spinnerPulse 2s ease-in-out infinite;
+}
+
+@keyframes spinnerRotate {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes spinnerPulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.1); }
+}
+
+/* ── Progress bar ────────────────────────────────────────── */
+
+.callback-progress-bar {
+  width: 180px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 24px;
+}
+
+.callback-progress-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #059669, #34d399, #059669);
+  border-radius: 4px;
+  animation: progressSweep 2.5s ease-in-out infinite;
+}
+
+@keyframes progressSweep {
+  0% { width: 0; margin-left: 0; }
+  50% { width: 60%; margin-left: 20%; }
+  100% { width: 0; margin-left: 100%; }
+}
+
+/* ── Deep link action button ─────────────────────────────── */
+
+.callback-action-wrap {
+  margin-top: 28px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.callback-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 50px;
+  padding: 0 24px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  border-radius: 12px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow:
+    0 0 0 1px rgba(5, 150, 105, 0.1) inset,
+    0 4px 12px -2px rgba(5, 150, 105, 0.35);
+}
+
+.callback-btn-primary:hover {
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px rgba(5, 150, 105, 0.15) inset,
+    0 8px 24px -4px rgba(5, 150, 105, 0.4);
+}
+
+.callback-btn-primary:active {
+  transform: translateY(0);
+  box-shadow:
+    0 0 0 1px rgba(5, 150, 105, 0.1) inset,
+    0 2px 8px -2px rgba(5, 150, 105, 0.3);
+}
+
+.callback-auto-close {
+  font-size: 12px;
+  color: rgba(100, 116, 139, 0.7);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Footer ──────────────────────────────────────────────── */
+
+.callback-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(100, 116, 139, 0.5);
+  letter-spacing: 0.3px;
+}
+
+.callback-footer-dot {
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+/* ── Responsive ──────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .callback-card {
+    padding: 32px 24px;
+    border-radius: 16px;
+  }
+
+  .callback-title {
+    font-size: 20px;
+  }
+
+  .callback-subtitle {
+    font-size: 14px;
+  }
+
+  .callback-bg-orb-1 {
+    width: 250px;
+    height: 250px;
+  }
+
+  .callback-bg-orb-2 {
+    width: 200px;
+    height: 200px;
+  }
+
+  .callback-bg-orb-3 {
+    display: none;
+  }
+}

@@ -13,7 +13,9 @@ const {
   resetPassword,
   resendResetCode,
   submitFeedback,
+  setUserType,
 } = require('../controllers/authController');
+const { googleLogin, linkGoogle } = require('../controllers/googleAuthController');
 const { authenticate } = require('../middleware/authenticate');
 const {
   loginLimiter,
@@ -24,6 +26,7 @@ const {
   verifyResetCodeLimiter,
   resendResetCodeLimiter,
   feedbackLimiter,
+  googleLoginLimiter,
 } = require('../middleware/rateLimiter');
 
 const router = Router();
@@ -53,5 +56,12 @@ router.post('/resend-reset-code',  resendResetCodeLimiter,   resendResetCode);
 
 // Feedback
 router.post('/feedback',          authenticate, feedbackLimiter, submitFeedback);
+
+// Google OAuth
+router.post('/google',            googleLoginLimiter,  googleLogin);
+router.post('/google/link',       googleLoginLimiter,  linkGoogle);
+
+// User type selection (called once after first login)
+router.post('/set-user-type',     authenticate,        setUserType);
 
 module.exports = router;

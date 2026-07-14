@@ -6,12 +6,78 @@
  */
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const logger = require('./logger');
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_CHAIN = (process.env.GEMINI_MODEL_CHAIN || 'gemini-2.5-flash,gemini-2.5-pro,gemini-2.0-flash,gemini-2.5-flash-lite,gemini-2.0-flash-lite')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+const MODEL_NAME = MODEL_CHAIN[0];
 const TEMPERATURE = 0.1;
 const MAX_RETRIES = 3;
 const BATCH_SIZE = 10;
 const MAX_PARALLEL_BATCHES = 5;
+
+// Build the chat-side model chain. Honors GEMINI_CHAT_MODEL by pinning it first
+// (deduped) so existing env wiring keeps working.
+function _chatModelChain() {
+  const pinned = process.env.GEMINI_CHAT_MODEL;
+  if (!pinned) return MODEL_CHAIN;
+  return [pinned, ...MODEL_CHAIN.filter((m) => m !== pinned)];
+}
+
+// Extract an HTTP-ish status code from a Gemini SDK error.
+function _statusOf(err) {
+  if (!err) return 0;
+  if (typeof err.status === 'number') return err.status;
+  const m = (err.message || '').match(/\[(\d{3})\s/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// 403/404/400 → permanent for this model, fall through immediately.
+// 429/500/503/0 → transient, retry same model then fall through.
+function _isPermanent(status) {
+  return status === 400 || status === 403 || status === 404;
+}
+
+/**
+ * Run `attemptFn(modelName)` across MODEL_CHAIN with per-model retry + backoff.
+ * SyntaxError is treated as a JSON-shape problem and retried on the same model
+ * via the caller's onSyntaxError hook (no model switch).
+ */
+async function _callWithFallback(chain, attemptFn, onSyntaxError) {
+  let lastError;
+  for (const modelName of chain) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const out = await attemptFn(modelName, attempt);
+        if (modelName !== chain[0]) {
+          logger.info(`[gemini] served by fallback model: ${modelName}`);
+        }
+        return out;
+      } catch (e) {
+        lastError = e;
+        if (e instanceof SyntaxError) {
+          if (onSyntaxError) onSyntaxError(attempt);
+          if (attempt < MAX_RETRIES - 1) {
+            await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
+            continue;
+          }
+          break; // bad JSON repeatedly — try next model
+        }
+        const status = _statusOf(e);
+        if (_isPermanent(status)) {
+          logger.warn(`[gemini] ${modelName} permanent error ${status}, falling through`);
+          break;
+        }
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
+          continue;
+        }
+        logger.warn(`[gemini] ${modelName} exhausted retries (status ${status || 'n/a'})`);
+      }
+    }
+  }
+  throw new Error(`Gemini failed across [${chain.join(',')}]: ${lastError?.message || 'unknown error'}`);
+}
 
 // ── Gemini client ────────────────────────────────────────
 
@@ -23,47 +89,34 @@ function _getClient() {
 
 // ── Low-level Gemini call with retries ───────────────────
 
-async function _callGemini(systemPrompt, userPrompt, retries = MAX_RETRIES) {
+async function _callGemini(systemPrompt, userPrompt) {
   const genAI = _getClient();
-  const model = genAI.getGenerativeModel({
-    model: MODEL_NAME,
-    systemInstruction: systemPrompt,
-    generationConfig: { temperature: TEMPERATURE },
-  });
+  let prompt = userPrompt;
 
-  let lastError;
-
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      const result = await model.generateContent(userPrompt);
+  return _callWithFallback(
+    MODEL_CHAIN,
+    async (modelName) => {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction: systemPrompt,
+        generationConfig: { temperature: TEMPERATURE },
+      });
+      const result = await model.generateContent(prompt);
       let raw = result.response.text();
-
-      // Strip markdown code fences if present
       raw = raw.replace(/^```(?:json)?\s*\n?/gm, '');
       raw = raw.replace(/\n?```\s*$/gm, '');
       raw = raw.trim();
-
-      // Validate it's parseable JSON
       JSON.parse(raw);
       return raw;
-    } catch (e) {
-      lastError = e;
-
-      // On second attempt, append a re-prompt hint for JSON issues
-      if (e instanceof SyntaxError && attempt === 1) {
-        userPrompt +=
+    },
+    (attempt) => {
+      if (attempt === 1) {
+        prompt +=
           '\n\nIMPORTANT: Your previous response was not valid JSON. ' +
           'Return ONLY a valid JSON object/array with no extra text.';
       }
-
-      // Exponential backoff: 1s, 2s, 4s
-      if (attempt < retries - 1) {
-        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
-      }
-    }
-  }
-
-  throw new Error(`Gemini API failed after ${retries} attempts: ${lastError?.message}`);
+    },
+  );
 }
 
 // ── Classification ───────────────────────────────────────
@@ -167,6 +220,114 @@ async function generateDataroom(name, description, fingerprints) {
   return JSON.parse(raw);
 }
 
+// ── Hybrid organize (AI mode + existing DataRoom) ────────
+
+const HYBRID_SYSTEM_PROMPT =
+  'You are a document organization AI. You are given a DataRoom with existing folders ' +
+  '(each with a UUID, name, and one-sentence description) and a set of new files to organize.\n\n' +
+  'PRIMARY GOAL: a user must be able to find any document just by reading folder names. ' +
+  'Folder names are the navigation system.\n\n' +
+  'Rules:\n' +
+  '1. STRONGLY PREFER reusing existing folders. For every file, first check whether any ' +
+  'existing folder fits its topic — if yes, assign it there. Do not create a near-duplicate ' +
+  'of an existing folder (e.g. do not create "Agreements" if "Contracts" already exists; ' +
+  'do not create "Bills" if "Invoices" already exists).\n' +
+  '2. Create NEW folders ONLY for genuinely new topics that no existing folder covers. ' +
+  'New folders may be root-level OR nested inside an existing folder (when that is the ' +
+  'natural parent — e.g. a new "2024 Invoices" inside an existing "Invoices" folder).\n' +
+  '3. Folder NAMES must be concrete, specific nouns: "Employment Contracts", "2024 Invoices", ' +
+  '"Board Minutes", "Product Roadmap" — NEVER vague labels like "Misc", "Other", "General", ' +
+  '"Docs", "Stuff", "Files".\n' +
+  '4. Every new folder must include a one-sentence context describing exactly what belongs there.\n' +
+  '5. Aim for at least 3 files per new folder. If fewer than 3 files would land in a new ' +
+  'folder, prefer the closest existing folder or a broader new folder instead.\n' +
+  '6. Every file must appear in exactly one of existing_assignments or new_assignments.\n' +
+  '7. Return ONLY a JSON object — no markdown, no commentary — with this shape:\n' +
+  '{\n' +
+  '  "existing_assignments": [\n' +
+  '    { "file_id": "...", "folder_id": "<existing-uuid>", "confidence": 0.0-1.0, "reasoning": "..." }\n' +
+  '  ],\n' +
+  '  "new_folders": [\n' +
+  '    { "temp_id": "nf_1", "name": "...", "context": "...", "parent": "<existing-uuid>|<another-temp_id>|null" }\n' +
+  '  ],\n' +
+  '  "new_assignments": [\n' +
+  '    { "file_id": "...", "new_folder_temp_id": "nf_1", "confidence": 0.0-1.0, "reasoning": "..." }\n' +
+  '  ]\n' +
+  '}\n' +
+  '- temp_id: unique string like "nf_1", "nf_2".\n' +
+  '- parent: an EXISTING folder UUID to nest the new folder under an existing folder, OR ' +
+  'another new folder\'s temp_id to build a new subtree, OR null to place at the DataRoom root.\n' +
+  '- confidence reflects how well the file matches the chosen folder.\n';
+
+/**
+ * Hybrid organize: classify files into an existing DataRoom, reusing existing
+ * folders where possible and creating new folders only for genuinely new topics.
+ *
+ * @param {Array} fingerprints  - Rich file fingerprints from Python (preview + optional summary)
+ * @param {string} folderTree   - Text tree of existing folders with IDs and contexts (may be empty string)
+ * @param {string[]} folderIds  - Valid existing folder IDs for this DataRoom
+ * @returns {Promise<Object>} { existing_assignments, new_folders, new_assignments }
+ */
+async function hybridOrganize(fingerprints, folderTree, folderIds) {
+  const folderIdsSet = new Set(folderIds || []);
+  const filesJson = JSON.stringify(fingerprints, null, 2);
+
+  const treeSection = folderTree && folderTree.trim().length > 0
+    ? folderTree
+    : '(this DataRoom currently has no folders — create the full structure as new folders)';
+
+  const userPrompt =
+    `## Existing folder tree\n${treeSection}\n\n` +
+    `## Files to organize (${fingerprints.length})\n${filesJson}\n\n` +
+    'Return the JSON object per the schema. Reuse existing folders whenever possible; ' +
+    'create new folders only for genuinely new topics.';
+
+  const raw = await _callGemini(HYBRID_SYSTEM_PROMPT, userPrompt);
+  const parsed = JSON.parse(raw);
+
+  // Sanitize: drop existing_assignments whose folder_id is not in the provided set.
+  const existingAssignments = Array.isArray(parsed.existing_assignments)
+    ? parsed.existing_assignments
+        .filter((r) => r && r.folder_id && folderIdsSet.has(r.folder_id))
+        .map((r) => ({
+          file_id: r.file_id,
+          folder_id: r.folder_id,
+          confidence: parseFloat(r.confidence || 0),
+          reasoning: r.reasoning || '',
+        }))
+    : [];
+
+  const newFolders = Array.isArray(parsed.new_folders)
+    ? parsed.new_folders
+        .filter((f) => f && typeof f.temp_id === 'string' && f.temp_id && f.name)
+        .map((f) => ({
+          temp_id: f.temp_id,
+          name: String(f.name),
+          context: f.context ? String(f.context) : String(f.name),
+          parent: f.parent == null ? null : String(f.parent),
+        }))
+    : [];
+
+  const tempIdSet = new Set(newFolders.map((f) => f.temp_id));
+
+  const newAssignments = Array.isArray(parsed.new_assignments)
+    ? parsed.new_assignments
+        .filter((r) => r && r.file_id && typeof r.new_folder_temp_id === 'string' && tempIdSet.has(r.new_folder_temp_id))
+        .map((r) => ({
+          file_id: r.file_id,
+          new_folder_temp_id: r.new_folder_temp_id,
+          confidence: parseFloat(r.confidence || 0),
+          reasoning: r.reasoning || '',
+        }))
+    : [];
+
+  return {
+    existing_assignments: existingAssignments,
+    new_folders: newFolders,
+    new_assignments: newAssignments,
+  };
+}
+
 // ── Embeddings (V1 Copilot) ──────────────────────────────
 
 const EMBEDDING_BATCH_SIZE = 50;
@@ -258,26 +419,15 @@ const SUMMARIZE_SYSTEM_PROMPT =
  */
 async function summarizeFile(text) {
   const genAI = _getClient();
-  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
-  const model = genAI.getGenerativeModel({
-    model: chatModel,
-    systemInstruction: SUMMARIZE_SYSTEM_PROMPT,
-    generationConfig: { temperature: 0.2 },
+  return _callWithFallback(_chatModelChain(), async (modelName) => {
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: SUMMARIZE_SYSTEM_PROMPT,
+      generationConfig: { temperature: 0.2 },
+    });
+    const result = await model.generateContent(text);
+    return result.response.text().trim();
   });
-
-  let lastError;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const result = await model.generateContent(text);
-      return result.response.text().trim();
-    } catch (e) {
-      lastError = e;
-      if (attempt < MAX_RETRIES - 1) {
-        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
-      }
-    }
-  }
-  throw new Error(`Summarize failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
 }
 
 // ── OCR via Gemini Vision ─────────────────────────────────
@@ -297,13 +447,6 @@ const OCR_SYSTEM_PROMPT =
  */
 async function extractTextFromImage(imageBase64, mimeType, filename) {
   const genAI = _getClient();
-  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
-  const model = genAI.getGenerativeModel({
-    model: chatModel,
-    systemInstruction: OCR_SYSTEM_PROMPT,
-    generationConfig: { temperature: 0.1 },
-  });
-
   const parts = [
     { inlineData: { mimeType, data: imageBase64 } },
     {
@@ -313,19 +456,15 @@ async function extractTextFromImage(imageBase64, mimeType, filename) {
     },
   ];
 
-  let lastError;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const result = await model.generateContent({ contents: [{ role: 'user', parts }] });
-      return result.response.text().trim();
-    } catch (e) {
-      lastError = e;
-      if (attempt < MAX_RETRIES - 1) {
-        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
-      }
-    }
-  }
-  throw new Error(`OCR failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+  return _callWithFallback(_chatModelChain(), async (modelName) => {
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: OCR_SYSTEM_PROMPT,
+      generationConfig: { temperature: 0.1 },
+    });
+    const result = await model.generateContent({ contents: [{ role: 'user', parts }] });
+    return result.response.text().trim();
+  });
 }
 
 // ── Chat title generation (V1 Copilot) ───────────────────
@@ -342,26 +481,15 @@ const TITLE_SYSTEM_PROMPT =
  */
 async function generateTitle(message) {
   const genAI = _getClient();
-  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
-  const model = genAI.getGenerativeModel({
-    model: chatModel,
-    systemInstruction: TITLE_SYSTEM_PROMPT,
-    generationConfig: { temperature: 0.3, maxOutputTokens: 20 },
+  return _callWithFallback(_chatModelChain(), async (modelName) => {
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: TITLE_SYSTEM_PROMPT,
+      generationConfig: { temperature: 0.3, maxOutputTokens: 20 },
+    });
+    const result = await model.generateContent(message);
+    return result.response.text().trim();
   });
-
-  let lastError;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const result = await model.generateContent(message);
-      return result.response.text().trim();
-    } catch (e) {
-      lastError = e;
-      if (attempt < MAX_RETRIES - 1) {
-        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
-      }
-    }
-  }
-  throw new Error(`Title generation failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
 }
 
 // ── Chat streaming (Phase C2 — Copilot) ──────────────────
@@ -414,76 +542,95 @@ const CHAT_SYSTEM_PROMPT =
  */
 async function chatStream(res, systemPrompt, messages, tools, toolConfig) {
   const genAI = _getClient();
-  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
+  const chain = _chatModelChain();
   const chatTemp = parseFloat(process.env.GEMINI_CHAT_TEMPERATURE || '0.3');
   const maxTokens = parseInt(process.env.GEMINI_CHAT_MAX_OUTPUT_TOKENS || '4096', 10);
 
-  const modelConfig = {
-    model: chatModel,
-    systemInstruction: systemPrompt || CHAT_SYSTEM_PROMPT,
-    generationConfig: { temperature: chatTemp, maxOutputTokens: maxTokens },
-  };
+  let lastError;
 
-  // Only add tools if provided
-  if (tools && tools.length > 0) {
-    modelConfig.tools = [{ functionDeclarations: tools }];
-  }
-  if (toolConfig) {
-    modelConfig.toolConfig = { functionCallingConfig: { mode: toolConfig.mode || 'AUTO' } };
-  }
+  for (const modelName of chain) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        const modelConfig = {
+          model: modelName,
+          systemInstruction: systemPrompt || CHAT_SYSTEM_PROMPT,
+          generationConfig: { temperature: chatTemp, maxOutputTokens: maxTokens },
+        };
 
-  const model = genAI.getGenerativeModel(modelConfig);
-
-  try {
-    const result = await model.generateContentStream({ contents: messages });
-    let hasToolCall = false;
-
-    for await (const chunk of result.stream) {
-      // Check for text content
-      const textContent = chunk.candidates?.[0]?.content?.parts
-        ?.filter(p => p.text)
-        ?.map(p => p.text)
-        ?.join('') || '';
-
-      if (textContent) {
-        res.write(`data: ${JSON.stringify({ type: 'chunk', text: textContent })}\n\n`);
-      }
-
-      // Check for function calls
-      const functionCalls = chunk.candidates?.[0]?.content?.parts
-        ?.filter(p => p.functionCall) || [];
-
-      if (functionCalls.length > 0) {
-        for (const part of functionCalls) {
-          // Whitelist check — reject hallucinated or unexpected tool names
-          if (!ALLOWED_TOOLS.has(part.functionCall.name)) {
-            console.warn(`[chatStream] Rejected tool call: ${part.functionCall.name}`);
-            res.write(`data: ${JSON.stringify({
-              type: 'error',
-              message: `Blocked disallowed tool: ${part.functionCall.name}`,
-            })}\n\n`);
-            continue;
-          }
-          hasToolCall = true;
-          res.write(`data: ${JSON.stringify({
-            type: 'tool_call',
-            name: part.functionCall.name,
-            args: part.functionCall.args,
-          })}\n\n`);
+        if (tools && tools.length > 0) {
+          modelConfig.tools = [{ functionDeclarations: tools }];
         }
+        if (toolConfig) {
+          modelConfig.toolConfig = { functionCallingConfig: { mode: toolConfig.mode || 'AUTO' } };
+        }
+
+        const model = genAI.getGenerativeModel(modelConfig);
+        const result = await model.generateContentStream({ contents: messages });
+        let hasToolCall = false;
+
+        if (modelName !== chain[0]) {
+          logger.info(`[chatStream] served by fallback model: ${modelName}`);
+        }
+
+        for await (const chunk of result.stream) {
+          const textContent = chunk.candidates?.[0]?.content?.parts
+            ?.filter(p => p.text)
+            ?.map(p => p.text)
+            ?.join('') || '';
+
+          if (textContent) {
+            res.write(`data: ${JSON.stringify({ type: 'chunk', text: textContent })}\n\n`);
+          }
+
+          const functionCalls = chunk.candidates?.[0]?.content?.parts
+            ?.filter(p => p.functionCall) || [];
+
+          if (functionCalls.length > 0) {
+            for (const part of functionCalls) {
+              if (!ALLOWED_TOOLS.has(part.functionCall.name)) {
+                console.warn(`[chatStream] Rejected tool call: ${part.functionCall.name}`);
+                res.write(`data: ${JSON.stringify({
+                  type: 'error',
+                  message: `Blocked disallowed tool: ${part.functionCall.name}`,
+                })}\n\n`);
+                continue;
+              }
+              hasToolCall = true;
+              res.write(`data: ${JSON.stringify({
+                type: 'tool_call',
+                name: part.functionCall.name,
+                args: part.functionCall.args,
+              })}\n\n`);
+            }
+          }
+        }
+
+        if (hasToolCall) {
+          res.write(`data: ${JSON.stringify({ type: 'tool_call_stop' })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify({ type: 'end' })}\n\n`);
+        }
+        return; // Success — exit the function
+      } catch (e) {
+        lastError = e;
+        const status = _statusOf(e);
+        if (_isPermanent(status)) {
+          logger.warn(`[chatStream] ${modelName} permanent error ${status}, falling through`);
+          break; // Try next model
+        }
+        if (attempt < MAX_RETRIES - 1) {
+          await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
+          continue; // Retry same model
+        }
+        logger.warn(`[chatStream] ${modelName} exhausted retries (status ${status || 'n/a'})`);
       }
     }
-
-    if (hasToolCall) {
-      // Signal Electron to execute tool and make a new request
-      res.write(`data: ${JSON.stringify({ type: 'tool_call_stop' })}\n\n`);
-    } else {
-      // Normal end — Gemini is done
-      res.write(`data: ${JSON.stringify({ type: 'end' })}\n\n`);
-    }
-  } catch (err) {
-    res.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
   }
+
+  // All models failed
+  const errMsg = `Gemini chat failed across [${chain.join(',')}]: ${lastError?.message || 'unknown error'}`;
+  logger.error(`[chatStream] ${errMsg}`);
+  res.write(`data: ${JSON.stringify({ type: 'error', message: errMsg })}\n\n`);
 }
 
 /**
@@ -497,51 +644,37 @@ async function chatStream(res, systemPrompt, messages, tools, toolConfig) {
  */
 async function chatNonStreaming(systemPrompt, messages, tools, toolConfig) {
   const genAI = _getClient();
-  const chatModel = process.env.GEMINI_CHAT_MODEL || MODEL_NAME;
   const chatTemp = parseFloat(process.env.GEMINI_CHAT_TEMPERATURE || '0.3');
   const maxTokens = parseInt(process.env.GEMINI_CHAT_MAX_OUTPUT_TOKENS || '4096', 10);
 
-  const modelConfig = {
-    model: chatModel,
-    systemInstruction: systemPrompt || CHAT_SYSTEM_PROMPT,
-    generationConfig: { temperature: chatTemp, maxOutputTokens: maxTokens },
-  };
-
-  if (tools && tools.length > 0) {
-    modelConfig.tools = [{ functionDeclarations: tools }];
-  }
-  if (toolConfig) {
-    modelConfig.toolConfig = { functionCallingConfig: { mode: toolConfig.mode || 'AUTO' } };
-  }
-
-  const model = genAI.getGenerativeModel(modelConfig);
-
-  let lastError;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const result = await model.generateContent({ contents: messages });
-      const parts = result.response.candidates?.[0]?.content?.parts || [];
-
-      const textParts = parts.filter(p => p.text).map(p => p.text);
-      const toolCalls = parts.filter(p => p.functionCall).map(p => ({
-        name: p.functionCall.name,
-        args: p.functionCall.args,
-      }));
-
-      return { response: textParts.join(''), tool_calls: toolCalls };
-    } catch (e) {
-      lastError = e;
-      if (attempt < MAX_RETRIES - 1) {
-        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
-      }
+  return _callWithFallback(_chatModelChain(), async (modelName) => {
+    const modelConfig = {
+      model: modelName,
+      systemInstruction: systemPrompt || CHAT_SYSTEM_PROMPT,
+      generationConfig: { temperature: chatTemp, maxOutputTokens: maxTokens },
+    };
+    if (tools && tools.length > 0) {
+      modelConfig.tools = [{ functionDeclarations: tools }];
     }
-  }
-  throw new Error(`Chat failed after ${MAX_RETRIES} attempts: ${lastError?.message}`);
+    if (toolConfig) {
+      modelConfig.toolConfig = { functionCallingConfig: { mode: toolConfig.mode || 'AUTO' } };
+    }
+    const model = genAI.getGenerativeModel(modelConfig);
+    const result = await model.generateContent({ contents: messages });
+    const parts = result.response.candidates?.[0]?.content?.parts || [];
+    const textParts = parts.filter((p) => p.text).map((p) => p.text);
+    const toolCalls = parts.filter((p) => p.functionCall).map((p) => ({
+      name: p.functionCall.name,
+      args: p.functionCall.args,
+    }));
+    return { response: textParts.join(''), tool_calls: toolCalls };
+  });
 }
 
 module.exports = {
   classifyFiles,
   generateDataroom,
+  hybridOrganize,
   embedTexts,
   extractEntities,
   extractTextFromImage,

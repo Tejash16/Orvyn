@@ -282,6 +282,22 @@ def prepare_index(file_ids: list, dataroom_id: str, db_session) -> dict:
         _image_exts = {".png", ".jpg", ".jpeg"}
         if file_ext in _image_exts and stored_extracted_text and not stored_extracted_text.startswith("[Image:"):
             extracted_text = stored_extracted_text
+        elif original_path == 'SHARED':
+            # Shared file: reconstruct text from file_chunks (created during import)
+            from app.main import _reconstruct_text_from_chunks
+            chunk_rows = db_session.execute(
+                text("SELECT chunk_text FROM file_chunks WHERE file_id = :fid ORDER BY chunk_index ASC"),
+                {"fid": file_id},
+            ).fetchall()
+            if chunk_rows:
+                extracted_text = _reconstruct_text_from_chunks(
+                    [c[0] for c in chunk_rows],
+                    overlap_chars=_CHUNK_OVERLAP,
+                )
+            elif stored_extracted_text:
+                extracted_text = stored_extracted_text
+            else:
+                extracted_text = ""
         else:
             # Re-extract full text from original file on disk
             if not os.path.exists(original_path):
@@ -709,7 +725,8 @@ def keyword_search(query: str, db_session, dataroom_id: str = None,
         JOIN file_chunks fc ON fc.rowid = fts.rowid
         JOIN files f ON f.id = fc.file_id
         WHERE file_chunks_fts MATCH :query
-        AND f.embedding_status = 'complete'
+        AND (f.embedding_status = 'complete'
+             OR (f.is_shared = 1 AND f.embedding_status IN ('pending', 'processing')))
         {scope_clause}
         ORDER BY fts.rank
         LIMIT :limit

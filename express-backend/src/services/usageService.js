@@ -57,8 +57,10 @@ async function getOrCreateLimits(userId) {
     {
       $setOnInsert: {
         userId,
+        plan: 'free',
         monthlyFileLimit: DEFAULT_FILE_LIMIT,
         dailyMessageLimit: DEFAULT_MESSAGE_LIMIT,
+        dataroomLimit: 3,
       },
     },
     { upsert: true, new: true }
@@ -343,6 +345,34 @@ async function getUsageSummary(userId) {
   };
 }
 
+/**
+ * Returns plan info, limits, and current usage for the authenticated user.
+ * Used by the GET /api/v1/usage/limits endpoint and Electron's limit checks.
+ *
+ * @returns {{ plan, limits: { dataroomLimit, monthlyFileLimit, dailyMessageLimit }, usage: { filesUploadedThisPeriod, messagesToday } }}
+ */
+async function getLimitsAndUsage(userId) {
+  const [usage, limits] = await Promise.all([
+    getOrCreateUsage(userId),
+    getOrCreateLimits(userId),
+  ]);
+
+  await resetExpiredPeriods(usage);
+
+  return {
+    plan: limits.plan || 'free',
+    limits: {
+      dataroomLimit: limits.dataroomLimit ?? 3,
+      monthlyFileLimit: limits.monthlyFileLimit ?? DEFAULT_FILE_LIMIT,
+      dailyMessageLimit: limits.dailyMessageLimit ?? DEFAULT_MESSAGE_LIMIT,
+    },
+    usage: {
+      filesUploadedThisPeriod: usage.filesUploadedThisPeriod ?? 0,
+      messagesToday: usage.messagesToday ?? 0,
+    },
+  };
+}
+
 module.exports = {
   checkFileLimit,
   checkMessageLimit,
@@ -350,4 +380,5 @@ module.exports = {
   rollbackFiles,
   incrementMessages,
   getUsageSummary,
+  getLimitsAndUsage,
 };

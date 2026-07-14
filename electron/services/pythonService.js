@@ -388,6 +388,32 @@ async function applyGenerateResults(name, description, geminiResult, fileIds, da
   return data;
 }
 
+async function prepareHybrid(dataroomId, fileIds) {
+  const res = await fetch(`${getPythonUrl()}/api/v1/ai/prepare-hybrid`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataroom_id: dataroomId, file_ids: fileIds }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Failed to prepare hybrid organize data.');
+  return data;
+}
+
+async function applyHybridResults(dataroomId, geminiResult, fileIds) {
+  const res = await fetch(`${getPythonUrl()}/api/v1/ai/apply-hybrid`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      dataroom_id: dataroomId,
+      gemini_result: geminiResult,
+      file_ids: fileIds,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Failed to apply hybrid organize results.');
+  return data;
+}
+
 module.exports = {
   checkHealth,
   initDb,
@@ -422,4 +448,6 @@ module.exports = {
   applyClassifyResults,
   prepareGenerate,
   applyGenerateResults,
+  prepareHybrid,
+  applyHybridResults,
 };

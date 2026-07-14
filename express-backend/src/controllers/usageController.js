@@ -34,4 +34,16 @@ async function checkFiles(req, res, next) {
   }
 }
 
-module.exports = { getUsage, checkFiles };
+// ── GET /api/v1/usage/limits — plan, limits, and current usage ─
+
+async function getLimits(req, res, next) {
+  try {
+    const data = await usageService.getLimitsAndUsage(req.user.userId);
+    return res.status(200).json({ success: true, ...data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getUsage, checkFiles, getLimits };
+

@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { loginSuccess, restoreComplete, logout } from './store/authSlice';
+import { loginSuccess, restoreComplete, logout, fetchLimits } from './store/authSlice';
 import { setTheme, setOnline, addToast } from './store/uiSlice';
 import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
 import SettingsPage from './pages/setting';
 import DataRoomList from './pages/DataRoomList';
 import UploadPage from './pages/UploadPage';
+import OrganizationSettings from './pages/OrganizationSettings';
+import CollaborationPage from './pages/CollaborationPage';
 import AuthPage from './pages/AuthPage';
 import ResetPassword from './pages/ResetPassword';
 import ToastContainer from './components/common/Toast';
@@ -18,6 +20,8 @@ function App() {
   const theme           = useSelector((state) => state.ui.theme);
   const activePage      = useSelector((state) => state.ui.activePage);
   const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+  const userType        = useSelector((state) => state.auth.user?.userType);
+  const activeOrgId     = useSelector((state) => state.auth.user?.activeOrganizationId);
   const isRestoring     = useSelector((state) => state.auth.isRestoring);
   const isOnline        = useSelector((state) => state.ui.isOnline);
 
@@ -28,6 +32,8 @@ function App() {
         if (result.success) {
           dispatch(loginSuccess(result.user));
           dispatch(setTheme(result.theme ?? 'light'));
+          // Hydrate plan/limits/usage after session restore
+          dispatch(fetchLimits());
         }
       } finally {
         dispatch(restoreComplete());
@@ -73,12 +79,18 @@ function App() {
             <span className="app-loading-dot" />
           </div>
         </div>
+      ) : isAuthenticated && !userType ? (
+        <AuthPage initialView="userType" />
+      ) : isAuthenticated && userType === 'enterprise' && !activeOrgId ? (
+        <AuthPage initialView="orgChoice" />
       ) : isAuthenticated ? (
         <div className="app-body">
           <Sidebar />
           <main className="app-content">
             {activePage === 'dataroom' && <DataRoomList />}
             {activePage === 'upload' && <UploadPage />}
+            {activePage === 'orgSettings' && <OrganizationSettings />}
+            {activePage === 'collaboration' && <CollaborationPage />}
             {activePage === 'settings' && <SettingsPage />}
           </main>
         </div>

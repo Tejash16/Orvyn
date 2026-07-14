@@ -294,6 +294,10 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
   const datarooms = useSelector((s) => s.dataroom.datarooms);
   const isDataroomListMode = !dataroomId;
 
+  // Shared DataRoom guard — blocks all write operations
+  const activeDataroom = datarooms.find((dr) => dr.id === dataroomId);
+  const isSharedDataRoom = Boolean(activeDataroom?.is_shared);
+
   // Back / forward history — local state
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -459,7 +463,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
         return;
       }
 
-      if (e.key === 'Delete' && selected) {
+      if (e.key === 'Delete' && selected && !isSharedDataRoom) {
         e.preventDefault();
         if (selected.type === 'file') {
           setRemoveConfirm(selected);
@@ -469,7 +473,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
         return;
       }
 
-      if (e.key === 'F2' && selected) {
+      if (e.key === 'F2' && selected && !isSharedDataRoom) {
         e.preventDefault();
         startRename(selected);
         return;
@@ -479,7 +483,7 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
         e.preventDefault();
         if (selected.type === 'folder') {
           dispatch(navigateToFolder({ folderId: selected.id, folderName: selected.name }));
-        } else {
+        } else if (!isSharedDataRoom) {
           dispatch(openFile(selected.original_path))
             .unwrap()
             .catch((err) => {
@@ -563,12 +567,14 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
     }
     if (item.type === 'folder') {
       dispatch(navigateToFolder({ folderId: item.id, folderName: item.name }));
-    } else {
+    } else if (!isSharedDataRoom) {
       dispatch(openFile(item.original_path))
         .unwrap()
         .catch((err) => {
           dispatch(addToast({ message: err || 'File not found at its original location', type: 'error' }));
         });
+    } else {
+      dispatch(addToast({ message: 'Cannot open shared files — they are metadata only', type: 'info' }));
     }
   }
 
@@ -626,6 +632,12 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
   }
 
   function buildFileContextMenuItems(item) {
+    // Shared DataRoom: read-only context menu
+    if (isSharedDataRoom) {
+      return [
+        { type: 'label', text: 'Shared file (read-only)' },
+      ];
+    }
     return [
       { type: 'action', label: 'Open', icon: <IconOpen />, shortcut: 'Enter', onClick: () => {
         dispatch(openFile(item.original_path)).unwrap().catch((err) => {
@@ -672,6 +684,14 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
   }
 
   function buildFolderContextMenuItems(item) {
+    // Shared DataRoom: only allow navigation
+    if (isSharedDataRoom) {
+      return [
+        { type: 'action', label: 'Open', icon: <IconOpen />, shortcut: 'Enter', onClick: () => dispatch(navigateToFolder({ folderId: item.id, folderName: item.name })) },
+        { type: 'separator' },
+        { type: 'label', text: 'Shared folder (read-only)' },
+      ];
+    }
     return [
       { type: 'action', label: 'Open', icon: <IconOpen />, shortcut: 'Enter', onClick: () => dispatch(navigateToFolder({ folderId: item.id, folderName: item.name })) },
       { type: 'separator' },
@@ -697,14 +717,18 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
   }
 
   function buildBackgroundContextMenuItems() {
-    return [
-      { type: 'action', label: 'New Folder', icon: <IconFolderPlus />, onClick: openNewFolderDialog },
-      { type: 'separator' },
+    const items = [];
+    if (!isSharedDataRoom) {
+      items.push({ type: 'action', label: 'New Folder', icon: <IconFolderPlus />, onClick: openNewFolderDialog });
+      items.push({ type: 'separator' });
+    }
+    items.push(
       { type: 'label', text: 'View' },
       { type: 'action', label: viewMode === 'grid' ? 'Switch to List' : 'Switch to Grid', icon: viewMode === 'grid' ? <IconList /> : <IconGrid />, onClick: () => dispatch(setViewMode(viewMode === 'grid' ? 'list' : 'grid')) },
       { type: 'separator' },
       { type: 'action', label: 'Refresh', icon: <IconRefresh />, onClick: () => { dispatch(refreshCurrentView()); dispatch(fetchDatarooms()); } },
-    ];
+    );
+    return items;
   }
 
   // ── New folder ──
@@ -850,6 +874,10 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
   async function handleExplorerDrop(e) {
     e.preventDefault();
     setIsDragOver(false);
+    if (isSharedDataRoom) {
+      dispatch(addToast({ message: 'Cannot add files to a shared DataRoom', type: 'info' }));
+      return;
+    }
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
     const paths = [];
@@ -1046,6 +1074,10 @@ function FileExplorer({ dataroomId, onClose, onOpenUpload, onSelectDataroom, onG
             <button className={`${styles.toolBtn} ${styles.toolBtnPrimary}`} onClick={() => onCreateDataroom && onCreateDataroom()} type="button">
               <IconPlus /> New DataRoom
             </button>
+          ) : isSharedDataRoom ? (
+            <span className={styles.toolBtn} style={{ opacity: 0.5, cursor: 'default', fontSize: '11px', color: 'var(--accent-primary)' }}>
+              Read-only (Shared)
+            </span>
           ) : (
             <button className={`${styles.toolBtn} ${styles.toolBtnPrimary}`} onClick={openNewFolderDialog} type="button">
               <IconFolderPlus /> New Folder

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import styles from './Header.module.css';
 import logoSrc from '../../assets/logo.png';
+import NotificationBell from './NotificationBell';
 
 function Header() {
   const [isMaximized, setIsMaximized] = useState(false);
@@ -25,6 +26,8 @@ function Header() {
       </div>
 
       <div className={styles.windowControls}>
+        <NotificationBell />
+
         {/* Minimize */}
         <button
           className={`${styles.controlBtn} ${styles.minimize}`}

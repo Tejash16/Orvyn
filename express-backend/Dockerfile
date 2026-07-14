@@ -11,6 +11,14 @@ RUN npm ci --omit=dev
 # Copy application source
 COPY src/ ./src/
 
+# Copy pre-built web-portal and web-admin SPAs.
+# These must be populated before building the image:
+#   cp -r web-portal/dist express-backend/portal-dist
+#   cp -r web-admin/dist  express-backend/admin-dist
+# server.js serves them at /portal/* and /admin/*.
+COPY portal-dist/ ./portal-dist/
+COPY admin-dist/ ./admin-dist/
+
 ENV NODE_ENV=production
 
 # Cloud Run injects PORT=8080 automatically

@@ -68,7 +68,12 @@ export const classifyRegisteredFiles = createAsyncThunk(
   'file/classifyRegisteredFiles',
   async ({ dataroomId, fileIds }, { rejectWithValue }) => {
     const result = await window.api.ai.classify(dataroomId, fileIds);
-    if (!result.success) return rejectWithValue(result.error);
+    if (!result.success) {
+      if (result.upgradeRequired || result.code === 'LIMIT_EXCEEDED') {
+        return rejectWithValue({ message: result.error, upgradeRequired: true });
+      }
+      return rejectWithValue(result.error);
+    }
     return result;
   }
 );
@@ -77,7 +82,28 @@ export const generateNewDataroom = createAsyncThunk(
   'file/generateNewDataroom',
   async ({ name, description, fileIds, dataroomId }, { rejectWithValue }) => {
     const result = await window.api.ai.generateDataroom(name, description, fileIds, dataroomId);
-    if (!result.success) return rejectWithValue(result.error);
+    if (!result.success) {
+      if (result.upgradeRequired || result.code === 'LIMIT_EXCEEDED') {
+        return rejectWithValue({ message: result.error, upgradeRequired: true });
+      }
+      return rejectWithValue(result.error);
+    }
+    return result;
+  }
+);
+
+// AI mode into an existing DataRoom: Gemini reuses existing folders where
+// possible and creates new folders for genuinely new topics.
+export const hybridOrganizeExisting = createAsyncThunk(
+  'file/hybridOrganizeExisting',
+  async ({ dataroomId, fileIds }, { rejectWithValue }) => {
+    const result = await window.api.ai.hybridOrganize(dataroomId, fileIds);
+    if (!result.success) {
+      if (result.upgradeRequired || result.code === 'LIMIT_EXCEEDED') {
+        return rejectWithValue({ message: result.error, upgradeRequired: true });
+      }
+      return rejectWithValue(result.error);
+    }
     return result;
   }
 );
@@ -286,7 +312,9 @@ const fileSlice = createSlice({
       })
       .addCase(classifyRegisteredFiles.rejected, (state, action) => {
         state.uploadModal.isClassifying = false;
-        state.uploadModal.error = action.payload;
+        state.uploadModal.error = typeof action.payload === 'string'
+          ? action.payload
+          : action.payload?.message || 'Classification failed.';
       });
 
     // generateNewDataroom (upload modal)
@@ -301,7 +329,26 @@ const fileSlice = createSlice({
       })
       .addCase(generateNewDataroom.rejected, (state, action) => {
         state.uploadModal.isGenerating = false;
-        state.uploadModal.error = action.payload;
+        state.uploadModal.error = typeof action.payload === 'string'
+          ? action.payload
+          : action.payload?.message || 'DataRoom generation failed.';
+      });
+
+    // hybridOrganizeExisting (upload modal) — reuses isGenerating + generationResult
+    builder
+      .addCase(hybridOrganizeExisting.pending, (state) => {
+        state.uploadModal.isGenerating = true;
+        state.uploadModal.error = null;
+      })
+      .addCase(hybridOrganizeExisting.fulfilled, (state, action) => {
+        state.uploadModal.isGenerating = false;
+        state.uploadModal.generationResult = action.payload;
+      })
+      .addCase(hybridOrganizeExisting.rejected, (state, action) => {
+        state.uploadModal.isGenerating = false;
+        state.uploadModal.error = typeof action.payload === 'string'
+          ? action.payload
+          : action.payload?.message || 'Hybrid organize failed.';
       });
 
     // Mutation thunks — only track errors

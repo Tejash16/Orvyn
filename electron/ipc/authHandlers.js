@@ -1,9 +1,12 @@
 const authService            = require('../services/authService');
 const userContextService     = require('../services/userContextService');
 const pythonService          = require('../services/pythonService');
+const expressService         = require('../services/expressService');
 const tokenVault             = require('../services/tokenVault');
 const tokenRefreshScheduler  = require('../services/tokenRefreshScheduler');
 const { resumePendingIndexing } = require('./copilotHandlers');
+const notificationStream        = require('./notificationHandlers');
+const log = require('../services/logger');
 
 /**
  * Registers all auth IPC handlers.
@@ -45,9 +48,43 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
   /** Full rollback of all in-memory + vault state. */
   function rollback() {
     tokenRefreshScheduler.cancel();
+    stopSubscriptionCheck();
+    notificationStream.stopStream();
     tokenVault.remove();
     authService.logout();
     userContextService.clear();
+  }
+
+  // ── Periodic subscription status check ───────────────────
+
+  let subscriptionCheckInterval = null;
+
+  /** Start polling subscription status every 30 minutes. */
+  function startSubscriptionCheck() {
+    if (subscriptionCheckInterval) clearInterval(subscriptionCheckInterval);
+    subscriptionCheckInterval = setInterval(async () => {
+      try {
+        const token = authService.getToken();
+        if (!token) return;
+        const res = await fetch(`${expressService.getExpressUrl()}/api/v1/billing/status`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const status = await res.json();
+        const win = getMainWindow();
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('billing:statusUpdate', status);
+        }
+      } catch { /* ignore network errors */ }
+    }, 30 * 60 * 1000); // 30 minutes
+  }
+
+  /** Stop the subscription check interval. */
+  function stopSubscriptionCheck() {
+    if (subscriptionCheckInterval) {
+      clearInterval(subscriptionCheckInterval);
+      subscriptionCheckInterval = null;
+    }
   }
 
   // ── Register ─────────────────────────────────────────────
@@ -112,7 +149,13 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
       // Step 6
       startRefreshScheduler();
 
-      // Step 7 — resume any pending indexing jobs (fire-and-forget)
+      // Step 7 — start periodic subscription check
+      startSubscriptionCheck();
+
+      // Step 8 — open the real-time notifications stream
+      notificationStream.startStream(getMainWindow);
+
+      // Step 9 — resume any pending indexing jobs (fire-and-forget)
       resumePendingIndexing(getMainWindow)
         .catch(() => { /* non-fatal */ });
 
@@ -204,7 +247,13 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
       // Step 9
       startRefreshScheduler();
 
-      // Step 10 — resume any pending indexing jobs (fire-and-forget)
+      // Step 10 — start periodic subscription check
+      startSubscriptionCheck();
+
+      // Step 11 — open the real-time notifications stream
+      notificationStream.startStream(getMainWindow);
+
+      // Step 12 — resume any pending indexing jobs (fire-and-forget)
       resumePendingIndexing(getMainWindow)
         .catch(() => { /* non-fatal */ });
 
@@ -221,6 +270,8 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
     try {
       // Cancel the refresh timer before clearing state
       tokenRefreshScheduler.cancel();
+      stopSubscriptionCheck();
+      notificationStream.stopStream();
 
       // Best-effort server-side revocation of the refresh token
       const storedRefreshToken = tokenVault.read();
@@ -241,20 +292,22 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
   // ── Delete Account ────────────────────────────────────────
   //
-  // Step 1: Express validates password + soft-deletes (sets isDeleted, clears refresh token).
+  // Step 1: Express validates password/email + soft-deletes (sets isDeleted, clears refresh token).
   //         If this throws, local state is untouched — full rollback by default.
   // Step 2: Cancel scheduler before any state mutation.
   // Step 3: Delete local user data directory (best-effort; account gone server-side).
   // Step 4: Remove refresh token from vault.
   // Step 5: Clear in-memory access token and user context.
 
-  ipcMain.handle('auth:deleteAccount', async (_event, { password }) => {
+  ipcMain.handle('auth:deleteAccount', async (_event, { password, confirmEmail }) => {
     try {
       // Step 1 — if server rejects, throw propagates to catch and nothing local is changed
-      await authService.deleteAccount({ password });
+      await authService.deleteAccount({ password, confirmEmail });
 
       // Step 2 — cancel before touching any state
       tokenRefreshScheduler.cancel();
+      stopSubscriptionCheck();
+      notificationStream.stopStream();
 
       // Step 3 — directory removal; account is already server-deleted so this is best-effort
       try {
@@ -271,6 +324,139 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message };
+    }
+  });
+
+  // ── Google OAuth: Initiate ────────────────────────────────
+  //
+  // Opens the system browser to Google consent URL with a cloud callback.
+  // The web-portal React app handles the code exchange and provides a
+  // deep link (orvyn://auth/google) back to this app with tokens.
+  // The renderer listens for 'deep-link:google-auth' events from main.js.
+
+  ipcMain.handle('auth:initiateGoogleAuth', async () => {
+    try {
+      authService.initiateGoogleAuth();
+      return { success: true, message: 'Browser opened for Google sign-in.' };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ── Google OAuth: Complete login via deep link ──────────────
+  //
+  // Called by the renderer after receiving tokens from the deep link
+  // (orvyn://auth/google?action=login&token=...&refreshToken=...)
+
+  ipcMain.handle('auth:completeGoogleAuth', async (_event, { accessToken, refreshToken, isNewUser }) => {
+    try {
+      log.info('[GoogleAuth] completeGoogleAuth called — hasAccessToken:', !!accessToken, 'hasRefreshToken:', !!refreshToken, 'isNewUser:', isNewUser);
+
+      // Validate the token and get user info
+      const user = await authService.validateToken(accessToken);
+      log.info('[GoogleAuth] Token validated — userId:', user?._id, 'email:', user?.email);
+
+      await userContextService.initializeUserDirectory(String(user._id));
+      const databasePath = userContextService.getActiveDatabasePath();
+
+      try {
+        await pythonService.initDb(databasePath, String(user._id));
+      } catch (err) {
+        authService.logout();
+        userContextService.clear();
+        throw new Error(`Database initialisation failed: ${err.message}`);
+      }
+
+      let theme;
+      try {
+        theme = await pythonService.getTheme();
+      } catch (err) {
+        authService.logout();
+        userContextService.clear();
+        throw new Error(`Theme fetch failed: ${err.message}`);
+      }
+
+      // Store tokens
+      try {
+        tokenVault.store(refreshToken);
+        log.info('[GoogleAuth] Refresh token stored in vault');
+      } catch (vaultErr) {
+        log.warn('[GoogleAuth] Vault store failed:', vaultErr.message);
+      }
+
+      // Set in-memory session state
+      authService.setSession(accessToken, user);
+      log.info('[GoogleAuth] Session set — getToken() null?', !authService.getToken());
+
+      startRefreshScheduler();
+
+      // Start periodic subscription check
+      startSubscriptionCheck();
+
+      // Open the real-time notifications stream
+      notificationStream.startStream(getMainWindow);
+
+      // Resume pending indexing (fire-and-forget)
+      resumePendingIndexing(getMainWindow)
+        .catch(() => { /* non-fatal */ });
+
+      return {
+        success: true,
+        user,
+        theme,
+        isNewUser: isNewUser || false,
+      };
+    } catch (error) {
+      log.error('[GoogleAuth] completeGoogleAuth failed:', error.message);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ── Google OAuth: Link existing account ───────────────────
+
+  ipcMain.handle('auth:linkGoogleAccount', async (_event, { email, password, googleId, picture }) => {
+    try {
+      const result = await authService.linkGoogleAccount(email, password, googleId, picture);
+
+      // Same login sequence
+      const user = result.user;
+      await userContextService.initializeUserDirectory(String(user._id));
+      const databasePath = userContextService.getActiveDatabasePath();
+
+      try {
+        await pythonService.initDb(databasePath, String(user._id));
+      } catch (err) {
+        authService.logout();
+        userContextService.clear();
+        throw new Error(`Database initialisation failed: ${err.message}`);
+      }
+
+      let theme;
+      try {
+        theme = await pythonService.getTheme();
+      } catch (err) {
+        authService.logout();
+        userContextService.clear();
+        throw new Error(`Theme fetch failed: ${err.message}`);
+      }
+
+      try {
+        tokenVault.store(result.refreshToken);
+      } catch { /* non-fatal */ }
+
+      authService.setSession(result.accessToken, user);
+
+      startRefreshScheduler();
+
+      // Start periodic subscription check
+      startSubscriptionCheck();
+
+      // Open the real-time notifications stream
+      notificationStream.startStream(getMainWindow);
+
+      return { success: true, user, theme };
+    } catch (error) {
+      return { success: false, error: error.message };
     }
   });
 
@@ -333,8 +519,49 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
 
   ipcMain.handle('auth:verifyEmail', async (_event, { email, code }) => {
     try {
+      // Express now returns { accessToken, refreshToken, user } so the user
+      // is logged in by the verify call itself — no second login required.
       const result = await authService.verifyEmail(email, code);
-      return { success: true, message: result.message };
+
+      if (!result.accessToken || !result.refreshToken || !result.user) {
+        // Backwards-safety — verification succeeded but no session payload
+        return { success: true, message: result.message };
+      }
+
+      const user = result.user;
+
+      // Same post-login sequence as auth:login / auth:initiateGoogleAuth
+      await userContextService.initializeUserDirectory(String(user._id));
+      const databasePath = userContextService.getActiveDatabasePath();
+
+      try {
+        await pythonService.initDb(databasePath, String(user._id));
+      } catch (initErr) {
+        authService.logout();
+        userContextService.clear();
+        throw new Error(`Database initialisation failed: ${initErr.message}`);
+      }
+
+      let theme;
+      try {
+        theme = await pythonService.getTheme();
+      } catch (themeErr) {
+        authService.logout();
+        userContextService.clear();
+        throw new Error(`Theme fetch failed: ${themeErr.message}`);
+      }
+
+      try {
+        tokenVault.store(result.refreshToken);
+      } catch { /* non-fatal */ }
+
+      authService.setSession(result.accessToken, user);
+      startRefreshScheduler();
+      startSubscriptionCheck();
+      notificationStream.startStream(getMainWindow);
+      resumePendingIndexing(getMainWindow).catch(() => { /* non-fatal */ });
+
+      return { success: true, user, theme };
     } catch (err) {
       return {
         success:           false,
@@ -385,6 +612,43 @@ function registerAuthHandlers(ipcMain, getMainWindow) {
       await authService.sendFeedback({ feedback });
       return { success: true };
     } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  // ── Set User Type ─────────────────────────────────────────
+
+  ipcMain.handle('auth:setUserType', async (_event, userType) => {
+    try {
+      log.info('[setUserType] Called with:', userType, '— token null?', !authService.getToken(), '— user:', authService.getCurrentUser()?.email);
+
+      // Guard: if in-memory token was lost (e.g. deep-link timing race),
+      // attempt a one-shot recovery from the vault before giving up.
+      if (!authService.getToken()) {
+        log.warn('[setUserType] Token is NULL — attempting recovery from vault');
+        const storedRefreshToken = tokenVault.read();
+        log.info('[setUserType] Vault has token?', !!storedRefreshToken);
+        if (storedRefreshToken) {
+          try {
+            const tokens = await authService.refreshTokens(storedRefreshToken);
+            authService.setSession(tokens.accessToken, tokens.user);
+            try { tokenVault.store(tokens.refreshToken); } catch { /* non-fatal */ }
+            startRefreshScheduler();
+            log.info('[setUserType] Recovery successful — token restored');
+          } catch (recoverErr) {
+            log.error('[setUserType] Recovery failed:', recoverErr.message);
+          }
+        }
+      }
+
+      const result = await expressService.setUserType(userType);
+      // Refresh in-memory user so subsequent IPCs see the new userType
+      if (result.user) {
+        authService.setSession(authService.getToken(), result.user);
+      }
+      return { success: true, user: result.user };
+    } catch (err) {
+      log.error('[setUserType] Failed:', err.message);
       return { success: false, error: err.message };
     }
   });

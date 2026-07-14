@@ -459,8 +459,6 @@ Both the normal indexing flow and the crash-recovery flow in `copilotHandlers.js
 | 11 | Auto DataRoom Insights | Auto-generated summary when DataRoom changes |
 | 12 | Entity Extraction | Extract organizations, people, amounts, dates, terms |
 | 13 | Document Comparison | "Compare these two contracts" |
-| 14 | Document Similarity | Find near-duplicates across DataRooms |
-| 15 | Role Simulation | "Act like a [VC / Legal Counsel / Board Member / Custom]" |
 
 ### FUTURE (V3+)
 

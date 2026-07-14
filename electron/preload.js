@@ -25,7 +25,7 @@ contextBridge.exposeInMainWorld('api', {
     register:       (payload) => ipcRenderer.invoke('auth:register', payload),
     login:          (payload) => ipcRenderer.invoke('auth:login', payload),
     logout:         ()        => ipcRenderer.invoke('auth:logout'),
-    deleteAccount:         (password) => ipcRenderer.invoke('auth:deleteAccount', { password }),
+    deleteAccount:         (payload) => ipcRenderer.invoke('auth:deleteAccount', payload),
     verifyEmail:           (email, code)               => ipcRenderer.invoke('auth:verifyEmail', { email, code }),
     resendVerification:    (email)                    => ipcRenderer.invoke('auth:resendVerification', { email }),
     forgotPassword:        (email)                        => ipcRenderer.invoke('auth:forgotPassword', { email }),
@@ -37,6 +37,12 @@ contextBridge.exposeInMainWorld('api', {
     getLocalDbPath: ()        => ipcRenderer.invoke('auth:getLocalDbPath'),
     // Called once on app mount — Electron performs the entire restore sequence.
     restoreSession: ()        => ipcRenderer.invoke('auth:restoreSession'),
+    // Google OAuth (cloud callback via web-portal)
+    initiateGoogleAuth:  (mode)    => ipcRenderer.invoke('auth:initiateGoogleAuth', mode),
+    completeGoogleAuth:  (payload) => ipcRenderer.invoke('auth:completeGoogleAuth', payload),
+    linkGoogleAccount:   (payload) => ipcRenderer.invoke('auth:linkGoogleAccount', payload),
+    // User type selection (called once after first login)
+    setUserType:        (userType) => ipcRenderer.invoke('auth:setUserType', userType),
 
     // Push event: Electron notifies the renderer when the session has expired
     // and cannot be silently renewed (revoked or expired refresh token).
@@ -52,6 +58,11 @@ contextBridge.exposeInMainWorld('api', {
   settings: {
     setTheme: (theme) => ipcRenderer.invoke('settings:setTheme', theme),
     getUsage: ()      => ipcRenderer.invoke('settings:getUsage'),
+  },
+
+  // Usage limits — plan, limits, and current usage
+  usage: {
+    getLimits: () => ipcRenderer.invoke('usage:getLimits'),
   },
 
   // DataRoom CRUD
@@ -106,6 +117,7 @@ contextBridge.exposeInMainWorld('api', {
   ai: {
     classify:         (dataroomId, fileIds)                => ipcRenderer.invoke('ai:classify', { dataroom_id: dataroomId, file_ids: fileIds }),
     generateDataroom: (name, description, fileIds, dataroomId) => ipcRenderer.invoke('ai:generate-dataroom', { dataroom_name: name, dataroom_description: description, file_ids: fileIds, dataroom_id: dataroomId }),
+    hybridOrganize:   (dataroomId, fileIds)                => ipcRenderer.invoke('ai:hybrid-organize', { dataroom_id: dataroomId, file_ids: fileIds }),
   },
 
   // Copilot — chat, indexing
@@ -132,6 +144,89 @@ contextBridge.exposeInMainWorld('api', {
     retryIndexing:    (data)  => ipcRenderer.invoke('copilot:retry-indexing', data),
     checkFileChanged: (data)  => ipcRenderer.invoke('copilot:check-file-changed', data),
     compareDocuments: (data)  => ipcRenderer.invoke('copilot:compare-documents', data),
+  },
+
+  // Organization operations
+  organization: {
+    create:           (name)                   => ipcRenderer.invoke('org:create', { name }),
+    get:              (orgId)                  => ipcRenderer.invoke('org:get', { orgId }),
+    update:           (orgId, updates)         => ipcRenderer.invoke('org:update', { orgId, updates }),
+    delete:           (orgId)                  => ipcRenderer.invoke('org:delete', { orgId }),
+    getMembers:       (orgId)                  => ipcRenderer.invoke('org:getMembers', { orgId }),
+    updateMemberRole: (orgId, userId, role)    => ipcRenderer.invoke('org:updateMemberRole', { orgId, userId, role }),
+    removeMember:     (orgId, userId)          => ipcRenderer.invoke('org:removeMember', { orgId, userId }),
+    createInvite:     (orgId, email, role)     => ipcRenderer.invoke('org:createInvite', { orgId, email, role }),
+    listInvites:      (orgId)                  => ipcRenderer.invoke('org:listInvites', { orgId }),
+    revokeInvite:     (orgId, inviteId)        => ipcRenderer.invoke('org:revokeInvite', { orgId, inviteId }),
+    acceptInvite:     (inviteCode)             => ipcRenderer.invoke('org:acceptInvite', { inviteCode }),
+    getInviteDetails: (inviteCode)             => ipcRenderer.invoke('org:getInviteDetails', { inviteCode }),
+    getAuditLogs:     (orgId, filters)          => ipcRenderer.invoke('organization:getAuditLogs', { orgId, filters }),
+  },
+
+  // Billing / subscription management
+  billing: {
+    upgrade:        (payload) => ipcRenderer.invoke('billing:upgrade', payload),
+    getStatus:      ()        => ipcRenderer.invoke('billing:status'),
+    cancel:         ()        => ipcRenderer.invoke('billing:cancel'),
+    // Push event: Electron notifies the renderer when subscription status changes.
+    // Returns a cleanup function for useEffect.
+    onStatusUpdate: (callback) => {
+      const handler = (_event, data) => callback(data);
+      ipcRenderer.on('billing:statusUpdate', handler);
+      return () => ipcRenderer.removeListener('billing:statusUpdate', handler);
+    },
+  },
+
+  // Sharing / collaboration
+  sharing: {
+    shareDataroom:  (payload) => ipcRenderer.invoke('sharing:shareDataroom', payload),
+    getReceived:    ()        => ipcRenderer.invoke('sharing:getReceived'),
+    importDataroom: (shareId) => ipcRenderer.invoke('sharing:importDataroom', { shareId }),
+    searchUsers:    (query)   => ipcRenderer.invoke('sharing:searchUsers', { query }),
+    updateShare:    (payload) => ipcRenderer.invoke('sharing:updateShare', payload),
+    getMyShares:    ()        => ipcRenderer.invoke('sharing:getMyShares'),
+    deleteShare:    (shareId) => ipcRenderer.invoke('sharing:deleteShare', { shareId }),
+    grantAccess:    (payload) => ipcRenderer.invoke('sharing:grantAccess', payload),
+    revokeAccess:   (payload) => ipcRenderer.invoke('sharing:revokeAccess', payload),
+    listAccess:     (shareId) => ipcRenderer.invoke('sharing:listAccess', { shareId }),
+  },
+
+  // Collaboration (contact list / friend requests)
+  collaboration: {
+    list:        ()           => ipcRenderer.invoke('collaboration:list'),
+    suggestions: ()           => ipcRenderer.invoke('collaboration:suggestions'),
+    request:     (email)      => ipcRenderer.invoke('collaboration:request', { email }),
+    accept:      (id)         => ipcRenderer.invoke('collaboration:accept', { id }),
+    reject:      (id)         => ipcRenderer.invoke('collaboration:reject', { id }),
+    remove:      (id)         => ipcRenderer.invoke('collaboration:remove', { id }),
+  },
+
+  // Notifications (SSE push + polling fallback)
+  notifications: {
+    list:        (opts = {})  => ipcRenderer.invoke('notification:list', opts),
+    markRead:    (id)         => ipcRenderer.invoke('notification:markRead', { id }),
+    markAllRead: ()           => ipcRenderer.invoke('notification:markAllRead'),
+    // Push event: fires when Express pushes a new notification over SSE.
+    // Returns a cleanup function for useEffect.
+    onNew: (callback) => {
+      const handler = (_event, payload) => callback(payload);
+      ipcRenderer.on('notification:new', handler);
+      return () => ipcRenderer.removeListener('notification:new', handler);
+    },
+  },
+
+  // Deep link push events (invite links, Google OAuth from emails/browser)
+  deepLink: {
+    onInvite: (callback) => {
+      const handler = (_event, code) => callback(code);
+      ipcRenderer.on('deep-link:invite', handler);
+      return () => ipcRenderer.removeListener('deep-link:invite', handler);
+    },
+    onGoogleAuth: (callback) => {
+      const handler = (_event, data) => callback(data);
+      ipcRenderer.on('deep-link:google-auth', handler);
+      return () => ipcRenderer.removeListener('deep-link:google-auth', handler);
+    },
   },
 
   // Logs — lets the UI offer a "Help > Open Logs" action

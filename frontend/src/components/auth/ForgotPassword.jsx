@@ -1,21 +1,19 @@
 import { useState } from 'react';
 import styles from './auth.module.css';
 
-function ForgotPassword({ onSwitchView }) {
+function ForgotPassword({ onSwitchView, showAuthToast }) {
   const [email,   setEmail]   = useState('');
   const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
 
   async function handleSubmit(e) {
     e.preventDefault();
 
     if (!email) {
-      setError('Email is required.');
+      showAuthToast('Email is required.');
       return;
     }
 
     setLoading(true);
-    setError('');
 
     try {
       const result = await window.api.auth.forgotPassword(email);
@@ -26,7 +24,7 @@ function ForgotPassword({ onSwitchView }) {
         cooldownSeconds: result.cooldownSeconds ?? 60,
       });
     } catch {
-      setError('An unexpected error occurred. Please try again.');
+      showAuthToast('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -49,8 +47,6 @@ function ForgotPassword({ onSwitchView }) {
             autoFocus
           />
         </div>
-
-        {error && <p className={styles.error}>{error}</p>}
 
         <button type="submit" className={styles.submit} disabled={loading}>
           {loading && <span className={styles.spinner} />}

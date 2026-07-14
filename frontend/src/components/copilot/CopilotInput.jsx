@@ -21,17 +21,12 @@ function CopilotInput({ onSend, disabled: externalDisabled }) {
   const dispatch = useDispatch();
   const isStreaming = useSelector((s) => s.copilot.isStreaming);
   const isLoading = useSelector((s) => s.copilot.isLoading);
-  const indexStatus = useSelector((s) => s.copilot.indexStatus);
   const { isOnline, requireOnline } = useRequireOnline();
   const [text, setText] = useState('');
   const textareaRef = useRef(null);
 
-  const scopeType = useSelector((s) => s.copilot.scopeType);
-  const activelyIndexing = (indexStatus?.pending ?? 0) + (indexStatus?.processing ?? 0);
-  // In global scope, don't block input for indexing — search only returns indexed chunks.
-  // User can still query datarooms that are already indexed.
-  const notFullyIndexed = scopeType !== 'global' && activelyIndexing > 0;
-  const disabled = isStreaming || isLoading || notFullyIndexed || externalDisabled;
+
+  const disabled = isStreaming || isLoading || externalDisabled;
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
@@ -78,7 +73,7 @@ function CopilotInput({ onSend, disabled: externalDisabled }) {
           value={text}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
-          placeholder={externalDisabled ? 'Add files to use Copilot…' : notFullyIndexed ? 'Waiting for files to finish indexing…' : 'Ask about your documents…'}
+          placeholder={externalDisabled ? 'Add files to use Copilot…' : 'Ask about your documents…'}
           rows={1}
           disabled={disabled}
           aria-label="Message input"

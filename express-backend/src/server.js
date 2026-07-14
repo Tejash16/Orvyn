@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const path    = require('path');
 const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
@@ -8,10 +9,17 @@ const helmet = require('helmet');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const logger = require('./services/logger');
-const healthRouter = require('./routes/health');
-const authRouter = require('./routes/auth');
-const aiRouter   = require('./routes/ai');
-const usageRouter = require('./routes/usage');
+const healthRouter       = require('./routes/health');
+const authRouter         = require('./routes/auth');
+const aiRouter           = require('./routes/ai');
+const usageRouter        = require('./routes/usage');
+const organizationRouter = require('./routes/organization');
+const billingRouter      = require('./routes/billing');
+const sharingRouter      = require('./routes/sharing');
+const collaborationRouter = require('./routes/collaboration');
+const notificationRouter  = require('./routes/notifications');
+// invitePagesRouter removed — invite landing now served by web-portal React app
+const adminRouter        = require('./routes/admin');
 
 // ── Fail fast on missing required environment variables ───
 const REQUIRED_ENV = ['JWT_SECRET', 'REFRESH_TOKEN_SECRET', 'MONGO_URI', 'GEMINI_API_KEY'];
@@ -32,24 +40,53 @@ if (missingSmtp.length > 0) {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
+
+// ── Serve portal/admin static assets BEFORE CORS ─────────
+// Static assets are same-origin and don't need CORS checks.
+// Placing these before the CORS middleware prevents CORS from
+// blocking JS/CSS loads during Google OAuth callback redirects.
+// Paths resolve to /app/portal-dist and /app/admin-dist inside the
+// Docker container (copied in by the Dockerfile). In local dev,
+// the web-portal/web-admin Vite dev servers on ports 5174/5175
+// handle these routes directly.
+app.use('/portal', express.static(path.join(__dirname, '../portal-dist')));
+app.use('/admin', express.static(path.join(__dirname, '../admin-dist')));
 
 // ── Middleware ────────────────────────────────────────────
 app.use(helmet());
 const corsOptions = {
   origin: function (origin, callback) {
-    // Desktop app (Electron main process) sends no Origin header — allow it.
-    // Safe because all sensitive endpoints require Bearer token auth.
-    if (!origin) return callback(null, true);
-    const allowed = process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : [];
-    if (allowed.includes(origin)) return callback(null, true);
+    if (!origin) return callback(null, true); // Electron / curl
+
+    const allowed = process.env.CLIENT_URL
+      ? process.env.CLIENT_URL.split(',').map(o => o.trim())
+      : [];
+
+    if (process.env.APP_URL) {
+      allowed.push(process.env.APP_URL);
+    }
+
+    if (allowed.includes(origin)) {
+      return callback(null, true);
+    }
+
+    logger.warn("CORS blocked:", origin);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
 };
 app.use(cors(corsOptions));
 app.options('/{*path}', cors(corsOptions));
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({
+  limit: '50mb',
+  // Preserve raw body on webhook routes for signature verification
+  verify: (req, _res, buf) => {
+    if (req.originalUrl && req.originalUrl.includes('/webhook')) {
+      req.rawBody = buf.toString();
+    }
+  },
+}));
 
 // HTTP request logging — piped through winston in all environments.
 // In dev: morgan 'dev' format to console + file. In prod: 'combined' to file only.
@@ -63,6 +100,32 @@ app.use('/api/v1', healthRouter);
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/ai', aiRouter);
 app.use('/api/v1/usage', usageRouter);
+app.use('/api/v1/organizations', organizationRouter);
+app.use('/api/v1/billing', billingRouter);
+app.use('/api/v1/sharing', sharingRouter);
+app.use('/api/v1/collaborations', collaborationRouter);
+app.use('/api/v1/notifications', notificationRouter);
+// Checkout web pages served at /billing/* (not under /api/v1/)
+app.use('/billing', billingRouter);
+// Redirect old invite URLs to the web-portal React app
+app.get('/invite/:code', (req, res) => {
+  res.redirect(`/portal/invite/${req.params.code}`);
+});
+
+// ── Admin API routes ─────────────────────────────────────
+app.use('/api/v1/admin', adminRouter);
+
+// ── Serve web-portal React build (SPA catch-all) ─────────
+// Static files already served above CORS; this handles SPA routing.
+app.get('/portal/{*path}', (req, res) => {
+  res.sendFile(path.join(__dirname, '../portal-dist/index.html'));
+});
+
+// ── Serve web-admin React build (SPA catch-all) ──────────
+// Static files already served above CORS; this handles SPA routing.
+app.get('/admin/{*path}', (req, res) => {
+  res.sendFile(path.join(__dirname, '../admin-dist/index.html'));
+});
 
 // ── Backward-compat aliases (unversioned → v1) ───────────
 // Keeps existing Electron builds working until they update to /api/v1/.
@@ -71,6 +134,9 @@ app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/usage', usageRouter);
+app.use('/api/organizations', organizationRouter);
+app.use('/api/billing', billingRouter);
+app.use('/api/sharing', sharingRouter);
 
 // ── 404 handler ───────────────────────────────────────────
 app.use((req, res) => {

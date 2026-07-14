@@ -31,15 +31,15 @@ const CODE_LENGTH = 6;
  * @prop {string}   email           — email the reset code was sent to
  * @prop {number}   initialCooldown — backend-driven resend cooldown in seconds
  * @prop {function} onSwitchView    — navigate to another view
+ * @prop {function} showAuthToast   — display toast in form panel
  */
-function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
+function ResetCode({ email, initialCooldown = 0, onSwitchView, showAuthToast }) {
   const [digits,       setDigits]       = useState(Array(CODE_LENGTH).fill(''));
   const [newPassword,  setNewPassword]  = useState('');
   const [confirm,      setConfirm]      = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm,  setShowConfirm]  = useState(false);
   const [status,       setStatus]       = useState('idle'); // 'idle' | 'verifying' | 'confirmed'
-  const [error,        setError]        = useState('');
   const [cooldown,     setCooldown]     = useState(initialCooldown);
   const inputRefs = useRef([]);
 
@@ -51,7 +51,6 @@ function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
     setDigits(Array(CODE_LENGTH).fill(''));
     setNewPassword('');
     setConfirm('');
-    setError('');
   }, [email]);
 
   // Cooldown countdown
@@ -66,7 +65,6 @@ function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
     const next  = [...digits];
     next[index] = digit;
     setDigits(next);
-    setError('');
     if (digit && index < CODE_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -85,7 +83,6 @@ function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
     const next = Array(CODE_LENGTH).fill('');
     for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
     setDigits(next);
-    setError('');
     inputRefs.current[Math.min(pasted.length, CODE_LENGTH - 1)]?.focus();
   }
 
@@ -94,27 +91,26 @@ function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
 
     const code = digits.join('');
     if (code.length < CODE_LENGTH) {
-      setError('Please enter the full 6-digit code.');
+      showAuthToast('Please enter the full 6-digit code.');
       return;
     }
 
     if (!newPassword) {
-      setError('New password is required.');
+      showAuthToast('New password is required.');
       return;
     }
 
     if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters.');
+      showAuthToast('Password must be at least 8 characters.');
       return;
     }
 
     if (newPassword !== confirm) {
-      setError('Passwords do not match.');
+      showAuthToast('Passwords do not match.');
       return;
     }
 
     setStatus('verifying');
-    setError('');
 
     try {
       const result = await window.api.auth.resetPassword({ email, code, newPassword });
@@ -130,11 +126,11 @@ function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
         if (result.retryAfterSeconds) {
           setCooldown(result.retryAfterSeconds);
         }
-        setError(result.error || 'Password reset failed.');
+        showAuthToast(result.error || 'Password reset failed.');
         setStatus('idle');
       }
     } catch {
-      setError('An unexpected error occurred.');
+      showAuthToast('An unexpected error occurred.');
       setStatus('idle');
     }
   }
@@ -150,9 +146,8 @@ function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
         setCooldown(result.cooldownSeconds ?? 60);
       }
       setDigits(Array(CODE_LENGTH).fill(''));
-      setError('');
     } catch {
-      setError('Failed to resend code. Please try again.');
+      showAuthToast('Failed to resend code. Please try again.');
     }
   }
 
@@ -252,8 +247,6 @@ function ResetCode({ email, initialCooldown = 0, onSwitchView }) {
             </button>
           </div>
         </div>
-
-        {error && <p className={styles.error}>{error}</p>}
 
         <button type="submit" className={styles.submit}>
           Reset password

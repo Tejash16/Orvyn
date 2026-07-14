@@ -97,6 +97,11 @@ class DataRoom(Base):
     is_starred = Column(Boolean, default=False)
     created_by_ai = Column(Boolean, default=False)
     status = Column(String, default="active")  # active | archived
+    # Sharing columns
+    is_shared = Column(Boolean, default=False)
+    shared_from_user_name = Column(String, nullable=True)
+    shared_dataroom_cloud_id = Column(String, nullable=True)
+    shared_snapshot_version = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -144,6 +149,8 @@ class File(Base):
     embedding_model = Column(String, nullable=True)
     indexed_file_size = Column(Integer, nullable=True)
     indexed_file_mtime = Column(Float, nullable=True)
+    # Sharing columns
+    is_shared = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
@@ -482,6 +489,39 @@ def init_db(request: InitDbRequest):
                     conn.execute(text(f"ALTER TABLE files ADD COLUMN {col_name} {col_type}"))
             conn.commit()
 
+    # Schema migration: add sharing columns to datarooms table if missing
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='datarooms'"
+        ))
+        if result.fetchone():
+            columns = [
+                row[1] for row in conn.execute(text("PRAGMA table_info(datarooms)"))
+            ]
+            sharing_dr_columns = {
+                "is_shared": "BOOLEAN DEFAULT 0",
+                "shared_from_user_name": "TEXT",
+                "shared_dataroom_cloud_id": "TEXT",
+                "shared_snapshot_version": "INTEGER",
+            }
+            for col_name, col_type in sharing_dr_columns.items():
+                if col_name not in columns:
+                    conn.execute(text(f"ALTER TABLE datarooms ADD COLUMN {col_name} {col_type}"))
+            conn.commit()
+
+    # Schema migration: add is_shared column to files table if missing
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='files'"
+        ))
+        if result.fetchone():
+            columns = [
+                row[1] for row in conn.execute(text("PRAGMA table_info(files)"))
+            ]
+            if "is_shared" not in columns:
+                conn.execute(text("ALTER TABLE files ADD COLUMN is_shared BOOLEAN DEFAULT 0"))
+                conn.commit()
+
     Base.metadata.create_all(engine)
 
     # Create FTS5 virtual table and sync triggers (content= mode)
@@ -672,6 +712,10 @@ def _dataroom_dict(dr):
         "is_starred": bool(dr.is_starred),
         "created_by_ai": dr.created_by_ai,
         "status": dr.status,
+        "is_shared": bool(dr.is_shared) if dr.is_shared is not None else False,
+        "shared_from_user_name": dr.shared_from_user_name,
+        "shared_dataroom_cloud_id": dr.shared_dataroom_cloud_id,
+        "shared_snapshot_version": dr.shared_snapshot_version,
         "created_at": _dt(dr.created_at),
         "updated_at": _dt(dr.updated_at),
     }
@@ -705,6 +749,7 @@ def _file_dict(f):
         "status": f.status,
         "embedding_status": f.embedding_status,
         "ai_summary": f.ai_summary,
+        "is_shared": bool(f.is_shared) if f.is_shared is not None else False,
         "created_at": _dt(f.created_at),
         "updated_at": _dt(f.updated_at),
     }
@@ -1615,6 +1660,17 @@ class ApplyGenerateRequest(BaseModel):
     dataroom_id: Optional[str] = None
 
 
+class PrepareHybridRequest(BaseModel):
+    dataroom_id: str
+    file_ids: List[str]
+
+
+class ApplyHybridRequest(BaseModel):
+    dataroom_id: str
+    gemini_result: dict  # {existing_assignments: [...], new_folders: [...], new_assignments: [...]}
+    file_ids: List[str]
+
+
 @app.post("/api/v1/ai/prepare-classify")
 async def ai_prepare_classify(request: PrepareClassifyRequest):
     """
@@ -1765,6 +1821,95 @@ async def ai_apply_generate(request: ApplyGenerateRequest):
                     logger.info(f"apply_generate: created {jobs_created} indexing jobs")
         except Exception as e:
             logger.warning(f"apply_generate: indexing job setup failed: {e}")
+
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/v1/ai/prepare-hybrid")
+async def ai_prepare_hybrid(request: PrepareHybridRequest):
+    """
+    Prepare fingerprints and existing folder tree for the hybrid organize path.
+    Unlike prepare-classify, this tolerates a DataRoom with zero folders.
+    """
+    from app.services.classification_service import prepare_hybrid
+
+    engine = _require_db()
+
+    if not request.file_ids:
+        raise HTTPException(status_code=400, detail="file_ids list cannot be empty.")
+
+    if len(request.file_ids) > _MAX_FILES_PER_REQUEST:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {_MAX_FILES_PER_REQUEST} files per request. Received {len(request.file_ids)}.",
+        )
+
+    with Session(engine) as session:
+        dr = session.query(DataRoom).filter_by(id=request.dataroom_id).first()
+        if not dr:
+            raise HTTPException(status_code=404, detail="DataRoom not found.")
+
+    try:
+        result = prepare_hybrid(engine, request.dataroom_id, request.file_ids)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/v1/ai/apply-hybrid")
+async def ai_apply_hybrid(request: ApplyHybridRequest):
+    """
+    Apply hybrid organize results (from Express/Gemini) to an existing DataRoom.
+    Reuses existing folders where possible, creates new folders at any depth,
+    and routes low-confidence files to an "Unclassified" folder.
+    """
+    from app.services.classification_service import apply_hybrid_results
+
+    engine = _require_db()
+
+    if not request.gemini_result:
+        raise HTTPException(status_code=400, detail="gemini_result is required.")
+
+    with Session(engine) as session:
+        dr = session.query(DataRoom).filter_by(id=request.dataroom_id).first()
+        if not dr:
+            raise HTTPException(status_code=404, detail="DataRoom not found.")
+
+    try:
+        result = apply_hybrid_results(
+            engine,
+            request.dataroom_id,
+            request.gemini_result,
+            request.file_ids,
+        )
+
+        # Create indexing jobs for every file_id that appeared in either assignment list
+        try:
+            from app.services.embedding_service import create_indexing_job
+            assigned_file_ids = set()
+            for r in request.gemini_result.get("existing_assignments", []) or []:
+                fid = r.get("file_id")
+                if fid:
+                    assigned_file_ids.add(fid)
+            for r in request.gemini_result.get("new_assignments", []) or []:
+                fid = r.get("file_id")
+                if fid:
+                    assigned_file_ids.add(fid)
+
+            jobs_created = 0
+            with Session(engine) as session:
+                for file_id in assigned_file_ids:
+                    try:
+                        create_indexing_job(file_id, request.dataroom_id, session)
+                        jobs_created += 1
+                    except Exception as e:
+                        logger.warning(f"apply_hybrid: indexing job creation failed for {file_id}: {e}")
+            if jobs_created:
+                logger.info(f"apply_hybrid: created {jobs_created} indexing jobs")
+        except Exception as e:
+            logger.warning(f"apply_hybrid: indexing job setup failed: {e}")
 
         return result
     except ValueError as e:
@@ -2538,3 +2683,239 @@ def _collect_subfolder_ids(session, folder_id: str) -> List[str]:
             result.append(child_id)
             queue.append(child_id)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Sharing — export / import DataRoom snapshots
+# ---------------------------------------------------------------------------
+
+def _reconstruct_text_from_chunks(chunk_texts: list, overlap_chars: int = 750) -> str:
+    """Reconstruct full text from overlapping chunks.
+    Chunks are created with overlap (default 750 chars). When reconstructing,
+    skip the overlap portion of each subsequent chunk to avoid duplication.
+    """
+    if not chunk_texts:
+        return ""
+    if len(chunk_texts) == 1:
+        return chunk_texts[0]
+
+    result = chunk_texts[0]
+    for i in range(1, len(chunk_texts)):
+        chunk = chunk_texts[i]
+        # Skip the overlap portion (first N chars of this chunk overlap with end of previous)
+        # Use a safe overlap size (don't skip more than the chunk itself)
+        skip = min(overlap_chars, len(chunk) // 2)
+        result += chunk[skip:]
+    return result
+
+
+def _build_nested_folder_tree(folders, parent_id=None):
+    """Build nested folder structure from flat list of Folder ORM objects."""
+    tree = []
+    for f in folders:
+        if f.parent_id == parent_id:
+            tree.append({
+                "id": f.id,
+                "name": f.name,
+                "context": f.context,
+                "children": _build_nested_folder_tree(folders, f.id),
+            })
+    return tree
+
+
+def _create_folders_recursive(session, dataroom_id, folder_tree, parent_id, id_map):
+    """Recursively create folders from tree structure, mapping old to new IDs."""
+    for folder in folder_tree:
+        new_id = str(uuid.uuid4())
+        id_map[folder['id']] = new_id
+        session.add(Folder(
+            id=new_id,
+            dataroom_id=dataroom_id,
+            name=folder['name'],
+            context=folder.get('context', ''),
+            parent_id=parent_id,
+        ))
+        if folder.get('children'):
+            _create_folders_recursive(session, dataroom_id, folder['children'], new_id, id_map)
+
+
+@app.post("/api/v1/sharing/export-dataroom")
+def export_dataroom(request: dict):
+    """Export DataRoom data as a snapshot for sharing.
+    Returns folder tree, file metadata, FULL extracted text, classifications, entities, summaries.
+    Does NOT include original_path (local to this machine).
+
+    IMPORTANT: files.extracted_text is truncated to 3000 chars at registration time.
+    For the FULL text, we must read from file_chunks (created during indexing).
+    file_chunks stores the complete extracted text split into overlapping chunks.
+    We concatenate chunks (removing overlaps) to reconstruct full text for sharing.
+    """
+    dataroom_id = request.get("dataroom_id")
+
+    engine = _require_db()
+    with Session(engine) as session:
+        dataroom = session.query(DataRoom).filter_by(id=dataroom_id).first()
+        if not dataroom:
+            raise HTTPException(status_code=404, detail="DataRoom not found")
+
+        # Build folder tree
+        folders = session.query(Folder).filter_by(dataroom_id=dataroom_id).all()
+        folder_tree = _build_nested_folder_tree(folders)
+
+        # Get files with classifications and entities
+        files = session.query(File).filter_by(dataroom_id=dataroom_id).all()
+        file_data = []
+        for f in files:
+            classification = session.query(Classification).filter_by(file_id=f.id).first()
+            entities = session.query(FileEntity).filter_by(file_id=f.id).all()
+
+            # Get FULL text from file_chunks if the file has been indexed
+            chunks = session.execute(
+                text("SELECT chunk_text FROM file_chunks WHERE file_id = :fid ORDER BY chunk_index ASC"),
+                {"fid": f.id}
+            ).fetchall()
+
+            if chunks:
+                # Reconstruct full text from chunks (chunks have overlap, so deduplicate)
+                full_text = _reconstruct_text_from_chunks(
+                    [c[0] for c in chunks],
+                    overlap_chars=int(os.getenv("RAG_CHUNK_OVERLAP_CHARS", "750"))
+                )
+            else:
+                # Unindexed file: re-extract FULL text from disk (DB preview is truncated to 3000 chars)
+                if f.original_path and f.original_path != 'SHARED' and os.path.exists(f.original_path):
+                    try:
+                        full_text = _extract_text(f.original_path, f.file_extension, f.original_name)
+                    except Exception:
+                        full_text = f.extracted_text or ""
+                else:
+                    full_text = f.extracted_text or ""
+
+            file_data.append({
+                "id": f.id,
+                "original_name": f.original_name,
+                "file_extension": f.file_extension,
+                "size_bytes": f.size_bytes,
+                "extracted_text": full_text,
+                "extracted_text_length": len(full_text),
+                "is_fully_indexed": len(chunks) > 0,
+                "ai_summary": f.ai_summary,
+                "folder_id": f.folder_id,
+                "classification_confidence": classification.confidence if classification else None,
+                "classification_reasoning": classification.reasoning if classification else None,
+                "entities": [
+                    {"type": e.entity_type, "value": e.entity_value, "context": e.context}
+                    for e in entities
+                ],
+            })
+
+        return {
+            "dataroom": {
+                "id": dataroom.id,
+                "name": dataroom.name,
+                "description": dataroom.description,
+            },
+            "folderTree": folder_tree,
+            "files": file_data,
+        }
+
+
+@app.post("/api/v1/sharing/import-dataroom")
+def import_dataroom(request: dict):
+    """Import a shared DataRoom snapshot into local SQLite.
+    Creates a read-only DataRoom with shared files.
+    """
+    snapshot = request.get("snapshot")
+    if not snapshot:
+        raise HTTPException(status_code=400, detail="snapshot is required")
+
+    engine = _require_db()
+    with Session(engine) as session:
+        # Create DataRoom marked as shared
+        dataroom = DataRoom(
+            id=str(uuid.uuid4()),
+            name=f"[Shared] {snapshot.get('sourceDataroomName', 'Unknown')}",
+            description=snapshot.get('sourceDataroomDescription', ''),
+            is_shared=True,
+            shared_from_user_name=snapshot.get('ownerName', 'Unknown'),
+            shared_dataroom_cloud_id=snapshot.get('_id', ''),
+            shared_snapshot_version=snapshot.get('snapshotVersion', 1),
+        )
+        session.add(dataroom)
+
+        # Create folders (map old IDs to new IDs)
+        folder_id_map = {}
+        folder_tree = snapshot.get('folderTree', [])
+        if folder_tree:
+            _create_folders_recursive(session, dataroom.id, folder_tree, None, folder_id_map)
+
+        # Create file records and chunks for Copilot
+        from app.services.embedding_service import chunk_text, create_indexing_job
+
+        imported_file_ids = []
+        for f in snapshot.get('files', []):
+            new_folder_id = folder_id_map.get(f.get('folder_id'))
+            file_record = File(
+                id=str(uuid.uuid4()),
+                dataroom_id=dataroom.id,
+                folder_id=new_folder_id,
+                original_name=f.get('original_name', 'Unknown'),
+                original_path='SHARED',  # Not a real path
+                file_extension=f.get('file_extension', ''),
+                size_bytes=f.get('size_bytes', 0),
+                extracted_text=f.get('extracted_text', '')[:_MAX_EXTRACTED_TEXT_LENGTH],
+                ai_summary=f.get('ai_summary', ''),
+                status='classified' if new_folder_id else 'registered',
+                is_shared=True,
+            )
+            session.add(file_record)
+            session.flush()  # Ensure file_record.id is assigned
+
+            # Create classification if exists
+            if f.get('classification_confidence') is not None:
+                classification = Classification(
+                    id=str(uuid.uuid4()),
+                    file_id=file_record.id,
+                    folder_id=new_folder_id,
+                    confidence=f.get('classification_confidence'),
+                    reasoning=f.get('classification_reasoning', ''),
+                )
+                session.add(classification)
+
+            # Create entities
+            for entity in f.get('entities', []):
+                session.add(FileEntity(
+                    id=str(uuid.uuid4()),
+                    file_id=file_record.id,
+                    dataroom_id=dataroom.id,
+                    entity_type=entity.get('type', ''),
+                    entity_value=entity.get('value', ''),
+                    context=entity.get('context', ''),
+                ))
+
+            # Create file_chunks for immediate Copilot keyword search
+            extracted_text = f.get('extracted_text', '')
+            if extracted_text and extracted_text.strip():
+                chunks = chunk_text(extracted_text)
+                for chunk in chunks:
+                    session.execute(
+                        text("""INSERT INTO file_chunks (id, file_id, dataroom_id, chunk_index, chunk_text)
+                                VALUES (:id, :fid, :did, :idx, :txt)"""),
+                        {
+                            "id": str(uuid.uuid4()),
+                            "fid": file_record.id,
+                            "did": dataroom.id,
+                            "idx": chunk["index"],
+                            "txt": chunk["text"],
+                        },
+                    )
+                create_indexing_job(file_record.id, dataroom.id, session)
+                imported_file_ids.append(file_record.id)
+
+        session.commit()
+
+        return {
+            "dataroom_id": dataroom.id,
+            "file_ids": imported_file_ids,
+            "message": "Shared DataRoom imported successfully",
+        }

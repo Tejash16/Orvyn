@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+/* ── Orvyn Brand Tokens ── */
+:root {
+  --brand-primary: #059669;
+  --brand-primary-hover: #047857;
+  --brand-primary-light: #d1fae5;
+  --brand-gradient-start: #f0fdf4;
+  --brand-gradient-mid: #ecfdf5;
+  --brand-gradient-end: #f0f9ff;
+  --brand-text: #1a1a2e;
+  --brand-text-muted: #6b7280;
+  --brand-card-bg: #ffffff;
+  --brand-card-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+  --brand-card-radius: 16px;
+  --brand-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--brand-font);
+  background: linear-gradient(135deg, var(--brand-gradient-start) 0%, var(--brand-gradient-mid) 50%, var(--brand-gradient-end) 100%);
+  min-height: 100vh;
+  color: var(--brand-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}

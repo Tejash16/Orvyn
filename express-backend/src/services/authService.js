@@ -4,12 +4,22 @@ const crypto      = require('crypto');
 const bcrypt      = require('bcryptjs');
 const jwt         = require('jsonwebtoken');
 const validator   = require('validator');
-const nodemailer  = require('nodemailer');
 
 const User                = require('../models/User');
 const PendingRegistration = require('../models/PendingRegistration');
+const Organization         = require('../models/Organization');
+const OrganizationMember   = require('../models/OrganizationMember');
+const OrganizationInvite   = require('../models/OrganizationInvite');
+const SharedDataRoom       = require('../models/SharedDataRoom');
+const SharedDataRoomAccess = require('../models/SharedDataRoomAccess');
+const AuditLog             = require('../models/AuditLog');
+const Subscription         = require('../models/Subscription');
+const UserLimits           = require('../models/UserLimits');
+const UserUsage            = require('../models/UserUsage');
+const IdempotencyKey       = require('../models/IdempotencyKey');
 const codeService         = require('./codeService');
 const logger      = require('./logger');
+const { sendEmail }       = require('./emailService');
 const { verificationEmailTemplate, passwordResetEmailTemplate } = require('./emailTemplates');
 
 // ── Token constants ────────────────────────────────────────
@@ -30,42 +40,6 @@ function issueAccessToken(userId) {
 
 function issueRefreshToken(userId) {
   return jwt.sign({ userId }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_TTL });
-}
-
-// ── Mailer ─────────────────────────────────────────────────
-
-let _transporter = null;
-
-function getTransporter() {
-  if (_transporter) return _transporter;
-
-  const host   = process.env.SMTP_HOST;
-  const user   = process.env.SMTP_USER;
-  const pass   = process.env.SMTP_PASS;
-  const port   = parseInt(process.env.SMTP_PORT || '587', 10);
-  const secure = process.env.SMTP_SECURE === 'true';
-
-  if (!host || !user || !pass) return null; // dev fallback
-
-  _transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
-  return _transporter;
-}
-
-async function sendEmail({ to, subject, text, html, attachments }) {
-  const transporter = getTransporter();
-  if (!transporter) {
-    // Dev fallback — log to file only, never expose credentials
-    logger.info(`[DEV EMAIL] To: ${to} | Subject: ${subject} | ${text}`);
-    return;
-  }
-  await transporter.sendMail({
-    from: process.env.MAIL_FROM || process.env.SMTP_USER,
-    to,
-    subject,
-    text,
-    html,
-    attachments,
-  });
 }
 
 // ── Email templates ────────────────────────────────────────
@@ -130,6 +104,11 @@ async function registerUser({ name, email, password }) {
   // Block registration if a verified (active) account already uses this email
   const existingUser = await User.findOne({ email: email.toLowerCase(), isDeleted: false });
   if (existingUser) {
+    if (existingUser.provider === 'google' || existingUser.provider === 'local+google') {
+      const conflict = new Error('This email is registered via Google. Please sign in with Google.');
+      conflict.statusCode = 409;
+      throw conflict;
+    }
     const conflict = new Error('An account with this email already exists.');
     conflict.statusCode = 409;
     throw conflict;
@@ -193,8 +172,8 @@ async function loginUser(email, password) {
     throw err;
   }
 
-  if (user.provider !== 'local') {
-    const err = new Error('This account uses a different sign-in method.');
+  if (user.provider !== 'local' && user.provider !== 'local+google') {
+    const err = new Error('This account uses Google sign-in. Please click "Sign in with Google" instead.');
     err.statusCode = 401;
     throw err;
   }
@@ -300,21 +279,43 @@ async function verifyEmail(email, code) {
     throw err;
   }
 
-  // OTP verified — create the real User record
-  try {
-    await User.create({
-      name: pending.name,
-      email: pending.email,
-      password: pending.password,
-      provider: 'local',
-      isEmailVerified: true,
-    });
-  } catch (createErr) {
-    // Race condition: concurrent verify created the user already — treat as success
-    if (createErr.code === 11000) {
-      logger.info(`Concurrent verify for ${pending.email} — user already created`);
-    } else {
-      throw createErr;
+  // OTP verified — create or reactivate the real User record
+  const softDeletedUser = await User.findOne({
+    email: pending.email,
+    isDeleted: true,
+  });
+
+  if (softDeletedUser) {
+    // Reactivate soft-deleted account
+    softDeletedUser.isDeleted = false;
+    softDeletedUser.deletedAt = undefined;
+    softDeletedUser.name = pending.name;
+    softDeletedUser.password = pending.password;
+    softDeletedUser.provider = 'local';
+    softDeletedUser.isEmailVerified = true;
+    softDeletedUser.googleId = undefined;
+    softDeletedUser.profilePicture = undefined;
+    softDeletedUser.refreshToken = undefined;
+    softDeletedUser.refreshTokenExpires = undefined;
+    softDeletedUser.failedLoginAttempts = 0;
+    softDeletedUser.lockUntil = undefined;
+    await softDeletedUser.save();
+  } else {
+    try {
+      await User.create({
+        name: pending.name,
+        email: pending.email,
+        password: pending.password,
+        provider: 'local',
+        isEmailVerified: true,
+      });
+    } catch (createErr) {
+      // Race condition: concurrent verify created the user already — treat as success
+      if (createErr.code === 11000) {
+        logger.info(`Concurrent verify for ${pending.email} — user already created`);
+      } else {
+        throw createErr;
+      }
     }
   }
 
@@ -332,6 +333,11 @@ async function requestPasswordReset(email) {
     .select(RESET_SELECT);
 
   if (!user || user.isDeleted) {
+    return { cooldownSeconds: codeService.CODE_RESEND_COOLDOWN_SECONDS };
+  }
+
+  // Google-only users cannot reset password — return generic success to prevent email enumeration
+  if (user.provider === 'google') {
     return { cooldownSeconds: codeService.CODE_RESEND_COOLDOWN_SECONDS };
   }
 
@@ -523,10 +529,81 @@ async function sendFeedbackEmail({ name, email, feedback }) {
   });
 }
 
+/**
+ * Hard-delete a user and cascade-purge all related records.
+ * Blocks if the user owns an organization with other active members.
+ */
+async function hardDeleteUser(userId) {
+  const user = await User.findById(userId);
+  if (!user) {
+    const err = new Error('User not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const userEmail = user.email;
+
+  // Step 2 — owned orgs check + solo-org cascade
+  const ownedOrgs = await Organization.find({ createdBy: userId, isDeleted: false });
+  for (const org of ownedOrgs) {
+    const otherMembers = await OrganizationMember.countDocuments({
+      organizationId: org._id,
+      userId: { $ne: userId },
+      status: 'active',
+    });
+    if (otherMembers > 0) {
+      const err = new Error(
+        'Cannot delete account: you own an organization with other members. ' +
+        'Transfer ownership or remove all other members first.'
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+  }
+
+  // Solo-owned orgs: cascade-delete each
+  for (const org of ownedOrgs) {
+    const orgId = org._id;
+    const safe = async (label, fn) => {
+      try { await fn(); }
+      catch (e) { logger.error(`hardDeleteUser: ${label} failed for org ${orgId}: ${e.message}`); }
+    };
+    await safe('OrganizationMember', () => OrganizationMember.deleteMany({ organizationId: orgId }));
+    await safe('OrganizationInvite', () => OrganizationInvite.deleteMany({ organizationId: orgId }));
+    await safe('SharedDataRoom',     () => SharedDataRoom.deleteMany({ organizationId: orgId }));
+    await safe('SharedDataRoomAccess', () => SharedDataRoomAccess.deleteMany({ organizationId: orgId }));
+    await safe('AuditLog',           () => AuditLog.deleteMany({ organizationId: orgId }));
+    await safe('Subscription',       () => Subscription.deleteMany({ organizationId: orgId }));
+    await safe('Organization',       () => Organization.deleteOne({ _id: orgId }));
+  }
+
+  // Best-effort purge for remaining user-owned data
+  const safe = async (label, fn) => {
+    try { await fn(); }
+    catch (e) { logger.error(`hardDeleteUser: ${label} failed for user ${userId}: ${e.message}`); }
+  };
+
+  await safe('OrganizationMember (memberships)', () => OrganizationMember.deleteMany({ userId }));
+  await safe('OrganizationInvite (sent)',         () => OrganizationInvite.deleteMany({ invitedBy: userId }));
+  await safe('OrganizationInvite (received)',     () => OrganizationInvite.deleteMany({ email: userEmail }));
+  await safe('SharedDataRoom (sharedBy)',         () => SharedDataRoom.deleteMany({ sharedBy: userId }));
+  await safe('SharedDataRoomAccess',              () => SharedDataRoomAccess.deleteMany({ userId }));
+  await safe('AuditLog',                          () => AuditLog.deleteMany({ userId }));
+  await safe('UserLimits',                        () => UserLimits.deleteMany({ userId }));
+  await safe('UserUsage',                         () => UserUsage.deleteMany({ userId }));
+  await safe('Subscription',                      () => Subscription.deleteMany({ userId }));
+  await safe('IdempotencyKey',                    () => IdempotencyKey.deleteMany({ userId }));
+  await safe('PendingRegistration',               () => PendingRegistration.deleteMany({ email: userEmail }));
+
+  // Step 11 — must succeed
+  await User.deleteOne({ _id: userId });
+}
+
 module.exports = {
   registerUser,
   loginUser,
   verifyEmail,
+  hardDeleteUser,
   requestPasswordReset,
   verifyResetCode,
   resetPassword,
