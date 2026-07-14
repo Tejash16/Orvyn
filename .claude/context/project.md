@@ -1,8 +1,5 @@
 # Orvyn — Project Context
 
-## Company
-Orbicle Labs (startup). Orvyn is our primary product.
-
 ## What is Orvyn?
 A privacy-first Windows desktop application for intelligent document management.
 Users import documents, and AI classifies them into Smart DataRooms automatically.

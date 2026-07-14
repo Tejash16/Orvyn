@@ -522,7 +522,7 @@ async function sendFeedbackEmail({ name, email, feedback }) {
   const escapedFeedback = validator.escape(feedback.trim());
 
   await sendEmail({
-    to:      'orbicle.labs@gmail.com',
+    to:      'tejushchauhan2002@gmail.com',
     subject: `Feedback from ${name || 'Unknown User'}`,
     text:    `Feedback from: ${name}\nEmail: ${email}\n\n${feedback.trim()}`,
     html:    `<h3>Feedback from ${escapedName}</h3><p><strong>Email:</strong> ${validator.escape(email)}</p><hr/><p>${escapedFeedback.replace(/\n/g, '<br/>')}</p>`,
