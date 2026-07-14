@@ -9,7 +9,7 @@
  */
 
 const { app } = require('electron');
-
+ 
 const isDev = !app.isPackaged;
 
 // ── Production Cloud Run URL ────────────────────────────────
@@ -19,7 +19,7 @@ const PRODUCTION_EXPRESS_URL = 'https://orvyn-express-160954399633.asia-south1.r
 // ── Production Google OAuth client ID ───────────────────────
 // Not a secret — sent publicly to Google in the consent URL.
 // Must match the GOOGLE_CLIENT_ID configured in express-backend (GCP secret).
-const PRODUCTION_GOOGLE_CLIENT_ID = '160954399633-bf9fv2hr0a9hg926i0tmc7m5gg79m7lk.apps.googleusercontent.com';
+const PRODUCTION_GOOGLE_CLIENT_ID = '444425904275-uvo3bq09vcl23qura8r2t9taklqok6rk.apps.googleusercontent.com';
 
 module.exports = {
   EXPRESS_URL: isDev
